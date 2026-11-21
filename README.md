@@ -105,6 +105,8 @@ All guides: **[docs/](https://github.com/Control-Panel-Network/CPN-Control-Panel
 | [INSTALL-FOOTPRINT.md](docs/INSTALL-FOOTPRINT.md) | Measured download size of the default install |
 | [SUPPORT.md](docs/SUPPORT.md) | Supported / partial / refused OS |
 | [CLI.md](docs/CLI.md) | `cpn` and `cpn-installer` flags |
+| [MFA-CLI.md](docs/MFA-CLI.md) | `cpn totp` / `passkey` / `mfa` operator reference |
+| [MULTI-HOSTNAME-MFA.md](docs/MULTI-HOSTNAME-MFA.md) | Passkeys vs host aliases / RP ID |
 | [RELEASES.md](docs/RELEASES.md) | Packages, checksums, GPG |
 | [CHANGELOG.md](docs/CHANGELOG.md) | Release history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Builds and PRs |
