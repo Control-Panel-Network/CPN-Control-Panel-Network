@@ -458,7 +458,10 @@ mod tests {
 
     #[test]
     fn health_url_is_loopback_default() {
-        assert_eq!(webmail_health_url(), format!("http://127.0.0.1:{DEFAULT_PORT}/"));
+        assert_eq!(
+            webmail_health_url(),
+            format!("http://127.0.0.1:{DEFAULT_PORT}/")
+        );
     }
 
     #[test]

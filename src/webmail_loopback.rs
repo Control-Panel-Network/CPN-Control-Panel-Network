@@ -96,10 +96,7 @@ fn listener_looks_like_cpn_web_server(port: u16) -> bool {
 
 /// Best-effort process summary for who listens on `127.0.0.1:port` or `*:port`.
 pub fn foreign_listener_summary(port: u16) -> Option<String> {
-    let output = Command::new("ss")
-        .args(["-ltnp"])
-        .output()
-        .ok()?;
+    let output = Command::new("ss").args(["-ltnp"]).output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -107,7 +104,9 @@ pub fn foreign_listener_summary(port: u16) -> Option<String> {
     let needle_a = format!(":{port} ");
     let needle_b = format!(":{port}\n");
     for line in text.lines() {
-        if !(line.contains(&needle_a) || line.contains(&needle_b) || line.ends_with(&format!(":{port}")))
+        if !(line.contains(&needle_a)
+            || line.contains(&needle_b)
+            || line.ends_with(&format!(":{port}")))
         {
             continue;
         }
@@ -193,7 +192,10 @@ mod tests {
     #[test]
     fn foreign_response_detection() {
         assert!(loopback_response_looks_foreign("", 404));
-        assert!(loopback_response_looks_foreign("{\"error\":\"missing\"}", 404));
+        assert!(loopback_response_looks_foreign(
+            "{\"error\":\"missing\"}",
+            404
+        ));
         assert!(!loopback_response_looks_foreign(
             "<html class=\"rl-started-trigger\">Tachyon login",
             200

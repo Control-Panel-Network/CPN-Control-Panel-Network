@@ -110,8 +110,7 @@ mod tests {
 
     #[test]
     fn ols_listener_address_rewrites_port() {
-        let conf =
-            "listener CPNWebmailHttp {\n  address                 127.0.0.1:8080\n  secure                  0\n}\n";
+        let conf = "listener CPNWebmailHttp {\n  address                 127.0.0.1:8080\n  secure                  0\n}\n";
         let updated = rewrite_ols_webmail_listener_address(conf, 18081);
         assert!(updated.contains("127.0.0.1:18081"));
         assert!(!updated.contains("127.0.0.1:8080"));

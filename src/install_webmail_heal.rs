@@ -5,8 +5,8 @@ use crate::install_webmail_engines::{
     nginx_conf_path,
 };
 use crate::install_webmail_runtime::{
-    configure_snappymail_external_data, ensure_snappymail_local_imap_defaults,
-    is_snappy_lineage_docroot, snappy_lineage_data_dir, write_php_fpm_pool, FPM_POOL,
+    FPM_POOL, configure_snappymail_external_data, ensure_snappymail_local_imap_defaults,
+    is_snappy_lineage_docroot, snappy_lineage_data_dir, write_php_fpm_pool,
 };
 use crate::webmail_loopback;
 use std::path::Path;
