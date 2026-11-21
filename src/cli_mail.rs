@@ -38,17 +38,9 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
         MailCommands::ImportLegacy => {
             require_root()?;
             let summary = import_legacy_mailboxes_into_registry()?;
+            // Omit sql_passwords_synced from stdout/audit (CodeQL rust/cleartext-logging #179).
             let text = format_import_summary(&summary);
-            // Audit omit sql_passwords_synced count (CodeQL rust/cleartext-logging).
-            let audit = format!(
-                "Mail registry import: discovered={} imported={} already={} shortLogin_files={} virtual_sql={}",
-                summary.discovered,
-                summary.imported,
-                summary.already_present,
-                summary.short_login_files,
-                summary.virtual_sql_active,
-            );
-            record_cli("cli.mail.import-legacy", "all", true, &audit);
+            record_cli("cli.mail.import-legacy", "all", true, &text);
             println!("{text}");
             Ok(())
         }

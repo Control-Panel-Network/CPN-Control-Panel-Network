@@ -237,14 +237,15 @@ fn patch_domains_short_login(data_dir: &Path, short_login: bool) -> Result<usize
 }
 
 pub fn format_import_summary(summary: &MailImportSummary) -> String {
+    // Do not include sql_passwords_synced: CodeQL rust/cleartext-logging treats
+    // that field name/value as sensitive when written to stdout or audit logs.
     format!(
-        "Mail registry import: discovered={} imported={} already={} shortLogin_files={} virtual_sql={} sql_passwords_synced={}",
+        "Mail registry import: discovered={} imported={} already={} shortLogin_files={} virtual_sql={}",
         summary.discovered,
         summary.imported,
         summary.already_present,
         summary.short_login_files,
         summary.virtual_sql_active,
-        summary.sql_passwords_synced
     )
 }
 

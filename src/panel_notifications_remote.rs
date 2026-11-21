@@ -418,16 +418,18 @@ pub fn deliver_broadcast(
     }
 }
 
-/// Full verify + deliver pipeline used by the HTTP route.
-pub fn process_remote_broadcast(
+/// Authenticate a remote broadcast on the raw body before JSON deserialization.
+///
+/// Callers must verify HMAC / replay / IP / rate limits first so CodeQL
+/// `rust/unsafe-deserialization` does not treat the body as untrusted input.
+pub fn authenticate_remote_broadcast(
     cfg: &RemotePushConfig,
     peer_ip: &str,
     timestamp: &str,
     nonce: &str,
     signature: &str,
     raw_body: &[u8],
-    req: RemoteBroadcastRequest,
-) -> Result<RemoteBroadcastResult, String> {
+) -> Result<(), String> {
     if !cfg.enabled {
         return Err("remote push is disabled".into());
     }
@@ -451,7 +453,14 @@ pub fn process_remote_broadcast(
     }
     consume_nonce(nonce, NONCE_TTL_SECS)?;
     check_rate_limit(cfg.rate_limit_per_minute)?;
+    Ok(())
+}
 
+/// Deliver a broadcast after [`authenticate_remote_broadcast`] succeeded.
+pub fn deliver_authenticated_broadcast(
+    cfg: &RemotePushConfig,
+    req: RemoteBroadcastRequest,
+) -> Result<RemoteBroadcastResult, String> {
     let body = decrypt_optional_body(cfg, &req.body, &req.body_enc, &req.body_nonce)?;
     validate_fields(&req.title, &body, &req.category)?;
     let targets = resolve_targets(req.all_users, &req.usernames)?;
@@ -461,6 +470,20 @@ pub fn process_remote_broadcast(
         &req.category,
         &targets,
     ))
+}
+
+/// Full verify + deliver pipeline (tests and callers that already hold a parsed body).
+pub fn process_remote_broadcast(
+    cfg: &RemotePushConfig,
+    peer_ip: &str,
+    timestamp: &str,
+    nonce: &str,
+    signature: &str,
+    raw_body: &[u8],
+    req: RemoteBroadcastRequest,
+) -> Result<RemoteBroadcastResult, String> {
+    authenticate_remote_broadcast(cfg, peer_ip, timestamp, nonce, signature, raw_body)?;
+    deliver_authenticated_broadcast(cfg, req)
 }
 
 #[cfg(test)]

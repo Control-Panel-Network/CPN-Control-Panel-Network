@@ -39,7 +39,7 @@ Persisted files:
 
 ### SSH: add passkeys (primary hostname)
 
-Windows Hello and security keys cannot register over SSH alone. From the server, issue a browser link (`sudo cpn mfa enroll-url --username USER`; full CLI tables in [MFA-CLI.md](MFA-CLI.md), overview in [CLI.md](CLI.md)). The printed `enroll_url` always targets the **primary** `panel_public_url` / `panel_hostname`, so the passkey RP ID matches that primary HTTPS name.
+Windows Hello and security keys cannot register over SSH alone. From the server, issue a browser link (`sudo cpn mfa enroll-url --username USER`; full CLI tables in [MFA-CLI.md](MFA-CLI.md), overview in [CLI.md](CLI.md)). The URL written to `enroll_url_file=` always targets the **primary** `panel_public_url` / `panel_hostname`, so the passkey RP ID matches that primary HTTPS name.
 
 Open the link on a desktop within 15 minutes. Paste into the address bar; do not paste into chat first (previews). On CPN 1.4.11 and older, GET/HEAD burns the single-use token; on intended/fixed builds, confirm with **Continue to Security** (POST consumes the token; GET/HEAD peeks only). When MFA is already enrolled, it lands **Modify User → Security** so you can register **additional** passkeys (second Hello, YubiKey, and so on) without clearing TOTP. One unused pending link exists per user; a new `enroll-url` replaces an unused prior link.
 
