@@ -26,6 +26,10 @@ Top-level groups:
 | `panel` | Live login URL, panel status, MOTD install helper |
 | `info` | Alias for `cpn panel status` |
 | `account` | Panel/operator account management |
+| `password` | Short panel password reset (alias of `account passwd` with default target) |
+| `passkey` | WebAuthn passkeys: list / rename / remove / clear ([MFA-CLI.md](MFA-CLI.md)) |
+| `totp` | TOTP authenticator: status / begin / confirm / disable / clear ([MFA-CLI.md](MFA-CLI.md)) |
+| `mfa` | Combined MFA status, enroll-url, and full clear ([MFA-CLI.md](MFA-CLI.md)) |
 | `site` | Website records |
 | `network` | Listen port, hostname, public URL, and port migration |
 | `plugin` | Per-site plugin management |
@@ -226,92 +230,52 @@ Options used by account commands:
 - `--yes` : skip destructive-operation confirmation where supported (`y`/`yes` also accepted at the prompt).
 - `--force` : required with `account deactivate` when targeting the last active panel admin.
 
-## Passkeys
+## Passkeys, TOTP, and MFA
 
-List, rename-by-label inspection, and remove WebAuthn passkeys from SSH. Output never includes credential secrets; only `id`, `label`, and timestamps.
+Full flag tables, enroll-url caveats, and playbooks: **[MFA-CLI.md](MFA-CLI.md)**. Hostname / RP ID rules: [MULTI-HOSTNAME-MFA.md](MULTI-HOSTNAME-MFA.md).
 
-**Registration** (Windows Hello, USB security keys, browser passkeys) cannot finish in SSH alone. Use `sudo cpn mfa enroll-url` (see **TOTP and MFA** below) and complete **Register passkey** in a desktop browser over HTTPS.
-
-```bash
-sudo cpn passkey list --username admin
-sudo cpn passkey remove --username admin --id <credential-id>
-sudo cpn passkey clear --username admin --yes
-```
-
-- `list`: print registered passkeys for the account (`id`, `label`, `created_unix`, `last_used_unix`).
-- `remove`: delete one passkey by `--id` from `list`.
-- `clear`: delete every passkey for the account; confirm with `yes`/`y` (case-insensitive) or pass `--yes` to skip the prompt. `no`/`n` (or empty) aborts.
-- All mutations and list require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir.
-- In the browser, registration tries **platform** authenticators first (Windows Hello), then falls back to a **cross-platform** security key if the user cancels or the platform path is unavailable. In Microsoft Edge, **Save another way** can keep a local Hello / FIDO2 credential instead of a synced passkey when that fits your policy.
-
-## TOTP and MFA
-
-Inspect, enroll, or clear administrator MFA from SSH. Sensitive values (TOTP secrets, backup codes, enroll tokens) are never printed to stdout.
-
-> [!NOTE]
-> **`mfa status`**, **`mfa enroll-url`**, **`totp begin`**, and **`totp confirm`** ship in CPN builds that include the MFA SSH enroll CLI (`c77438e` and newer). Packages cut from older `stable` commits already provide `totp status|disable|clear`, `mfa clear`, and `passkey list|remove|clear`. Run `cpn mfa --help` on the host to see what your installed binary exposes.
+All `passkey`, `totp`, and `mfa` subcommands require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir. Usernames resolve case-insensitively.
 
 ```bash
-sudo cpn mfa status --username admin
-sudo cpn mfa enroll-url --username admin
-sudo cpn totp status --username admin
-sudo cpn totp begin --username admin
-sudo cpn totp confirm --username admin --code 123456
-sudo cpn totp disable --username admin --yes
-sudo cpn totp clear --username admin --yes
-sudo cpn mfa clear --username admin --yes
+sudo cpn mfa status --username shadows
+sudo cpn mfa enroll-url --username shadows
+sudo cpn passkey list --username shadows
+sudo cpn passkey rename --username shadows --id <credential-id> --label "Laptop Windows Hello"
+sudo cpn passkey remove --username shadows --id <credential-id>
+sudo cpn passkey clear --username shadows --yes
+sudo cpn totp status --username shadows
+sudo cpn totp begin --username shadows
+sudo cpn totp confirm --username shadows --code 123456
+sudo cpn totp disable --username shadows --yes
+sudo cpn totp clear --username shadows --yes
+sudo cpn mfa clear --username shadows --yes
 ```
 
-### SSH: enroll passkeys or Windows Hello (`mfa enroll-url`)
+| Group | Subcommands | Notes |
+|---|---|---|
+| `passkey` | `list`, `rename`, `remove`, `clear` | Registration cannot finish over SSH. Use `mfa enroll-url` then **Register passkey** in a desktop browser. `list` prints `id`, `label`, `type`, `created`, `last_used` (no secrets). `clear` does **not** remove TOTP. |
+| `totp` | `status`, `begin`, `confirm`, `disable`, `clear` | `begin` / `confirm` write secrets and backup codes to mode-600 temp files (not stdout). `disable` and `clear` are the same force-remove (no authenticator code required). |
+| `mfa` | `status`, `enroll-url`, `clear` | `status` combines TOTP + passkey + enroll flags. `enroll-url` mints a 15-minute primary-hostname HTTPS link. `clear` removes TOTP, all passkeys for the user, and pending WebAuthn ceremony files. |
 
-Passkeys and Windows Hello need a user-present browser ceremony. Operators on SSH mint a short-lived HTTPS link; the administrator opens it on a desktop machine with the authenticator.
+### Enroll passkeys or Windows Hello (`mfa enroll-url`)
 
-1. On the server: `sudo cpn mfa enroll-url --username USER`.
-2. Copy `enroll_url=` from the CLI output. Open it in a desktop browser within **15 minutes** (single use).
-3. The URL uses the panel **primary public HTTPS base** (`panel_public_url`, else `https://<panel_hostname>`). The token signs the user in and opens MFA enrollment, or **Modify User → Security** (`/account/users/modify?tab=security`) when MFA is already enrolled.
-4. Click **Register passkey**. Complete Windows Hello (platform) or, if prompted, a USB/NFC/Bluetooth security key.
-5. Verify over SSH: `sudo cpn passkey list --username USER`.
+1. `sudo cpn mfa enroll-url --username shadows`
+2. Copy `enroll_url=`. Open it in a **desktop** browser within **15 minutes** by pasting into the **address bar**. Do **not** paste into chat/email first (link previews).
+3. On CPN **1.4.11** and older, the first GET/HEAD **burns** the single-use token. On intended/fixed builds, GET/HEAD peeks and shows **Continue to Security**; POST consumes the token.
+4. After continue, enroll MFA or open **Modify User → Security** when already enrolled, then **Register passkey**.
+5. Verify: `sudo cpn passkey list --username shadows`
 
-**Add more passkeys** (second Hello, YubiKey, another laptop): repeat `enroll-url` for the same user and register again on the Security tab. **TOTP is one secret per account**; additional factors are extra passkeys (or change TOTP via the panel / `totp` CLI).
-
-**Enroll link rules:**
+**Add more passkeys:** run `enroll-url` again (or sign in normally) and register on the Security tab. TOTP is one secret per account; extra factors are more passkeys.
 
 | Rule | Detail |
 |---|---|
-| TTL | **15 minutes** (`expires_in_secs=` in CLI output) |
-| Use count | **Single-use**; an opened or expired link cannot be reused |
-| Pending links | **One unused link per username**; a new `enroll-url` **replaces** any prior unused link for that user (`cli_enroll_token_pending=` in `mfa status`) |
-| Disabled accounts | `enroll-url` fails until the account is enabled |
+| TTL | 15 minutes (`expires_in_secs=`) |
+| Use | Single-use after continue (POST on fixed builds; after first GET/HEAD on 1.4.11 and older) |
+| Pending | One unused link per username; a new `enroll-url` replaces any prior unused link |
+| Disabled accounts | Fails until `account enable` |
+| Hostname | Link always uses primary `panel_public_url` / `panel_hostname`. Aliases need a separate passkey registered while browsing that alias. See [MULTI-HOSTNAME-MFA.md](MULTI-HOSTNAME-MFA.md). |
 
-**Hostname / RP ID (passkeys):**
-
-- Enroll and day-to-day login should use the **same HTTPS hostname** so the browser RP ID matches.
-- Do not rely on `http://SERVER_IP` or raw IP URLs for passkey registration. Set `sudo cpn network set-hostname` / `sudo cpn network set-public-url` (or Settings) so links are not loopback-only; the CLI may warn when `panel_public_url` is unset.
-- **Host aliases** on one install need a **separate** passkey registered on each alias hostname. TOTP works on every alias. See [MULTI-HOSTNAME-MFA.md](MULTI-HOSTNAME-MFA.md).
-
-### SSH: TOTP enroll (`totp begin` / `confirm`)
-
-```bash
-sudo cpn totp begin --username admin
-# stdout: totp_enroll_file=<mode-600 temp path> (base32 secret + otpauth URI inside; not printed)
-sudo cpn totp confirm --username admin --code 123456
-# backup codes land in another mode-600 temp file (backup_codes_file=); not stdout
-```
-
-Scan the `otpauth` URI from the temp file with an authenticator app. Delete or secure those files after enrollment.
-
-### Command reference
-
-- `mfa status`: `totp_enabled`, `totp_pending_enroll`, `passkey_count`, `totp_required`, `needs_mfa_enrollment`, `cli_enroll_token_pending` (booleans/counts only).
-- `mfa enroll-url`: **root only**. Prints `enroll_url=`, `expires_at_unix=`, `expires_in_secs=`, and operator notes (no raw token beyond the URL). Passkey / Windows Hello enrollment **cannot** run purely over SSH; open the printed URL on a desktop browser.
-- `totp status`: prints `totp_enabled=` and `pending_enroll=` (boolean flags only).
-- `totp begin`: starts TOTP enrollment and writes the base32 secret and `otpauth` URI to a **mode-600** temp file (`totp_enroll_file=`); nothing sensitive is printed to stdout.
-- `totp confirm`: completes pending enrollment with `--code`; backup codes are written to a mode-600 temp file (`backup_codes_file=`), not stdout.
-- `totp disable` / `totp clear`: remove the TOTP secret and pending enrollment without an authenticator code; confirm with `yes`/`y` or pass `--yes` to skip.
-- `mfa clear`: clears TOTP, all passkeys, and pending WebAuthn ceremony files; same confirmation rules (`yes`/`y`/`YES`, or `--yes`; `no`/`n` aborts).
-- Destructive confirmations are case-insensitive and trim whitespace (shared helper for account/site/plugin clears too).
-- After clearing all MFA for an admin with `totp_required`, the next password login may land on `/account/security/enroll-2fa` instead of `/login/2fa`. That is expected until the admin enrolls again.
-- Passkey clear alone does **not** remove TOTP; use `totp` or `mfa clear` when the Authenticator code page should stop appearing.
+Password reset (`cpn password` / `account passwd`) does **not** clear MFA. After `mfa clear` on a `totp_required` admin, the next login may land on `/account/security/enroll-2fa` until re-enrollment.
 
 ## Sites
 
