@@ -59,8 +59,8 @@ fn e_users_table_reachable() -> bool {
 }
 
 fn mysql_client() -> Option<&'static str> {
-    for bin in ["mariadb", "mysql"] {
-        if Command::new(bin)
+    ["mariadb", "mysql"].into_iter().find(|&bin| {
+        Command::new(bin)
             .arg("--version")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -68,11 +68,7 @@ fn mysql_client() -> Option<&'static str> {
             .status()
             .map(|s| s.success())
             .unwrap_or(false)
-        {
-            return Some(bin);
-        }
-    }
-    None
+    })
 }
 
 /// Discover mailboxes from SQL inventory and/or `/home/vmail`.
