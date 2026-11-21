@@ -108,7 +108,8 @@ fn load_accounts_file() -> Result<AccountsFile, String> {
             accounts: Vec::new(),
         });
     }
-    let raw = fs::read_to_string(&path).map_err(|e| format!("Could not read mail accounts: {e}"))?;
+    let raw =
+        fs::read_to_string(&path).map_err(|e| format!("Could not read mail accounts: {e}"))?;
     serde_json::from_str(&raw).map_err(|e| format!("mail-accounts.json is unreadable: {e}"))
 }
 
@@ -121,7 +122,8 @@ fn save_accounts_file(file: &AccountsFile) -> Result<(), String> {
     out.schema_version = 1;
     let raw = serde_json::to_string_pretty(&out)
         .map_err(|e| format!("Could not serialize mail accounts: {e}"))?;
-    fs::write(&path, format!("{raw}\n")).map_err(|e| format!("Could not write mail accounts: {e}"))?;
+    fs::write(&path, format!("{raw}\n"))
+        .map_err(|e| format!("Could not write mail accounts: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

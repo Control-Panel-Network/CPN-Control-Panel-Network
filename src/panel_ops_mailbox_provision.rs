@@ -111,11 +111,11 @@ pub fn provision_local_mailbox(address: &str, password: &str) -> Result<String, 
         let _ = crate::install_snappymail_folders::seed_settings_local_for_address(address);
         // When Dovecot still uses classic virtual-mail SQL (`e_users`), keep that
         // hash in step so Tachyon/IMAP see the same password as the panel registry.
-        let sql_note =
-            match crate::mail_legacy_sql::sync_password_to_virtual_sql(address, password) {
-                Ok(msg) => format!(" {msg}"),
-                Err(err) => format!(" Virtual-mail SQL sync: {err}."),
-            };
+        let sql_note = match crate::mail_legacy_sql::sync_password_to_virtual_sql(address, password)
+        {
+            Ok(msg) => format!(" {msg}"),
+            Err(err) => format!(" Virtual-mail SQL sync: {err}."),
+        };
         Ok(format!(
             "Local mailbox ready for `{address}` (system user `{user}`, Maildir + system folders).{sql_note}"
         ))

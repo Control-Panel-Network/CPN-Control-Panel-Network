@@ -123,9 +123,9 @@ pub fn apply_panel(
     match crate::mail_accounts_import::import_legacy_mailboxes_into_registry() {
         Ok(summary) => {
             if summary.discovered > 0 || summary.imported > 0 || summary.short_login_files > 0 {
-                report.warnings.push(
-                    crate::mail_accounts_import::format_import_summary(&summary),
-                );
+                report
+                    .warnings
+                    .push(crate::mail_accounts_import::format_import_summary(&summary));
             }
         }
         Err(error) => report

@@ -40,7 +40,8 @@ fn dovecot_sql_uses_e_users() -> bool {
         return false;
     };
     let lower = raw.to_ascii_lowercase();
-    lower.contains("e_users") && (lower.contains("driver = mysql") || lower.contains("driver=mysql"))
+    lower.contains("e_users")
+        && (lower.contains("driver = mysql") || lower.contains("driver=mysql"))
 }
 
 fn e_users_table_reachable() -> bool {
@@ -48,11 +49,7 @@ fn e_users_table_reachable() -> bool {
         return false;
     };
     Command::new(bin)
-        .args([
-            "-N",
-            "-e",
-            "SELECT 1 FROM cyberpanel.e_users LIMIT 1",
-        ])
+        .args(["-N", "-e", "SELECT 1 FROM cyberpanel.e_users LIMIT 1"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -241,9 +238,8 @@ pub fn sync_password_to_virtual_sql(email: &str, password: &str) -> Result<Strin
     };
     let email_sql = escape_sql(&email);
     let hash_sql = escape_sql(&hash);
-    let sql = format!(
-        "UPDATE cyberpanel.e_users SET password='{hash_sql}' WHERE email='{email_sql}'"
-    );
+    let sql =
+        format!("UPDATE cyberpanel.e_users SET password='{hash_sql}' WHERE email='{email_sql}'");
     let output = Command::new(bin)
         .args(["-e", &sql])
         .stdin(Stdio::null())
