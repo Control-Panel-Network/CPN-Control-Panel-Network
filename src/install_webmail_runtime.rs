@@ -235,7 +235,7 @@ fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), Strin
     if let Some(smtp) = data.get_mut("SMTP").and_then(|v| v.as_object_mut()) {
         smtp.insert("port".into(), serde_json::json!(25));
     }
-    // Enable ManageSieve so Filters work in SnappyMail.
+    // Enable ManageSieve so Filters work in SnappyMail/Tachyon.
     {
         let sieve = data.as_object_mut().map(|o| {
             o.entry("Sieve".to_string())
@@ -250,6 +250,8 @@ fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), Strin
             obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }
     }
+    // Never leave Sieve.shortLogin false when IMAP shortLogin is true.
+    let _ = crate::install_snappymail_prefs::align_domain_sieve_short_login(&mut data);
     let pretty = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     std::fs::write(&default_path, format!("{pretty}\n")).map_err(|e| e.to_string())?;
     // Mirror onto hostname and any existing local domain files (skip public providers).
@@ -276,13 +278,17 @@ fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), Strin
             }
         }
     }
+    // Always provision apex + mail.<apex> profiles (Filters/IMAP auth hostnames).
+    let apex_domains = crate::panel_ops_mail_onboarding::mail_client_fallback_domains();
+    crate::install_snappymail_prefs::append_mail_and_apex_domain_profiles(
+        &mut mirror_names,
+        &apex_domains,
+    );
     // Always keep a newstargeted.com domain profile for lab/production mailboxes.
-    if !mirror_names
-        .iter()
-        .any(|n| n.eq_ignore_ascii_case("newstargeted.com.json"))
-    {
-        mirror_names.push("newstargeted.com.json".into());
-    }
+    crate::install_snappymail_prefs::append_mail_and_apex_domain_profiles(
+        &mut mirror_names,
+        &["newstargeted.com".into()],
+    );
     for name in mirror_names {
         let host_path = domains.join(name);
         let _ = std::fs::write(&host_path, format!("{pretty}\n"));
