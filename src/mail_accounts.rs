@@ -238,7 +238,10 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
     {
         return Err(format!("Mailbox `{}` already exists", account.address));
     }
-    if account.smtp_mode == MailSmtpMode::PostfixLocal && !account.mailbox_password.is_empty() {
+    if account.enabled
+        && account.smtp_mode == MailSmtpMode::PostfixLocal
+        && !account.mailbox_password.is_empty()
+    {
         crate::panel_ops_mailbox_provision::provision_local_mailbox(
             &account.address,
             &account.mailbox_password,

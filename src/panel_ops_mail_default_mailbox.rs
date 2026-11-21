@@ -100,7 +100,16 @@ pub fn ensure_default_info_mailbox(apex_raw: &str) -> Result<DefaultMailboxResul
     let password = generate_password(&default_password_policy());
     // Prefer enabled when Postfix is up (Host email Start). Otherwise register disabled
     // so unit tests and early install still seed info@ without failing SMTP checks.
-    let enabled = crate::postfix_fallback::postfix_is_ready();
+    let enabled = {
+        #[cfg(test)]
+        {
+            false
+        }
+        #[cfg(not(test))]
+        {
+            crate::postfix_fallback::postfix_is_ready()
+        }
+    };
     create_account(MailAccountInput {
         address: address.clone(),
         domain: apex.clone(),
