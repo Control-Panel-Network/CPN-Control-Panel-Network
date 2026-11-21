@@ -476,7 +476,9 @@ mod tests {
     fn hints_include_login_and_vbox_nat() {
         let lines = post_install_service_hints(2087, false);
         let joined = lines.join("\n");
-        assert!(joined.contains("http://127.0.0.1:2087/login"));
+        assert!(joined.contains("Server IP:"));
+        assert!(joined.contains("hostname HTTPS for login"));
+        assert!(!joined.contains("http://127.0.0.1:2087/login"));
         assert!(joined.contains("2089"));
         assert!(joined.contains("systemctl"));
         assert!(!joined.to_lowercase().contains("password"));
