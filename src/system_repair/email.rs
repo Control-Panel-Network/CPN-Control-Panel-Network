@@ -199,11 +199,30 @@ pub fn heal_email_stack() -> HealResult {
         };
     }
     match start_email_stack() {
-        Ok(msg) => HealResult {
-            heal_id: "email.stack".into(),
-            ok: true,
-            message: msg,
-        },
+        Ok(msg) => {
+            let import_note =
+                match crate::mail_accounts_import::import_legacy_mailboxes_into_registry() {
+                    Ok(summary) => {
+                        if summary.discovered > 0
+                            || summary.imported > 0
+                            || summary.short_login_files > 0
+                        {
+                            format!(
+                                " {}",
+                                crate::mail_accounts_import::format_import_summary(&summary)
+                            )
+                        } else {
+                            String::new()
+                        }
+                    }
+                    Err(error) => format!(" Mail registry import: {error}."),
+                };
+            HealResult {
+                heal_id: "email.stack".into(),
+                ok: true,
+                message: format!("{msg}{import_note}"),
+            }
+        }
         Err(err) => HealResult {
             heal_id: "email.stack".into(),
             ok: false,
