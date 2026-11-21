@@ -23,10 +23,7 @@ pub fn ensure_notification_count_placeholders() -> Result<usize, String> {
                 Ok(true) => fixed += 1,
                 Ok(false) => {}
                 Err(err) => {
-                    eprintln!(
-                        "cpn webmail i18n: skip {}: {err}",
-                        path.display()
-                    );
+                    eprintln!("cpn webmail i18n: skip {}: {err}", path.display());
                 }
             }
         }
@@ -53,7 +50,10 @@ fn walk_collect(dir: &Path, out: &mut Vec<PathBuf>) {
         if path.file_name().and_then(|n| n.to_str()) != Some("user.json") {
             continue;
         }
-        let parent = path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str());
+        let parent = path
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str());
         let grand = path
             .parent()
             .and_then(|p| p.parent())
@@ -158,7 +158,8 @@ mod tests {
 
     #[test]
     fn leaves_correct_english_alone() {
-        let raw = r#"{"MESSAGE_LIST":{"NEW_MESSAGE_NOTIFICATION":"You have %COUNT% new messages!"}}"#;
+        let raw =
+            r#"{"MESSAGE_LIST":{"NEW_MESSAGE_NOTIFICATION":"You have %COUNT% new messages!"}}"#;
         let updated = normalize_new_message_notification_json(raw).unwrap();
         assert_eq!(updated, raw);
     }
