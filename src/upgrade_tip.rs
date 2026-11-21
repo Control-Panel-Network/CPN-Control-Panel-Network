@@ -184,73 +184,19 @@ async fn cargo_build_release(
     Ok(())
 }
 
-async fn heal_rustup(state: &AppState) -> Result<(), String> {
-    require_cmd("curl").await?;
-    let home = upgrade_tip_toolchain::rustup_home_dir();
-    let script = PathBuf::from("/var/tmp/cpn-rustup-init.sh");
-    state
-        .progress("installing", 8, "Installing Rust toolchain (rustup)")
-        .await;
-    upgrade_tip_log::log_info("Installing rustup for tip upgrade (retry=1)");
-    let url = "https://sh.rustup.rs";
-    let output = Command::new("curl")
-        .args([
-            "--proto",
-            "=https",
-            "--tlsv1.2",
-            "-sSf",
-            "--max-time",
-            "120",
-            "-o",
-        ])
-        .arg(&script)
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|error| fail(format!("rustup-init download failed: {error}"), Some(1)))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(fail(
-            format!(
-                "rustup-init download failed ({})",
-                stderr.trim().chars().take(200).collect::<String>()
-            ),
-            Some(1),
-        ));
-    }
-    let cargo_home = home.join(".cargo");
-    let rustup_home = home.join(".rustup");
-    let status = Command::new("sh")
-        .arg(&script)
-        .args(["-y", "--default-toolchain", "stable"])
-        .env("HOME", &home)
-        .env("CARGO_HOME", &cargo_home)
-        .env("RUSTUP_HOME", &rustup_home)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .status()
-        .await
-        .map_err(|error| fail(format!("rustup-init failed to start: {error}"), Some(1)))?;
-    let _ = std::fs::remove_file(&script);
-    if !status.success() {
-        return Err(fail("rustup-init did not complete successfully", Some(1)));
-    }
-    Ok(())
-}
-
 async fn ensure_toolchain(state: &AppState) -> Result<Toolchain, String> {
     if let Some(found) = upgrade_tip_toolchain::discover() {
         upgrade_tip_log::log_info(format!("Using cargo at {}", found.cargo.display()));
+        crate::upgrade_tip_rustup::warn_if_missing_cc();
         return Ok(found);
     }
     upgrade_tip_log::log_failure("cargo not on PATH; attempting rustup heal", Some(1));
-    heal_rustup(state).await?;
+    crate::upgrade_tip_rustup::heal_rustup(state)
+        .await
+        .map_err(|error| fail(error, None))?;
+    crate::upgrade_tip_rustup::warn_if_missing_cc();
     upgrade_tip_toolchain::discover()
-        .ok_or_else(|| fail(upgrade_tip_toolchain::missing_cargo_message(), Some(1)))
+        .ok_or_else(|| fail(upgrade_tip_toolchain::missing_cargo_message(), None))
 }
 
 fn maybe_cleanup_build_trees(root: &Path) {
