@@ -16,10 +16,10 @@ use crate::sites::{create_site, default_docroot, normalize_domain, resolve_paren
 /// the bootstrap admin so package usage / dashboard counts stay coherent.
 fn resolve_migrate_site_owner(raw: &str) -> String {
     let raw = raw.trim();
-    if let Some(boot) = load_bootstrap() {
-        if raw.is_empty() || !is_known_panel_username(raw) {
-            return boot.username;
-        }
+    if let Some(boot) = load_bootstrap()
+        && (raw.is_empty() || !is_known_panel_username(raw))
+    {
+        return boot.username;
     }
     if raw.is_empty() {
         return "cpnowner".into();

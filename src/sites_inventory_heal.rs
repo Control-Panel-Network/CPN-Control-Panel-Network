@@ -72,12 +72,7 @@ fn guess_docroot(domain: &str) -> Option<PathBuf> {
         home.join(domain),
         home.join("public_html").join(domain),
     ];
-    for path in candidates {
-        if path.is_dir() {
-            return Some(path);
-        }
-    }
-    None
+    candidates.into_iter().find(|path| path.is_dir())
 }
 
 fn list_lsws_vhost_names() -> Vec<String> {
