@@ -838,8 +838,7 @@ mod tests {
             "dark mode must paint .cpn-modal with canvas (not UA white)"
         );
         assert!(
-            css.contains(".cpn-modal .stack-form label")
-                && css.contains("color:var(--ink"),
+            css.contains(".cpn-modal .stack-form label") && css.contains("color:var(--ink"),
             "dark modal labels must use ink tokens for contrast on the modal surface"
         );
     }

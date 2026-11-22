@@ -575,8 +575,7 @@ mod tests {
             "native dialogs must use canvas/ink tokens so dark-mode labels stay readable"
         );
         assert!(
-            css.contains(".cpn-modal .stack-form label")
-                && css.contains(".cpn-modal::backdrop"),
+            css.contains(".cpn-modal .stack-form label") && css.contains(".cpn-modal::backdrop"),
             "modal form labels and backdrop must be styled with the shared modal class"
         );
     }
