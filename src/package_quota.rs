@@ -99,8 +99,7 @@ fn disk_used_mb_for_sites(sites: &[SiteRecord]) -> u64 {
 fn approx_disk_mb_for_sites(sites: &[SiteRecord]) -> u64 {
     let mut total_bytes = 0u64;
     for site in sites {
-        total_bytes =
-            total_bytes.saturating_add(site_used_bytes(site, 3_000).unwrap_or(0));
+        total_bytes = total_bytes.saturating_add(site_used_bytes(site, 3_000).unwrap_or(0));
     }
     total_bytes.div_ceil(1024 * 1024)
 }
