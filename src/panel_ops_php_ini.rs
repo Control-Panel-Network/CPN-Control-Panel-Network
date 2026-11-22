@@ -19,7 +19,12 @@ pub enum PhpIniRuntime {
 
 impl PhpIniRuntime {
     pub fn parse(raw: Option<&str>) -> Self {
-        match raw.map(str::trim).unwrap_or("").to_ascii_lowercase().as_str() {
+        match raw
+            .map(str::trim)
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "apache" | "httpd" | "system" | "modular" => Self::Apache,
             _ => Self::LiteSpeed,
         }

@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 pub use crate::panel_hub_routes_php_cfg::{
     server_php_configs, server_php_configs_post, server_php_configs_restart,
-    server_php_configs_save_advanced, server_php_configs_save_basic, server_php_configs_set_default,
-    server_php_configs_set_default_get,
+    server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_configs_set_default_get,
 };
 
 fn same_origin_ok(http: &HttpRequest) -> bool {

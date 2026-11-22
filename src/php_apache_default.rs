@@ -10,7 +10,7 @@ use crate::os_support::detect_guest_os;
 use crate::panel_ops_php_ext::MANAGED_BRANCHES;
 use crate::paths::default_data_dir;
 use crate::php_defaults::{
-    host_php_cli_branch, normalize_php_request, stream_for_branch, CPN_PREFERRED_PHP_BRANCH,
+    CPN_PREFERRED_PHP_BRANCH, host_php_cli_branch, normalize_php_request, stream_for_branch,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;

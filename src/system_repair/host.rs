@@ -1,7 +1,7 @@
 //! Host stack checks: MariaDB, web, disk, MFA, firewall, SSL, Docker.
 
 use super::host_apps;
-use super::{push, CheckStatus, HealResult};
+use super::{CheckStatus, HealResult, push};
 use crate::litespeed_stack;
 use crate::panel_feature_gate;
 use crate::panel_ops_firewall_heal;
