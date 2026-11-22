@@ -133,7 +133,7 @@ pub fn usage_for_account_opts(
 
     let owned = owned_site_domains(username)?;
 
-    let emails_used = mail_accounts::list_accounts()
+    let emails_used = mail_accounts::list_active_accounts()
         .into_iter()
         .filter(|m| {
             if owned.iter().any(|d| names_equal(d, &m.domain)) {

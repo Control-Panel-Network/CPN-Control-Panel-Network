@@ -125,6 +125,7 @@ fn account_from_legacy(row: &LegacyMailbox) -> MailAccount {
         mailbox_password: String::new(),
         created_at_unix: now,
         updated_at_unix: now,
+        deleted_at_unix: None,
     }
 }
 

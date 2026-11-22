@@ -188,7 +188,7 @@ pub fn render_users_sql(rows: &[SogoUserRow]) -> String {
 fn collect_user_rows() -> Vec<SogoUserRow> {
     let mut rows = Vec::new();
     for account in crate::mail_accounts::list_accounts() {
-        if !account.enabled {
+        if account.is_deleted() || !account.enabled {
             continue;
         }
         let Ok(local) = crate::panel_ops_mailbox_provision::local_part(&account.address) else {

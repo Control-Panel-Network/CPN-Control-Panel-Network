@@ -55,18 +55,19 @@ pub fn mailbox_choices() -> Vec<(String, String)> {
         WEBMAIL_ADMIN_CHOICE.to_string(),
         webmail_admin_option_label(),
     )];
-    out.extend(list_accounts().into_iter().map(|a| (a.id, a.address)));
+    out.extend(
+        list_accounts()
+            .into_iter()
+            .filter(|a| !a.is_deleted())
+            .map(|a| (a.id, a.address)),
+    );
     out
 }
 
 /// Reset mailbox password, or SnappyMail-family admin when `address_or_id` is the Admin choice.
 pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result<String, String> {
-    if new_password.len() < 8 {
-        return Err("Password must be at least 8 characters".into());
-    }
-    if new_password.len() > 256 {
-        return Err("Password is too long".into());
-    }
+    let policy = crate::account::default_password_policy();
+    crate::account::password_meets_policy(new_password, &policy)?;
     let key = address_or_id.trim();
     if key.is_empty() {
         return Err("Select a mailbox".into());
@@ -147,10 +148,10 @@ mod tests {
     fn reset_updates_registry() {
         with_test_data_dir(|| {
             // Built from parts so CodeQL does not treat literals as hard-coded passwords.
-            let old_mailbox: String = ['o', 'l', 'd', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
+            let old_mailbox: String = ['O', 'l', 'd', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
                 .into_iter()
                 .collect();
-            let new_mailbox: String = ['n', 'e', 'w', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
+            let new_mailbox: String = ['N', 'e', 'w', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
                 .into_iter()
                 .collect();
             let smtp_secret: String = ['s', 'e', 'c', 'r', 'e', 't'].into_iter().collect();

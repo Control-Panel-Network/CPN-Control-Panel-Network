@@ -52,7 +52,8 @@ pub use crate::panel_app_routes::{
 };
 pub use crate::panel_backup_routes::{backups_page, backups_run};
 pub use crate::panel_mail_routes::{
-    email_account_create, email_account_disable, email_account_enable,
+    email_account_create, email_account_delete, email_account_disable, email_account_enable,
+    email_account_modify, email_account_restore,
 };
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
