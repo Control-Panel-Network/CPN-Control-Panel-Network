@@ -8,6 +8,9 @@
 //! - Subdomain `blog.example.com` (parent site `example.com` must already exist):
 //!   - Home: `/home/example.com/blog.example.com/`
 //!   - Docroot: `/home/example.com/blog.example.com/public_html/`
+//! - Provider / multi-label public-suffix FQDNs (for example `vmi123.contaboserver.net`,
+//!   `shop.example.co.uk`) are first-class apex sites under `/home/<fqdn>/`, not nested
+//!   under the provider suffix (`contaboserver.net`, `co.uk`).
 //!
 //! # Ownership (OpenSSH SFTP chroot + PHP write)
 //!
@@ -161,15 +164,76 @@ fn site_path(domain: &str) -> PathBuf {
     sites_dir().join(format!("{domain}.json"))
 }
 
+/// Multi-label public suffixes where the registrable domain is `label.<suffix>`.
+///
+/// Includes common ccTLD compounds and VPS/dynamic-DNS provider hostnames so
+/// operator FQDNs are apex sites (not "create parent contaboserver.net" errors).
+/// Keep this list generic; never put customer Contabo hostnames here.
+fn multi_label_public_suffixes() -> &'static [&'static str] {
+    &[
+        // VPS / lab / dynamic-DNS provider hostnames (label.suffix is the apex).
+        "contaboserver.net",
+        "ddns.net",
+        "hopto.org",
+        "duckdns.org",
+        "serveftp.com",
+        "servehttp.com",
+        "sytes.net",
+        "zapto.org",
+        // Common multi-part public suffixes.
+        "co.uk",
+        "org.uk",
+        "ac.uk",
+        "gov.uk",
+        "com.au",
+        "net.au",
+        "org.au",
+        "co.nz",
+        "com.br",
+        "co.jp",
+        "com.cn",
+        "com.mx",
+        "co.za",
+        "com.sg",
+        "com.hk",
+        "com.tw",
+    ]
+}
+
+/// Number of trailing DNS labels that form the public suffix for `domain`.
+///
+/// Default is `1` (`com`, `net`, `io`). Known multi-label suffixes return `2+`.
+pub fn public_suffix_label_count(domain: &str) -> usize {
+    let domain = domain.trim().trim_matches('.').to_ascii_lowercase();
+    if domain.is_empty() {
+        return 1;
+    }
+    let mut best = 1usize;
+    for suffix in multi_label_public_suffixes() {
+        let suffix_labels = suffix.split('.').count().max(1);
+        if domain == *suffix || domain.ends_with(&format!(".{suffix}")) {
+            best = best.max(suffix_labels);
+        }
+    }
+    best
+}
+
 /// Parent domain candidates for a FQDN, longest first (for example
 /// `a.b.example.com` -> `b.example.com`, `example.com`).
+///
+/// Respects multi-label public suffixes: `vmi123.contaboserver.net` and
+/// `example.co.uk` are apex (no parents). `blog.vmi123.contaboserver.net`
+/// parents to `vmi123.contaboserver.net` only.
 pub fn parent_domain_candidates(domain: &str) -> Vec<String> {
-    let parts: Vec<&str> = domain.split('.').collect();
+    let parts: Vec<&str> = domain.split('.').filter(|p| !p.is_empty()).collect();
     let mut out = Vec::new();
-    if parts.len() <= 2 {
+    let suffix_labels = public_suffix_label_count(domain);
+    // Apex shape: one registrable label + public suffix labels.
+    let min_apex_labels = suffix_labels.saturating_add(1);
+    if parts.len() <= min_apex_labels {
         return out;
     }
-    for skip in 1..=(parts.len() - 2) {
+    for skip in 1..=(parts.len() - min_apex_labels) {
         out.push(parts[skip..].join("."));
     }
     out
@@ -712,6 +776,47 @@ mod tests {
             vec!["b.example.com".to_string(), "example.com".to_string()]
         );
         assert!(parent_domain_candidates("example.com").is_empty());
+    }
+
+    #[test]
+    fn provider_and_compound_suffixes_are_apex() {
+        // Contabo-style VPS hostname: do not require creating contaboserver.net.
+        assert_eq!(public_suffix_label_count("vmi123456.contaboserver.net"), 2);
+        assert!(parent_domain_candidates("vmi123456.contaboserver.net").is_empty());
+        assert_eq!(
+            parent_domain_candidates("blog.vmi123456.contaboserver.net"),
+            vec!["vmi123456.contaboserver.net".to_string()]
+        );
+
+        // Dynamic DNS / compound ccTLD apex shapes.
+        assert!(parent_domain_candidates("lab.ddns.net").is_empty());
+        assert!(parent_domain_candidates("example.co.uk").is_empty());
+        assert_eq!(
+            parent_domain_candidates("shop.example.co.uk"),
+            vec!["example.co.uk".to_string()]
+        );
+    }
+
+    #[test]
+    fn create_provider_hostname_without_parent_suffix_site() {
+        with_temp_data(|| {
+            let home = hosting_home_root();
+            let created = create_site(
+                "vmi999001.contaboserver.net",
+                "admin",
+                None,
+                Some("openlitespeed"),
+                Some("provider fqdn apex"),
+            )
+            .expect("provider hostname must create as apex");
+            let expected = home
+                .join("vmi999001.contaboserver.net")
+                .join("public_html")
+                .to_string_lossy()
+                .into_owned();
+            assert_eq!(created.docroot, expected);
+            assert!(Path::new(&created.docroot).is_dir());
+        });
     }
 
     #[test]
