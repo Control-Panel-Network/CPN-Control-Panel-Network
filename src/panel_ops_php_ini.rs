@@ -2,10 +2,41 @@
 
 use crate::panel_ops_php_ext::{PhpPackageFamily, list_php_versions};
 use crate::paths::default_data_dir;
+use crate::php_apache_default::{ApachePhpKind, resolve_apache_php_ini};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Which PHP runtime the Configurations editor targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhpIniRuntime {
+    /// LiteSpeed `lsphp*` (default when that tree exists for the branch).
+    LiteSpeed,
+    /// Apache / httpd oriented PHP (system Remi or Remi parallel). Never lsphp.
+    Apache,
+}
+
+impl PhpIniRuntime {
+    pub fn parse(raw: Option<&str>) -> Self {
+        match raw
+            .map(str::trim)
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "apache" | "httpd" | "system" | "modular" => Self::Apache,
+            _ => Self::LiteSpeed,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LiteSpeed => "litespeed",
+            Self::Apache => "apache",
+        }
+    }
+}
 
 /// Basic php.ini keys shown on the Configurations Basic Settings tab.
 pub const BASIC_BOOL_KEYS: &[&str] = &[
@@ -66,12 +97,36 @@ fn php_ini_from_binary(bin: &str) -> Option<PathBuf> {
     None
 }
 
-/// Resolve the writable php.ini for a managed PHP branch.
+/// Resolve the writable php.ini for a managed PHP branch (LiteSpeed preferred when present).
 pub fn resolve_php_ini_target(branch: &str) -> Result<PhpIniTarget, String> {
+    resolve_php_ini_target_for(branch, PhpIniRuntime::LiteSpeed)
+}
+
+/// Resolve php.ini for the selected runtime. Apache never writes LiteSpeed lsphp ini.
+pub fn resolve_php_ini_target_for(
+    branch: &str,
+    runtime: PhpIniRuntime,
+) -> Result<PhpIniTarget, String> {
     let branch = branch.trim();
     if branch.is_empty() {
         return Err("PHP version is required".into());
     }
+
+    if runtime == PhpIniRuntime::Apache {
+        let (ini_path, binary, kind) = resolve_apache_php_ini(branch)?;
+        let family = match kind {
+            ApachePhpKind::Parallel | ApachePhpKind::Modular | ApachePhpKind::System => {
+                PhpPackageFamily::Modular
+            }
+        };
+        return Ok(PhpIniTarget {
+            branch: branch.to_string(),
+            ini_path,
+            binary,
+            family,
+        });
+    }
+
     let versions = list_php_versions();
     let matched = versions.iter().find(|v| v.branch == branch);
     if let Some(v) = matched
@@ -272,6 +327,36 @@ pub fn restart_php_services(family: PhpPackageFamily) -> Result<String, String> 
             }
             Err(e) => notes.push(format!("php-fpm restart error: {e}")),
         }
+        for unit in [
+            "php86-php-fpm",
+            "php85-php-fpm",
+            "php84-php-fpm",
+            "php83-php-fpm",
+            "php82-php-fpm",
+        ] {
+            let ok = Command::new("systemctl")
+                .args(["try-restart", unit])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if ok {
+                notes.push(format!("{unit} restarted"));
+            }
+        }
+        for unit in ["httpd", "apache2"] {
+            let ok = Command::new("systemctl")
+                .args(["try-restart", unit])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if ok {
+                notes.push(format!("{unit} restarted"));
+            }
+        }
     }
     if family == PhpPackageFamily::LiteSpeed {
         for unit in ["lshttpd", "lsws"] {
@@ -310,5 +395,17 @@ mod tests {
     fn truthy_parser() {
         assert!(is_ini_truthy("On"));
         assert!(!is_ini_truthy("Off"));
+    }
+
+    #[test]
+    fn runtime_parse_apache_vs_litespeed() {
+        assert_eq!(PhpIniRuntime::parse(Some("apache")), PhpIniRuntime::Apache);
+        assert_eq!(PhpIniRuntime::parse(Some("httpd")), PhpIniRuntime::Apache);
+        assert_eq!(
+            PhpIniRuntime::parse(Some("litespeed")),
+            PhpIniRuntime::LiteSpeed
+        );
+        assert_eq!(PhpIniRuntime::parse(None), PhpIniRuntime::LiteSpeed);
+        assert_eq!(PhpIniRuntime::Apache.as_str(), "apache");
     }
 }

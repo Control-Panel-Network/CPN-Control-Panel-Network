@@ -1,4 +1,4 @@
-//! LiteSpeed `lsphp*` host runtime detection (CyberPanel / OLS migration installs).
+//! LiteSpeed `lsphp*` host runtime detection (OLS / LiteSpeed migration installs).
 //!
 //! Remi modular `php-fpm` and `lsphp*-common` both own `/var/lib/php/opcache` on EL9+.
 //! CPN must not pull Remi `php-fpm` / `php-opcache` when LiteSpeed PHP is already present.
