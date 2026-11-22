@@ -314,6 +314,23 @@ pub fn run_light_email_heal(context: &str) -> LightHealReport {
             .notes
             .push(format!("hosted mail maps sync ({context})"));
 
+        match crate::mail_home_layout::migrate_legacy_top_level_homes(false) {
+            Ok(mig) => {
+                report.notes.push(format!(
+                    "mailbox home layout: scanned={} migrated={} skipped={}",
+                    mig.scanned, mig.migrated, mig.skipped
+                ));
+                if mig.migrated > 0 {
+                    crate::mail_hosted_domains::sync_hosted_mail_delivery_logged(
+                        "mailbox home migrate (light heal)",
+                    );
+                }
+            }
+            Err(e) => report
+                .notes
+                .push(format!("mailbox home layout warning: {e}")),
+        }
+
         let dns = soft_publish_cloudflare_mail_dns();
         report.notes.push(format!("mail DNS: {dns}"));
     }

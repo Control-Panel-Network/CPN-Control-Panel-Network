@@ -46,9 +46,22 @@ pub fn sanitize_log_line(line: &str) -> String {
         "pwd=",
         "secret=",
         "token=",
+        "totp=",
+        "totp_secret=",
+        "otpauth://",
+        "backup_code=",
+        "backup_codes=",
+        "session=",
+        "session_token=",
+        "bearer ",
         "authorization:",
         "api_key=",
         "apikey=",
+        "api_secret=",
+        "smtp_password=",
+        "mailbox_password=",
+        "private_key=",
+        "credential=",
     ];
     let mut skip_until_space = false;
     let mut emitted = 0usize;
@@ -372,6 +385,14 @@ mod tests {
         assert!(!with_eq.contains("abc123"));
         let plain = sanitize_log_line("sshd[1]: Failed password for root from 10.0.0.1 port 22");
         assert!(plain.contains("Failed password"));
+        let mfa = sanitize_log_line(
+            "enroll totp_secret=JBSWY3DPEHPK3PXP backup_codes=111111 otpauth://totp/CPN?secret=ABC",
+        );
+        assert!(mfa.contains("totp_secret=***"));
+        assert!(!mfa.contains("JBSWY3DPEHPK3PXP"));
+        assert!(mfa.contains("backup_codes=***"));
+        assert!(!mfa.contains("111111"));
+        assert!(mfa.contains("otpauth://***"));
     }
 
     #[test]

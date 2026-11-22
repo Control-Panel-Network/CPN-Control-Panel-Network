@@ -78,6 +78,13 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/account/users/password" => Some("identity.password.change"),
         "/account/users/security/totp/enable" => Some("identity.totp.enroll"),
         "/account/users/security/totp/disable" => Some("identity.totp.disable"),
+        "/account/users/profile/totp/begin" => Some("identity.totp.enroll"),
+        "/account/users/profile/totp/confirm" => Some("identity.totp.enroll"),
+        "/account/users/profile/totp/disable" => Some("identity.totp.disable"),
+        "/account/users/profile/password" => Some("identity.password.change"),
+        "/account/security/change-password" => Some("identity.password.change"),
+        "/account/security/enroll-2fa/begin" => Some("identity.totp.enroll"),
+        "/account/security/enroll-2fa/confirm" => Some("identity.totp.enroll"),
         "/account/users/security/passkey/register" => Some("identity.passkey.enroll"),
         "/account/users/security/passkey/delete" => Some("identity.passkey.delete"),
         "/account/users/security/passkey/rename" => Some("identity.passkey.rename"),
@@ -161,6 +168,22 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/email/delete" => Some("email.mailbox.delete"),
         "/email/password" => Some("email.password"),
         "/email/dkim" => Some("email.dkim"),
+        "/email/dkim/ensure" => Some("email.dkim"),
+        "/email/forwarding/save" => Some("email.forwarding.save"),
+        "/email/forwarding/delete" => Some("email.forwarding.delete"),
+        "/email/forwarding/apply" => Some("email.forwarding.apply"),
+        "/email/catchall/save" => Some("email.catchall.save"),
+        "/email/webmail/settings" => Some("email.webmail.settings"),
+        "/email/webmail/regenerate-path" => Some("email.webmail.regenerate-path"),
+        "/email/mta-sts/save" => Some("email.mta_sts.save"),
+        "/email/mta-sts/push-cloudflare" => Some("email.mta_sts.push"),
+        "/email/bimi/save" => Some("email.bimi.save"),
+        "/email/bimi/push-cloudflare" => Some("email.bimi.push"),
+        "/server/php/configs/save-basic" => Some("php.config.save"),
+        "/server/php/configs/save-advanced" => Some("php.config.save"),
+        "/server/php/configs/restart" => Some("php.config.restart"),
+        "/server/php/extensions/install" => Some("php.extension.install"),
+        "/server/php/extensions/uninstall" => Some("php.extension.uninstall"),
         "/backups/run" => Some("backup.run"),
         "/backups/restore" => Some("backup.restore"),
         "/backups/schedule" => Some("backup.schedule"),
@@ -298,88 +321,7 @@ pub fn default_severity(action: &str, ok: bool) -> AuditSeverity {
     }
 }
 
-pub fn action_label(action: &str) -> &'static str {
-    match action {
-        "host.install" => "Host package: install",
-        "host.reinstall" => "Host package: reinstall",
-        "host.uninstall" => "Host package: uninstall",
-        "host.start" => "Host package: start",
-        "host.stop" => "Host package: stop",
-        "host.attach" => "Host package: attach to site",
-        "host.detach" => "Host package: detach from site",
-        "plugin.install" => "Plugin: install",
-        "plugin.install-cpn" => "Plugin: install for User Panel",
-        "plugin.install-host" => "Plugin: install on host",
-        "plugin.activate-host" => "Plugin: activate from host",
-        "plugin.deactivate-host" => "Plugin: deactivate (host install)",
-        "plugin.uninstall-host" => "Plugin: uninstall from host",
-        "plugin.uninstall-cpn" => "Plugin: uninstall from User Panel",
-        "plugin.uninstall" => "Plugin: uninstall",
-        "plugin.activate" => "Plugin: activate",
-        "plugin.activate-cpn" => "Plugin: activate (User Panel)",
-        "plugin.deactivate" => "Plugin: deactivate",
-        "plugin.deactivate-cpn" => "Plugin: deactivate (User Panel)",
-        "plugin.settings" => "Plugin: settings",
-        "theme.install" => "Theme: install",
-        "theme.update" => "Theme: update",
-        "theme.uninstall" => "Theme: uninstall",
-        "theme.apply" => "Theme: apply",
-        "theme.update-all" => "Theme: update all",
-        "theme.redeem" => "Theme: redeem",
-        "panel.notifications.remote" => "Panel: remote notification broadcast",
-        "security.fail2ban.unban" => "Security: Fail2Ban unban",
-        "auth.login" => "Auth: login",
-        "auth.login.fail" => "Auth: login failed",
-        "auth.mfa.verify" => "Auth: MFA verify",
-        "auth.mfa.fail" => "Auth: MFA failed",
-        "auth.logout" => "Auth: logout",
-        "auth.lockout" => "Auth: lockout",
-        "auth.password.forgot" => "Auth: forgot password",
-        "auth.password.reset" => "Auth: reset password",
-        "auth.account.setup" => "Auth: first account setup",
-        "token.issue" => "API token: issue",
-        "token.revoke" => "API token: revoke",
-        "account.create" => "Account: create",
-        "account.delete" => "Account: delete",
-        "account.rename" => "Account: rename",
-        "account.deactivate" => "Account: deactivate",
-        "account.enable" => "Account: enable",
-        "account.modify" => "Account: modify",
-        "identity.password.change" => "Identity: password change",
-        "identity.totp.enroll" => "Identity: TOTP enroll",
-        "identity.totp.disable" => "Identity: TOTP disable",
-        "identity.passkey.enroll" => "Identity: passkey enroll",
-        "identity.passkey.delete" => "Identity: passkey delete",
-        "identity.passkey.rename" => "Identity: passkey rename",
-        "firewall.enable" => "Firewall: enable",
-        "firewall.start" => "Firewall: start",
-        "firewall.stop" => "Firewall: stop",
-        "firewall.reload" => "Firewall: reload",
-        "firewall.rule.add" => "Firewall: add rule",
-        "firewall.rule.delete" => "Firewall: delete rule",
-        "firewall.ban.add" => "Firewall: ban",
-        "firewall.ban.unban" => "Firewall: unban",
-        "settings.audit" => "Settings: audit policy",
-        "settings.log_retention" => "Settings: log retention",
-        "repair.heal" => "System repair: heal",
-        "migrate.apply" => "Migrate: apply",
-        "updates.upgrade" => "Updates: upgrade",
-        "cli.mfa.clear" => "CLI: MFA clear",
-        "cli.mfa.enroll-url" => "CLI: MFA enroll URL",
-        "cli.totp.begin" => "CLI: TOTP enroll begin",
-        "cli.totp.confirm" => "CLI: TOTP enroll confirm",
-        "cli.password" => "CLI: password reset",
-        "cli.doctor.heal" => "CLI: doctor heal",
-        "cli.uninstall" => "CLI: uninstall",
-        "cli.account.create" => "CLI: account create",
-        "cli.account.delete" => "CLI: account delete",
-        "website.create" => "Website: create",
-        "website.delete" => "Website: delete",
-        "backup.run" => "Backup: run",
-        "backup.restore" => "Backup: restore",
-        _ => "Panel action",
-    }
-}
+pub use crate::panel_audit_labels::action_label;
 
 pub fn synthesize_action(method: &str, path: &str) -> String {
     let path = normalize_path(path);
@@ -453,6 +395,18 @@ mod tests {
             assert_eq!(action_for_path(path), Some(action), "action for {path}");
             assert_eq!(category_for_path(path), category, "category for {path}");
         }
+        assert_eq!(
+            action_for_path("/account/users/profile/totp/begin"),
+            Some("identity.totp.enroll")
+        );
+        assert_eq!(
+            action_for_path("/email/forwarding/save"),
+            Some("email.forwarding.save")
+        );
+        assert_eq!(
+            category_for_path("/server/php/configs/save-basic"),
+            AuditCategory::Docker
+        );
     }
 
     #[test]

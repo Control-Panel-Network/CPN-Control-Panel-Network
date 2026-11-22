@@ -1,7 +1,8 @@
-//! `cpn mail`: classic mailbox import, password sync, and mail-auth DNS publish.
+//! `cpn mail`: classic mailbox import, password sync, home migrate, and mail-auth DNS.
 
 use crate::cli_common::read_password_confirmed;
 use crate::mail_accounts_import::{format_import_summary, import_legacy_mailboxes_into_registry};
+use crate::mail_home_layout::migrate_legacy_top_level_homes;
 use crate::panel_audit_cli::record_cli;
 use crate::panel_ops_email_password::reset_mailbox_password;
 use crate::panel_ops_mail_dns::{provision_mail_dns, provision_mail_dns_for_known_domains};
@@ -20,6 +21,13 @@ pub enum MailCommands {
         /// Read the new password from stdin (never put secrets in argv)
         #[arg(long)]
         password_stdin: bool,
+    },
+    /// Move legacy `/home/<user>` Maildirs into `/home/<domain>/e-mails/<user>/`
+    #[command(name = "migrate-homes")]
+    MigrateHomes {
+        /// Plan moves only (no filesystem changes)
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Publish SPF / DKIM / DMARC (local zone + Cloudflare when configured)
     #[command(name = "publish-dns")]
@@ -63,6 +71,29 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
             record_cli("cli.mail.passwd", address, true, "mailbox password updated");
             // Do not echo reset_mailbox_password return (CodeQL rust/cleartext-logging).
             println!("Mailbox password updated for `{address}`.");
+            Ok(())
+        }
+        MailCommands::MigrateHomes { dry_run } => {
+            require_root()?;
+            let report = migrate_legacy_top_level_homes(dry_run)?;
+            let summary = format!(
+                "mailbox home migrate: scanned={} migrated={} skipped={} dry_run={}",
+                report.scanned, report.migrated, report.skipped, report.dry_run
+            );
+            record_cli(
+                "cli.mail.migrate-homes",
+                "all",
+                true,
+                &summary,
+            );
+            println!("{summary}");
+            for note in report.notes {
+                println!("{note}");
+            }
+            if !dry_run && report.migrated > 0 {
+                crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("migrate mailbox homes");
+                let _ = crate::panel_ops_mailbox_folders::heal_all_maildir_system_folders();
+            }
             Ok(())
         }
         MailCommands::PublishDns { domain, all } => {

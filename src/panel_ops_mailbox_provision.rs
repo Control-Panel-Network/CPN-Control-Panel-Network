@@ -1,18 +1,15 @@
 //! Provision local Postfix/Dovecot system mailbox for a panel address.
+//!
+//! Mailbox homes live under `/home/<domain>/e-mails/<user>/` (Maildir + sieve),
+//! not as top-level `/home/<user>` next to website homes.
 
-use std::fs;
 use std::io::Write;
-use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::mail_home_layout::{preferred_mailbox_home, split_address};
+
 pub(crate) fn local_part(address: &str) -> Result<String, String> {
-    let address = address.trim().to_ascii_lowercase();
-    let Some((user, domain)) = address.split_once('@') else {
-        return Err("Mailbox address must include @domain".into());
-    };
-    if user.is_empty() || domain.is_empty() {
-        return Err("Mailbox address is incomplete".into());
-    }
+    let (user, _domain) = split_address(address)?;
     if !user
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
@@ -22,7 +19,7 @@ pub(crate) fn local_part(address: &str) -> Result<String, String> {
     if user.len() > 32 {
         return Err("Local part is too long for a system mailbox user".into());
     }
-    Ok(user.to_string())
+    Ok(user)
 }
 
 pub(crate) fn user_exists(user: &str) -> bool {
@@ -59,32 +56,17 @@ fn set_password(user: &str, password: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_maildir(user: &str) -> Result<(), String> {
-    let home = format!("/home/{user}");
-    let maildir = format!("{home}/Maildir");
-    for sub in ["new", "cur", "tmp"] {
-        let p = format!("{maildir}/{sub}");
-        fs::create_dir_all(&p).map_err(|e| format!("Cannot create Maildir: {e}"))?;
-    }
-    let _ = Command::new("chown")
-        .args(["-R", &format!("{user}:{user}"), &maildir])
-        .status();
-    if Path::new("/etc/aliases").exists() {
-        let _ = Command::new("newaliases").status();
-    }
-    let _ = home;
-    Ok(())
-}
-
 /// Create or update a local system mailbox (Dovecot PAM / Postfix Maildir).
 pub fn provision_local_mailbox(address: &str, password: &str) -> Result<String, String> {
     if password.len() < 8 {
         return Err("Mailbox password must be at least 8 characters".into());
     }
     let user = local_part(address)?;
+    let (_, domain) = split_address(address)?;
+    let home = preferred_mailbox_home(&domain, &user);
     #[cfg(windows)]
     {
-        let _ = user;
+        let _ = (user, home);
         Ok(
             "Local mailbox provisioning is Linux-only; account was stored in the panel registry."
                 .into(),
@@ -92,30 +74,21 @@ pub fn provision_local_mailbox(address: &str, password: &str) -> Result<String, 
     }
     #[cfg(not(windows))]
     {
+        use crate::mail_home_layout::{ensure_mailbox_unix_user, ensure_maildir_skeleton};
         // Classic virtual-mail stacks authenticate in SQL (`e_users`), not PAM on a short
         // Unix local part. Skip chpasswd/useradd so Change Password cannot fail before SQL.
         if crate::mail_legacy_sql::virtual_sql_mail_active() {
             return crate::mail_legacy_sql::sync_password_to_virtual_sql(address, password);
         }
-        if !user_exists(&user) {
-            let status = Command::new("useradd")
-                .args(["-m", "-s", "/sbin/nologin", &user])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .status()
-                .map_err(|e| format!("useradd failed: {e}"))?;
-            if !status.success() {
-                return Err(format!("useradd failed for `{user}`"));
-            }
-        }
+        ensure_mailbox_unix_user(&user, &home)?;
         set_password(&user, password)?;
-        ensure_maildir(&user)?;
+        ensure_maildir_skeleton(&home, &user)?;
         let _ = crate::panel_ops_mailbox_folders::ensure_dovecot_system_mailboxes_conf();
-        let _ = crate::panel_ops_mailbox_folders::ensure_imap_system_folders(&user);
+        let _ = crate::panel_ops_mailbox_folders::ensure_imap_system_folders_for_email(address);
         let _ = crate::install_snappymail_folders::seed_settings_local_for_address(address);
         Ok(format!(
-            "Local mailbox ready for `{address}` (system user `{user}`, Maildir + system folders)."
+            "Local mailbox ready for `{address}` (system user `{user}`, home `{}`).",
+            home.display()
         ))
     }
 }

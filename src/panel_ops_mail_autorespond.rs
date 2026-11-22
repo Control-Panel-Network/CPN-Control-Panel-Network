@@ -74,10 +74,11 @@ fn sieve_escape(value: &str) -> String {
 
 fn write_vacation_sieve(item: &Autoresponder) -> Result<(), String> {
     let user = local_part(&item.address)?;
-    let home = PathBuf::from(format!("/home/{user}"));
+    let home = crate::mail_home_layout::resolve_mailbox_home(&item.address)
+        .unwrap_or_else(|| PathBuf::from(format!("/home/{user}")));
     if !home.is_dir() {
         return Err(format!(
-            "Mailbox system user `{user}` home is missing; create the mailbox first"
+            "Mailbox home for `{user}` is missing; create the mailbox first"
         ));
     }
     let sieve_dir = home.join("sieve");
