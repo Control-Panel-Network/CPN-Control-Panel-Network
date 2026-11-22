@@ -179,6 +179,24 @@ button { font:inherit; cursor:pointer; }
   padding:10px 12px; border:1px solid var(--hairline); border-radius:10px;
   background:var(--canvas); color:var(--ink);
 }
+/* Native <dialog> defaults to a light UA surface; theme tokens so dark-mode
+   light ink/labels stay readable (no white-on-white). */
+.cpn-modal {
+  border:1px solid var(--hairline,#d0d5dd); border-radius:12px; padding:0;
+  max-width:min(440px, calc(100% - 24px)); width:calc(100% - 24px);
+  background:var(--canvas,#fff); color:var(--ink,#1d1d1f);
+  box-shadow:0 18px 48px rgba(15,23,42,.22); color-scheme:light dark;
+}
+.cpn-modal::backdrop { background:rgba(15,23,42,.55); }
+.cpn-modal h2 { margin:0 0 8px; font-size:1.15rem; color:var(--ink,#1d1d1f); }
+.cpn-modal .muted { color:var(--muted,#6e6e73); }
+.cpn-modal .stack-form label { color:var(--ink,#1d1d1f); }
+.cpn-modal .stack-form input,
+.cpn-modal .stack-form select,
+.cpn-modal .stack-form textarea {
+  background:var(--surface-soft,#fafafc); color:var(--ink,#1d1d1f);
+  border-color:var(--hairline,#e0e0e0);
+}
 .cpn-check-fieldset { border:1px solid var(--hairline,#d0d5dd); border-radius:8px; padding:12px 14px 14px; margin:0; min-width:0; }
 .cpn-check-fieldset legend { padding:0 6px; font-weight:600; }
 .cpn-check-grid {
@@ -546,6 +564,22 @@ pub fn panel_shell_exp(
 #[cfg(test)]
 mod tests {
     use super::panel_styles;
+
+    #[test]
+    fn panel_styles_theme_native_modals_with_canvas_ink() {
+        let css = panel_styles();
+        assert!(
+            css.contains(".cpn-modal")
+                && css.contains("background:var(--canvas")
+                && css.contains("color:var(--ink"),
+            "native dialogs must use canvas/ink tokens so dark-mode labels stay readable"
+        );
+        assert!(
+            css.contains(".cpn-modal .stack-form label")
+                && css.contains(".cpn-modal::backdrop"),
+            "modal form labels and backdrop must be styled with the shared modal class"
+        );
+    }
 
     #[test]
     fn panel_styles_keep_sidebar_while_main_scrolls() {

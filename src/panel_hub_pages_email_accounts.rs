@@ -78,9 +78,9 @@ fn modify_modal_html() -> String {
     let hint = password_policy_hint_html(&policy);
     let min_len = policy.min_length;
     format!(
-        r#"<dialog id="mailbox-modify-modal" class="cpn-modal" style="border:1px solid #d0d5dd;border-radius:12px;padding:0;max-width:440px;width:calc(100% - 24px);">
+        r#"<dialog id="mailbox-modify-modal" class="cpn-modal">
   <form method="post" action="/email/accounts/modify" class="stack-form" style="padding:20px;margin:0;" id="mailbox-modify-form">
-    <h2 style="margin:0 0 8px;font-size:1.15rem;">Modify mailbox</h2>
+    <h2>Modify mailbox</h2>
     <p class="muted" id="mailbox-modify-address" style="margin:0 0 12px;"></p>
     <input type="hidden" name="id" id="mailbox-modify-id" value="">
     <input type="hidden" name="return_to" value="/email/accounts">
@@ -400,5 +400,21 @@ mod tests {
         assert!(html.contains("mailbox-modify-modal"));
         assert!(html.contains("/email/accounts/modify"));
         assert!(html.contains("/email/accounts/delete") || html.contains("No mailboxes yet"));
+    }
+
+    #[test]
+    fn modify_modal_uses_shared_themed_cpn_modal_class() {
+        let html = modify_modal_html();
+        assert!(
+            html.contains("id=\"mailbox-modify-modal\"") && html.contains("class=\"cpn-modal\""),
+            "Modify mailbox dialog must use .cpn-modal for themed contrast"
+        );
+        assert!(
+            !html.contains("border:1px solid #d0d5dd"),
+            "hardcoded light border fights dark-mode canvas tokens"
+        );
+        assert!(html.contains("Email username (before @)"));
+        assert!(html.contains("New password (optional)"));
+        assert!(html.contains("Confirm new password"));
     }
 }
