@@ -1,8 +1,10 @@
 //! Hosted-domain local delivery for the CPN Postfix + Dovecot stack.
 //!
-//! Mailboxes are system users (`smoke@example.com` -> user `smoke`, Maildir
-//! `/home/smoke/Maildir`). Unknown recipients in a hosted domain bounce unless
-//! Postfix is loopback-only (then unknown addresses relay to the public MX).
+//! Mailboxes are system users (`smoke@example.com` -> user `smoke`) whose home
+//! is `/home/<domain>/e-mails/<user>/` with Maildir under that tree. Postfix
+//! aliases rewrite to `user@myhostname` for local delivery. Unknown recipients
+//! in a hosted domain bounce unless Postfix is loopback-only (then unknown
+//! addresses relay to the public MX).
 //!
 //! Maps: `/etc/postfix/cpn_virtual_domains` and `/etc/postfix/cpn_virtual_aliases`.
 

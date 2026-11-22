@@ -119,10 +119,11 @@ fn render_sieve_for_address(address: &str, rules: &[EmailFilter]) -> String {
 
 fn write_filters_sieve(address: &str) -> Result<(), String> {
     let user = local_part(address)?;
-    let home = PathBuf::from(format!("/home/{user}"));
+    let home = crate::mail_home_layout::resolve_mailbox_home(address)
+        .unwrap_or_else(|| PathBuf::from(format!("/home/{user}")));
     if !home.is_dir() {
         return Err(format!(
-            "Mailbox system user `{user}` home is missing; create the mailbox first"
+            "Mailbox home for `{user}` is missing; create the mailbox first"
         ));
     }
     let sieve_dir = home.join("sieve");

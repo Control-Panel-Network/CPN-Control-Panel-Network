@@ -21,8 +21,6 @@ const SYSTEM_FOLDERS: &[(&str, Option<&str>)] = &[
     ("Archive", Some(r"\Archive")),
 ];
 
-const VMAIL_ROOT: &str = "/home/vmail";
-
 /// IMAP LIST / settings_local name for a system folder (honours Dovecot namespace prefix).
 pub fn imap_system_folder_name(bare: &str) -> String {
     format!("{}{bare}", imap_namespace_prefix())
@@ -38,11 +36,17 @@ pub fn ensure_imap_system_folders(user: &str) -> Result<(), String> {
     if !valid_local_user(user) {
         return Err("Invalid mailbox user for system folders".into());
     }
+    // Prefer domain e-mails homes when discoverable from the registry.
+    if let Some(address) = registry_address_for_local(user)
+        && let Some(maildir) = crate::mail_home_layout::resolve_maildir(&address)
+    {
+        return ensure_maildir_system_folders(&maildir.to_string_lossy(), user, Some(user));
+    }
     let maildir = format!("/home/{user}/Maildir");
     ensure_maildir_system_folders(&maildir, user, Some(user))
 }
 
-/// Ensure system folders for a full email address (virtual SQL / vmail or PAM).
+/// Ensure system folders for a full email address (virtual SQL / domain e-mails / PAM).
 pub fn ensure_imap_system_folders_for_email(email: &str) -> Result<(), String> {
     let email = email.trim().to_ascii_lowercase();
     if !valid_email(&email) {
@@ -59,7 +63,7 @@ pub fn ensure_imap_system_folders_for_email(email: &str) -> Result<(), String> {
     doveadm_ensure_system_folders(&email)
 }
 
-fn ensure_maildir_system_folders(
+pub(crate) fn ensure_maildir_system_folders(
     maildir: &str,
     doveadm_user: &str,
     chown_user: Option<&str>,
@@ -125,100 +129,30 @@ fn doveadm_ensure_system_folders(doveadm_user: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Heal system folders for PAM homes and classic `/home/vmail` trees.
-pub fn heal_all_maildir_system_folders() -> Result<usize, String> {
-    let mut count = 0usize;
-    count += heal_pam_homes()?;
-    count += heal_vmail_tree()?;
-    for row in crate::mail_legacy_sql::list_legacy_mailboxes() {
-        if ensure_imap_system_folders_for_email(&row.email).is_ok() {
-            count += 1;
-        }
-    }
-    for acct in crate::mail_accounts::list_accounts() {
-        if ensure_imap_system_folders_for_email(&acct.address).is_ok() {
-            count += 1;
-        }
-    }
-    Ok(count)
-}
+pub use crate::panel_ops_mailbox_heal::heal_all_maildir_system_folders;
 
-fn heal_pam_homes() -> Result<usize, String> {
-    let home = Path::new("/home");
-    if !home.is_dir() {
-        return Ok(0);
-    }
-    let mut count = 0usize;
-    for entry in fs::read_dir(home).map_err(|e| e.to_string())?.flatten() {
-        let name = entry.file_name();
-        let Some(user) = name.to_str() else {
-            continue;
-        };
-        if user == "lost+found" || user == "vmail" || user.starts_with('.') {
-            continue;
-        }
-        if !entry.path().join("Maildir").is_dir() {
-            continue;
-        }
-        if ensure_imap_system_folders(user).is_ok() {
-            count += 1;
-        }
-    }
-    Ok(count)
-}
-
-fn heal_vmail_tree() -> Result<usize, String> {
-    let root = Path::new(VMAIL_ROOT);
-    if !root.is_dir() {
-        return Ok(0);
-    }
-    let mut count = 0usize;
-    let Ok(domains) = fs::read_dir(root) else {
-        return Ok(0);
-    };
-    for domain_ent in domains.flatten() {
-        let domain_path = domain_ent.path();
-        if !domain_path.is_dir() {
-            continue;
-        }
-        let domain = domain_ent
-            .file_name()
-            .to_string_lossy()
-            .to_ascii_lowercase();
-        if domain.starts_with('.') {
-            continue;
-        }
-        let Ok(users) = fs::read_dir(&domain_path) else {
-            continue;
-        };
-        for user_ent in users.flatten() {
-            let user_path = user_ent.path();
-            if !user_path.is_dir() {
-                continue;
-            }
-            let local = user_ent.file_name().to_string_lossy().to_ascii_lowercase();
-            if local.starts_with('.') {
-                continue;
-            }
-            let maildir = user_path.join("Maildir");
-            if !maildir.is_dir() {
-                continue;
-            }
-            let email = format!("{local}@{domain}");
-            if ensure_maildir_system_folders(&maildir.to_string_lossy(), &email, Some("vmail"))
-                .is_ok()
-            {
-                count += 1;
-            }
-        }
-    }
-    Ok(count)
+fn registry_address_for_local(local: &str) -> Option<String> {
+    let local = local.trim().to_ascii_lowercase();
+    crate::mail_accounts::list_accounts()
+        .into_iter()
+        .find_map(|a| {
+            let addr = a.address.trim().to_ascii_lowercase();
+            let matches = addr.split_once('@').is_some_and(|(l, _)| l == local);
+            matches.then_some(addr)
+        })
 }
 
 fn resolve_maildir_for_email(email: &str) -> Option<String> {
+    if let Some(p) = crate::mail_home_layout::resolve_maildir(email) {
+        return Some(p.to_string_lossy().into_owned());
+    }
     let (local, domain) = email.split_once('@')?;
     let candidates = [
-        PathBuf::from(format!("{VMAIL_ROOT}/{domain}/{local}/Maildir")),
+        crate::mail_home_layout::preferred_maildir(domain, local),
+        PathBuf::from(format!(
+            "{}/{domain}/{local}/Maildir",
+            crate::mail_home_layout::CLASSIC_VMAIL_ROOT
+        )),
         PathBuf::from(format!("/home/{local}/Maildir")),
     ];
     for p in candidates {
@@ -230,7 +164,7 @@ fn resolve_maildir_for_email(email: &str) -> Option<String> {
 }
 
 fn maildir_owner_hint(maildir: &str) -> Option<String> {
-    if maildir.starts_with(VMAIL_ROOT) {
+    if maildir.starts_with(crate::mail_home_layout::CLASSIC_VMAIL_ROOT) {
         return Some("vmail".into());
     }
     Path::new(maildir)

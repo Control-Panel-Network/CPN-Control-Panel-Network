@@ -135,13 +135,14 @@ pub fn rename_mailbox(id: &str, new_local_part: &str, actor: &str) -> Result<Mai
     account.updated_at_unix = now_unix();
     let out = account.clone();
     save_file_public(&file)?;
-    if out.smtp_mode == crate::mail_accounts::MailSmtpMode::PostfixLocal
-        && !out.mailbox_password.is_empty()
-    {
-        let _ = crate::panel_ops_mailbox_provision::provision_local_mailbox(
-            &out.address,
-            &out.mailbox_password,
-        );
+    if out.smtp_mode == crate::mail_accounts::MailSmtpMode::PostfixLocal {
+        let _ = crate::mail_home_layout::rename_mailbox_home(&old_address, &out.address);
+        if !out.mailbox_password.is_empty() {
+            let _ = crate::panel_ops_mailbox_provision::provision_local_mailbox(
+                &out.address,
+                &out.mailbox_password,
+            );
+        }
     }
     sync_after_mailbox_change("rename mailbox");
     let _ = crate::panel_audit::record(
