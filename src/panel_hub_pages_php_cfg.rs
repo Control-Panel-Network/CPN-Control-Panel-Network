@@ -1,9 +1,10 @@
 //! PHP Configurations UI: host default, basic settings, advanced php.ini editor.
 
+use crate::panel_hub_pages_php_cfg_apache::apache_php_section;
 use crate::panel_hubs::{feature_shell, status_kv};
 use crate::panel_ops_php_ext::{list_php_versions, php_ext_csrf_token, selected_default_branch};
 use crate::panel_ops_php_ini::{
-    is_ini_truthy, read_basic_setting, read_php_ini_text, resolve_php_ini_target,
+    is_ini_truthy, read_basic_setting, read_php_ini_text, resolve_php_ini_target_for, PhpIniRuntime,
 };
 use crate::php_defaults::load_php_default;
 
@@ -30,6 +31,7 @@ pub fn php_configurations_page(
     username: &str,
     php: Option<&str>,
     tab: &str,
+    runtime: Option<&str>,
     notice: Option<&str>,
     error: Option<&str>,
     is_admin: bool,
@@ -46,6 +48,8 @@ pub fn php_configurations_page(
     } else {
         "basic"
     };
+    let runtime_kind = PhpIniRuntime::parse(runtime);
+    let runtime = runtime_kind.as_str();
     let csrf = php_ext_csrf_token(username);
     let (host_default, persisted) = host_default_label();
 
@@ -71,10 +75,12 @@ pub fn php_configurations_page(
         <select id="php" name="php" data-initial="{php}">{options}</select>
       </div>
       <input type="hidden" name="tab" value="{tab}" id="php-cfg-tab">
+      <input type="hidden" name="runtime" value="{runtime}" id="php-cfg-runtime">
       <noscript><button type="submit" class="btn-secondary">Load</button></noscript>
     </form>"#,
         options = options,
         tab = tab,
+        runtime = html_escape(runtime),
         php = html_escape(&selected),
     );
 
@@ -85,27 +91,32 @@ pub fn php_configurations_page(
       <input type="hidden" name="op" value="set-default">
       <input type="hidden" name="php" value="{php}">
       <input type="hidden" name="tab" value="{tab}">
+      <input type="hidden" name="runtime" value="{runtime}">
       <button type="submit" class="btn-secondary">Set PHP {php} as host default</button>
     </form>"#,
             php = html_escape(&selected),
             csrf = html_escape(&csrf),
             tab = tab,
+            runtime = html_escape(runtime),
         )
     } else {
         String::new()
     };
 
+    let apache_block = apache_php_section(&selected, runtime, &csrf, tab, is_admin);
+
     let tabs = format!(
         r#"<div class="php-cfg-tabs" role="tablist">
-      <a class="php-cfg-tab{basic}" href="/server/php/configs?php={php}&amp;tab=basic">Basic Settings</a>
-      <a class="php-cfg-tab{adv}" href="/server/php/configs?php={php}&amp;tab=advanced">Advanced Editor</a>
+      <a class="php-cfg-tab{basic}" href="/server/php/configs?php={php}&amp;tab=basic&amp;runtime={runtime}">Basic Settings</a>
+      <a class="php-cfg-tab{adv}" href="/server/php/configs?php={php}&amp;tab=advanced&amp;runtime={runtime}">Advanced Editor</a>
     </div>"#,
         php = html_escape(&selected),
+        runtime = html_escape(runtime),
         basic = if tab == "basic" { " is-active" } else { "" },
         adv = if tab == "advanced" { " is-active" } else { "" },
     );
 
-    let editor = match resolve_php_ini_target(&selected) {
+    let editor = match resolve_php_ini_target_for(&selected, runtime_kind) {
         Ok(target) => match read_php_ini_text(&target.ini_path) {
             Ok(raw) => {
                 if tab == "advanced" {
@@ -113,11 +124,12 @@ pub fn php_configurations_page(
                         &target.ini_path.display().to_string(),
                         &raw,
                         &selected,
+                        runtime,
                         &csrf,
                         is_admin,
                     )
                 } else {
-                    basic_settings(&raw, &selected, &csrf, is_admin)
+                    basic_settings(&raw, &selected, runtime, &csrf, is_admin)
                 }
             }
             Err(err) => format!(
@@ -132,14 +144,21 @@ pub fn php_configurations_page(
     };
 
     let persist_note = if persisted {
-        "Stored in /var/lib/cpn/php-default.json (used by phpMyAdmin / php-fpm and new sites)."
+        "Stored in /var/lib/cpn/php-default.json (LiteSpeed lsphp / phpMyAdmin host default)."
     } else {
-        "Not written yet. Use Set as host default to persist for phpMyAdmin and system PHP."
+        "Not written yet. Use Set as host default to persist for phpMyAdmin and LiteSpeed/system PHP."
+    };
+
+    let runtime_note = if runtime_kind == PhpIniRuntime::Apache {
+        "Editing Apache / httpd PHP ini (not LiteSpeed lsphp)."
+    } else {
+        "Editing LiteSpeed lsphp or host PHP ini for the selected version."
     };
 
     let kv = status_kv(&[
         ("Host default", host_default.as_str()),
         ("Selected", selected.as_str()),
+        ("Editor target", runtime_note),
         ("Persistence", persist_note),
     ]);
 
@@ -267,7 +286,11 @@ pub fn php_configurations_page(
   function navigateTo(branch) {
     var tabEl = document.getElementById('php-cfg-tab');
     var tab = tabEl ? tabEl.value : 'basic';
-    var url = '/server/php/configs?php=' + encodeURIComponent(branch) + '&tab=' + encodeURIComponent(tab);
+    var rtEl = document.getElementById('php-cfg-runtime');
+    var runtime = rtEl ? rtEl.value : 'litespeed';
+    var url = '/server/php/configs?php=' + encodeURIComponent(branch)
+      + '&tab=' + encodeURIComponent(tab)
+      + '&runtime=' + encodeURIComponent(runtime);
     window.location.assign(url);
   }
 
@@ -327,9 +350,9 @@ pub fn php_configurations_page(
 </script>"#;
 
     let note = if is_admin {
-        "<p class=\"muted\">Saving creates a backup under <code>/var/lib/cpn/php-ini-backups/</code> before writing php.ini. Host default controls system php-fpm (phpMyAdmin), not only per-site handlers.</p>"
+        "<p class=\"muted\">Saving creates a backup under <code>/var/lib/cpn/php-ini-backups/</code> before writing php.ini. Host default is LiteSpeed lsphp / phpMyAdmin; Apache PHP default is stored separately.</p>"
     } else {
-        "<p class=\"muted\">Only the panel admin can edit php.ini or change the host default.</p>"
+        "<p class=\"muted\">Only the panel admin can edit php.ini or change PHP defaults.</p>"
     };
 
     feature_shell(
@@ -339,16 +362,16 @@ pub fn php_configurations_page(
             ("PHP Configurations", None),
         ],
         "PHP Configurations",
-        "Configure PHP settings and choose the host default used by system tools like phpMyAdmin.",
+        "Configure PHP settings, LiteSpeed host default, and Apache / httpd PHP when available.",
         &format!(
-            "{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}{modal}{script}"
+            "{styles}{kv}{version_form}{set_default}{apache_block}{tabs}{editor}{note}{cross}{modal}{script}"
         ),
         notice,
         error,
     )
 }
 
-fn basic_settings(raw: &str, php: &str, csrf: &str, is_admin: bool) -> String {
+fn basic_settings(raw: &str, php: &str, runtime: &str, csrf: &str, is_admin: bool) -> String {
     let mut rows = String::new();
     let bool_meta = [
         ("display_errors", "Show PHP errors to visitors."),
@@ -409,6 +432,7 @@ fn basic_settings(raw: &str, php: &str, csrf: &str, is_admin: bool) -> String {
         r#"<form method="post" action="/server/php/configs/save-basic" class="php-cfg-basic">
       <input type="hidden" name="csrf" value="{csrf}">
       <input type="hidden" name="php" value="{php}">
+      <input type="hidden" name="runtime" value="{runtime}">
       {rows}
       <div class="php-cfg-footer">
         <button type="submit" class="btn-primary">Save Changes</button>
@@ -417,11 +441,19 @@ fn basic_settings(raw: &str, php: &str, csrf: &str, is_admin: bool) -> String {
     </form>"#,
         csrf = html_escape(csrf),
         php = html_escape(php),
+        runtime = html_escape(runtime),
         rows = rows,
     )
 }
 
-fn advanced_editor(path: &str, raw: &str, php: &str, csrf: &str, is_admin: bool) -> String {
+fn advanced_editor(
+    path: &str,
+    raw: &str,
+    php: &str,
+    runtime: &str,
+    csrf: &str,
+    is_admin: bool,
+) -> String {
     let disabled = if is_admin { "" } else { " disabled" };
     let save = if is_admin {
         r#"<div class="php-cfg-footer">
@@ -436,13 +468,20 @@ fn advanced_editor(path: &str, raw: &str, php: &str, csrf: &str, is_admin: bool)
         r#"<form method="post" action="/server/php/configs/save-advanced">
       <input type="hidden" name="csrf" value="{csrf}">
       <input type="hidden" name="php" value="{php}">
-      <p class="muted">Editing <code>{path}</code></p>
+      <input type="hidden" name="runtime" value="{runtime}">
+      <p class="muted">Editing <code>{path}</code> ({runtime_label})</p>
       <label for="ini"><strong>php.ini</strong></label>
       <textarea id="ini" name="ini" class="php-cfg-editor" spellcheck="false"{disabled}>{body}</textarea>
       {save}
     </form>"#,
         csrf = html_escape(csrf),
         php = html_escape(php),
+        runtime = html_escape(runtime),
+        runtime_label = if runtime == "apache" {
+            "Apache PHP"
+        } else {
+            "LiteSpeed / host PHP"
+        },
         path = html_escape(path),
         body = html_escape(raw),
         disabled = disabled,

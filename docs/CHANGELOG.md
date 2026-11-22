@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Apache PHP on PHP Configurations**: `/server/php/configs` gains an Apache / httpd PHP control beside the LiteSpeed lsphp host default. Preference is stored in `/var/lib/cpn/php-apache-default.json`. On lsphp hosts CPN prefers Remi parallel packages (`php86-php`, and siblings) so Apache PHP can change without fighting lsphp opcache paths. Basic/Advanced editors honor `runtime=apache` so saves do not overwrite LiteSpeed php.ini. When httpd is missing, the control is disabled with a System Repair heal path (`httpd`).
+
 ## [1.4.12] - 21/11/2026
 
 Patch release after v1.4.11. Mail and webmail hardening: OpenDKIM plus SPF/DKIM/DMARC defaults, Cloudflare DNS publish, virtual-alias/MX fixes, light email heal on install/upgrade, Tachyon folders/Auth-Results/Sieve/notifications, and host-site release version display (#703 to #717).

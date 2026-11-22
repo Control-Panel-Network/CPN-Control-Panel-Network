@@ -1,7 +1,7 @@
 //! Host stack checks: MariaDB, web, disk, MFA, firewall, SSL, Docker.
 
 use super::host_apps;
-use super::{CheckStatus, HealResult, push};
+use super::{push, CheckStatus, HealResult};
 use crate::litespeed_stack;
 use crate::panel_feature_gate;
 use crate::panel_ops_firewall_heal;
@@ -11,7 +11,13 @@ use crate::service_detect::{self, port_open, systemd_unit_active};
 use std::path::Path;
 use std::process::Command;
 
-pub const HOST_HEAL_IDS: &[&str] = &["firewall", "openlitespeed", "phpmyadmin", "docker.engine"];
+pub const HOST_HEAL_IDS: &[&str] = &[
+    "firewall",
+    "openlitespeed",
+    "httpd",
+    "phpmyadmin",
+    "docker.engine",
+];
 
 fn free_disk_mb(path: &str) -> Option<(u64, u64)> {
     #[cfg(unix)]
@@ -144,6 +150,26 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
         } else {
             None
         },
+    );
+
+    let httpd_ok = crate::php_apache_default::httpd_present();
+    push(
+        checks,
+        "host.httpd",
+        "web",
+        "Apache httpd",
+        if httpd_ok {
+            CheckStatus::Pass
+        } else {
+            CheckStatus::Warn
+        },
+        if httpd_ok {
+            "Apache httpd is installed (optional beside OpenLiteSpeed)"
+        } else {
+            "Apache httpd is not installed (optional; needed for Apache PHP on PHP Configurations)"
+        },
+        false,
+        if httpd_ok { None } else { Some("httpd") },
     );
 
     if let Some((free_mb, total_mb)) = free_disk_mb("/") {
@@ -371,6 +397,57 @@ pub fn heal_openlitespeed() -> HealResult {
             heal_id: "openlitespeed".into(),
             ok: false,
             message,
+        },
+    }
+}
+
+/// Install Apache httpd packages without replacing OpenLiteSpeed as the default stack.
+pub fn heal_httpd() -> HealResult {
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            return HealResult {
+                heal_id: "httpd".into(),
+                ok: false,
+                message: "requires root".into(),
+            };
+        }
+    }
+    if crate::php_apache_default::httpd_present() {
+        return HealResult {
+            heal_id: "httpd".into(),
+            ok: true,
+            message: "Apache httpd already present".into(),
+        };
+    }
+    let dnf = Path::new("/usr/bin/dnf").exists() || Path::new("/usr/bin/yum").exists();
+    let apt = Path::new("/usr/bin/apt-get").exists();
+    let install_ok = if dnf {
+        Command::new("dnf")
+            .args(["--setopt=lock_timeout=60", "install", "-y", "httpd"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    } else if apt {
+        Command::new("apt-get")
+            .args(["install", "-y", "apache2"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+    // Do not force-enable httpd when OpenLiteSpeed is the primary stack; install only.
+    let present = crate::php_apache_default::httpd_present();
+    HealResult {
+        heal_id: "httpd".into(),
+        ok: install_ok || present,
+        message: if present {
+            "Apache httpd installed (optional). OpenLiteSpeed remains the default web stack. Set Apache PHP under Server → PHP Configurations.".into()
+        } else if install_ok {
+            "httpd packages installed".into()
+        } else {
+            "Could not install Apache httpd. Install the httpd (or apache2) package manually, then set Apache PHP under PHP Configurations.".into()
         },
     }
 }

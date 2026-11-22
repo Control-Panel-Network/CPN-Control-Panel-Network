@@ -1,11 +1,11 @@
-//! LiteSpeed `lsphp*` host runtime detection (CyberPanel / OLS migration installs).
+//! LiteSpeed `lsphp*` host runtime detection (OLS / LiteSpeed migration installs).
 //!
 //! Remi modular `php-fpm` and `lsphp*-common` both own `/var/lib/php/opcache` on EL9+.
 //! CPN must not pull Remi `php-fpm` / `php-opcache` when LiteSpeed PHP is already present.
 
 use crate::apps_pkg::{package_installed, rpm_or_dpkg_installed};
 use crate::os_support::GuestOs;
-use crate::php_defaults::{PhpDefaultRecord, normalize_php_request, save_php_default};
+use crate::php_defaults::{normalize_php_request, save_php_default, PhpDefaultRecord};
 use std::path::PathBuf;
 use std::process::Command;
 
