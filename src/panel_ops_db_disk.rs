@@ -1,20 +1,17 @@
 //! MariaDB schema size metering for owned panel databases.
 
+use crate::panel_db_acl::list_managed_databases;
 use crate::panel_ops_db::{is_system_database, mariadb_client_bin};
-use crate::resource_accounts::list_databases;
 use std::process::Command;
 
-fn names_equal(a: &str, b: &str) -> bool {
-    a.trim().eq_ignore_ascii_case(b.trim())
-}
-
-/// Sum `information_schema` data + index length for databases owned by `username`.
+/// Sum `information_schema` data + index length for databases the account may manage.
 ///
-/// Returns 0 when MariaDB is unavailable or no owned schemas exist.
+/// Uses the same inventory as the Databases UI (live MariaDB for panel admin,
+/// registry-owned rows for other accounts). Returns 0 when MariaDB is unavailable
+/// or no managed schemas exist.
 pub fn database_disk_bytes_for_owner(username: &str) -> u64 {
-    let owned: Vec<String> = list_databases()
+    let owned: Vec<String> = list_managed_databases(username)
         .into_iter()
-        .filter(|d| names_equal(&d.owner, username))
         .map(|d| d.name)
         .filter(|n| !is_system_database(n))
         .collect();

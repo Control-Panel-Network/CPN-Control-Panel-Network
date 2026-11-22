@@ -8,7 +8,7 @@
 use crate::account::{data_dir, now_unix};
 use crate::panel_website_bandwidth::parse_response_bytes;
 use crate::panel_website_logs::{candidate_log_paths, first_existing_log};
-use crate::sites::{SiteRecord, list_sites};
+use crate::sites::SiteRecord;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -276,18 +276,13 @@ pub fn site_month_bytes(site: &SiteRecord, period: &MeterPeriod) -> u64 {
     }
 }
 
-/// Bytes transferred this month across every site owned by `username`.
+/// Bytes transferred this month across every site counted for `username` usage.
 pub fn account_month_bytes(username: &str) -> u64 {
-    let Ok(sites) = list_sites() else {
-        return 0;
-    };
+    let sites = crate::package_usage_scope::sites_for_package_usage(username);
     let period = current_period();
-    sites
-        .iter()
-        .filter(|s| s.owner.trim().eq_ignore_ascii_case(username.trim()))
-        .fold(0u64, |acc, site| {
-            acc.saturating_add(site_month_bytes(site, &period))
-        })
+    sites.iter().fold(0u64, |acc, site| {
+        acc.saturating_add(site_month_bytes(site, &period))
+    })
 }
 
 /// Whole megabytes (rounded up) for quota comparison with package MB limits.
