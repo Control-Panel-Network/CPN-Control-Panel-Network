@@ -273,19 +273,19 @@ pub async fn email_account_create(
         return login_redirect(&http);
     };
     let domain_for_acl = form.selected_domain().ok();
-    if let Some(ref domain) = domain_for_acl {
-        if !can_manage_mail_domain(&user, domain) {
-            return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    email_redirect(
-                        Some(&form.return_to),
-                        None,
-                        Some("You cannot create mailboxes for that domain"),
-                    ),
-                ))
-                .finish();
-        }
+    if let Some(ref domain) = domain_for_acl
+        && !can_manage_mail_domain(&user, domain)
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                email_redirect(
+                    Some(&form.return_to),
+                    None,
+                    Some("You cannot create mailboxes for that domain"),
+                ),
+            ))
+            .finish();
     }
     let owner = if crate::packages::is_panel_admin(&user) {
         domain_for_acl
