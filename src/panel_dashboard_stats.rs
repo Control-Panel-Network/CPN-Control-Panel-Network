@@ -2,10 +2,11 @@
 
 use crate::backups::is_subdomain_site;
 use crate::package_quota::{UsageCollectOpts, usage_for_account_opts};
+use crate::package_usage_scope::sites_for_package_usage;
 use crate::packages::{UNLIMITED, is_panel_admin, package_for_account};
 use crate::panel_storage_fmt::{format_used_count, format_used_limit_for_user, unlimited_html};
 use crate::panel_website_resources::site_used_bytes;
-use crate::sites::{SiteRecord, list_sites};
+use crate::sites::SiteRecord;
 
 fn html_escape(value: &str) -> String {
     value
@@ -16,11 +17,7 @@ fn html_escape(value: &str) -> String {
 }
 
 fn owned_sites(username: &str) -> Vec<SiteRecord> {
-    list_sites()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|s| s.owner.trim().eq_ignore_ascii_case(username.trim()))
-        .collect()
+    sites_for_package_usage(username)
 }
 
 fn aliases_used(sites: &[SiteRecord]) -> u64 {

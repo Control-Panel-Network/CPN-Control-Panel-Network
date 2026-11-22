@@ -7,8 +7,25 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use crate::account::load_bootstrap;
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
+use crate::package_usage_scope::is_known_panel_username;
 use crate::sites::{create_site, default_docroot, normalize_domain, resolve_parent_domain};
+
+/// Prefer a real panel account as site owner. Legacy CyberPanel domain-users map to
+/// the bootstrap admin so package usage / dashboard counts stay coherent.
+fn resolve_migrate_site_owner(raw: &str) -> String {
+    let raw = raw.trim();
+    if let Some(boot) = load_bootstrap()
+        && (raw.is_empty() || !is_known_panel_username(raw))
+    {
+        return boot.username;
+    }
+    if raw.is_empty() {
+        return "cpnowner".into();
+    }
+    raw.to_string()
+}
 
 use super::catalog::{PanelSpec, spec_by_id};
 use super::scan::{Inventory, SiteHit, inventory_for, rel};
@@ -173,15 +190,12 @@ fn copy_one(
             .delete_paths
             .push(source.to_string_lossy().into_owned());
     }
+    let owner = resolve_migrate_site_owner(&site.owner);
     let mut registered = false;
     if options.register_sites {
         match create_site(
             &domain,
-            if site.owner.trim().is_empty() {
-                "cpnowner"
-            } else {
-                site.owner.trim()
-            },
+            &owner,
             Some(&dest_text),
             None,
             Some(&format!("Migrated from {}", spec.name)),
@@ -202,8 +216,8 @@ fn copy_one(
     import_databases(site, report);
     copy_mail(&domain, site, report);
     copy_zones(&domain, site, report);
-    if !site.owner.trim().is_empty() && !report.users.iter().any(|user| user == &site.owner) {
-        report.users.push(site.owner.clone());
+    if !owner.is_empty() && !report.users.iter().any(|user| user == &owner) {
+        report.users.push(owner);
     }
     report.sites.push(SiteVerify {
         domain,
