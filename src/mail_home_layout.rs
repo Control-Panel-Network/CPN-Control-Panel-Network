@@ -66,7 +66,9 @@ pub fn resolve_mailbox_home(address: &str) -> Option<PathBuf> {
 
 /// Resolve Maildir for `address`, preferring the domain e-mails layout.
 pub fn resolve_maildir(address: &str) -> Option<PathBuf> {
-    resolve_mailbox_home(address).map(|h| h.join("Maildir")).filter(|p| p.is_dir())
+    resolve_mailbox_home(address)
+        .map(|h| h.join("Maildir"))
+        .filter(|p| p.is_dir())
 }
 
 /// True when `home` is under `/home/<domain>/e-mails/`.
@@ -173,7 +175,8 @@ fn migrate_one_address(address: &str, dry_run: bool) -> Result<MigrateOne, Strin
     }
 
     if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Cannot create {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Cannot create {}: {e}", parent.display()))?;
     }
     if dest.exists() {
         return Err(format!(
@@ -190,11 +193,7 @@ fn migrate_one_address(address: &str, dry_run: bool) -> Result<MigrateOne, Strin
     })?;
     ensure_unix_home_dir(&local, &dest)?;
     let _ = Command::new("chown")
-        .args([
-            "-R",
-            &format!("{local}:{local}"),
-            &dest.to_string_lossy(),
-        ])
+        .args(["-R", &format!("{local}:{local}"), &dest.to_string_lossy()])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -339,7 +338,9 @@ pub fn rename_mailbox_home(old_address: &str, new_address: &str) -> Result<Strin
                 .status()
                 .map_err(|e| format!("usermod rename failed: {e}"))?;
             if !status.success() {
-                return Err(format!("usermod rename failed for `{old_local}` -> `{new_local}`"));
+                return Err(format!(
+                    "usermod rename failed for `{old_local}` -> `{new_local}`"
+                ));
             }
         } else {
             ensure_unix_home_dir(&new_local, &dest)?;
@@ -356,10 +357,7 @@ pub fn rename_mailbox_home(old_address: &str, new_address: &str) -> Result<Strin
             .stderr(Stdio::null())
             .status();
     }
-    Ok(format!(
-        "mailbox home now {}",
-        dest.display()
-    ))
+    Ok(format!("mailbox home now {}", dest.display()))
 }
 
 /// Create a nologin system user whose home is the domain e-mails path (no `/home/<user>`).

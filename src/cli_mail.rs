@@ -80,18 +80,15 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
                 "mailbox home migrate: scanned={} migrated={} skipped={} dry_run={}",
                 report.scanned, report.migrated, report.skipped, report.dry_run
             );
-            record_cli(
-                "cli.mail.migrate-homes",
-                "all",
-                true,
-                &summary,
-            );
+            record_cli("cli.mail.migrate-homes", "all", true, &summary);
             println!("{summary}");
             for note in report.notes {
                 println!("{note}");
             }
             if !dry_run && report.migrated > 0 {
-                crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("migrate mailbox homes");
+                crate::mail_hosted_domains::sync_hosted_mail_delivery_logged(
+                    "migrate mailbox homes",
+                );
                 let _ = crate::panel_ops_mailbox_folders::heal_all_maildir_system_folders();
             }
             Ok(())

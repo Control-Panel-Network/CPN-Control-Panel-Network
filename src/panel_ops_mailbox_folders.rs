@@ -40,11 +40,7 @@ pub fn ensure_imap_system_folders(user: &str) -> Result<(), String> {
     if let Some(address) = registry_address_for_local(user)
         && let Some(maildir) = crate::mail_home_layout::resolve_maildir(&address)
     {
-        return ensure_maildir_system_folders(
-            &maildir.to_string_lossy(),
-            user,
-            Some(user),
-        );
+        return ensure_maildir_system_folders(&maildir.to_string_lossy(), user, Some(user));
     }
     let maildir = format!("/home/{user}/Maildir");
     ensure_maildir_system_folders(&maildir, user, Some(user))
@@ -137,13 +133,13 @@ pub use crate::panel_ops_mailbox_heal::heal_all_maildir_system_folders;
 
 fn registry_address_for_local(local: &str) -> Option<String> {
     let local = local.trim().to_ascii_lowercase();
-    crate::mail_accounts::list_accounts().into_iter().find_map(|a| {
-        let addr = a.address.trim().to_ascii_lowercase();
-        let matches = addr
-            .split_once('@')
-            .is_some_and(|(l, _)| l == local);
-        matches.then_some(addr)
-    })
+    crate::mail_accounts::list_accounts()
+        .into_iter()
+        .find_map(|a| {
+            let addr = a.address.trim().to_ascii_lowercase();
+            let matches = addr.split_once('@').is_some_and(|(l, _)| l == local);
+            matches.then_some(addr)
+        })
 }
 
 fn resolve_maildir_for_email(email: &str) -> Option<String> {
