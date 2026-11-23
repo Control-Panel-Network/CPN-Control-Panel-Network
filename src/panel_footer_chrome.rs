@@ -106,6 +106,9 @@ pub fn sidebar_footer_styles() -> &'static str {
 .notify-toast-text span {
   display:block; font-size:12px; line-height:1.4; color:rgba(255,255,255,.88);
 }
+.notify-toast-text span.notify-toast-time {
+  margin-top:2px; font-size:11px; color:rgba(255,255,255,.6);
+}
 .notify-toast-dismiss {
   flex:0 0 auto; width:28px; height:28px; border:0; border-radius:4px;
   background:transparent; color:rgba(255,255,255,.45); padding:0; cursor:pointer;
@@ -316,13 +319,28 @@ pub fn notifications_popover_script() -> &'static str {
     return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>';
   }
 
-  function markRead(ids, all) {
+  function relativeTime(createdAt) {
+    var ts = Number(createdAt) || 0;
+    if (!ts) return "";
+    var secs = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+    if (secs < 60) return "just now";
+    var mins = Math.floor(secs / 60);
+    if (mins < 60) return mins + (mins === 1 ? " minute ago" : " minutes ago");
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + (hours === 1 ? " hour ago" : " hours ago");
+    var days = Math.floor(hours / 24);
+    return days + (days === 1 ? " day ago" : " days ago");
+  }
+
+  function markRead(ids, all, dismissItems) {
     bumpLoadEpoch();
+    var payload = all ? { all: true } : { ids: ids || [] };
+    if (dismissItems) payload.dismiss = true;
     return fetch("/api/panel/notifications/mark-read", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify(all ? { all: true } : { ids: ids || [] })
+      body: JSON.stringify(payload)
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
@@ -358,6 +376,7 @@ pub fn notifications_popover_script() -> &'static str {
         '<span class="notify-toast-icon" aria-hidden="true">' + severityIcon(sev) + "</span>"
         + '<div class="notify-toast-text"><strong>' + escapeHtml(item.title) + "</strong>"
         + (item.body ? "<span>" + escapeHtml(item.body) + "</span>" : "")
+        + (item.created_at ? '<span class="notify-toast-time">' + escapeHtml(relativeTime(item.created_at)) + (item.sticky ? " (stays until dismissed)" : "") + "</span>" : "")
         + "</div>"
         + '<button type="button" class="notify-toast-dismiss" aria-label="Dismiss" title="Dismiss">'
         + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
@@ -366,7 +385,7 @@ pub fn notifications_popover_script() -> &'static str {
       if (dismiss && item.id) {
         dismiss.addEventListener("click", function (ev) {
           ev.stopPropagation();
-          markRead([String(item.id)], false);
+          markRead([String(item.id)], false, true);
         });
       }
       li.appendChild(toast);
@@ -494,6 +513,8 @@ mod tests {
         assert!(js.contains("POPOVER_WIDTH = 340"));
         assert!(js.contains("itemSeverity"));
         assert!(js.contains("notify-toast-dismiss"));
+        assert!(js.contains("payload.dismiss = true"));
+        assert!(js.contains("relativeTime"));
         assert!(js.contains("loadEpoch"));
         assert!(js.contains("AbortController"));
         assert!(!js.contains("CyberPanel"));
