@@ -38,7 +38,7 @@ use crate::smtp_settings::validate_smtp_input;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
-#[get("/cpn-logo.png")]
+#[actix_web::route("/cpn-logo.png", method = "GET", method = "HEAD")]
 pub async fn cpn_logo() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("image/png")
