@@ -148,7 +148,8 @@ pub(crate) fn site_card(
     };
     let ssl_view = inspect_public_ssl(&site.domain);
     let ssl = ssl_list_badge_html(&ssl_view);
-    let disk_bytes = crate::panel_website_resources::site_used_bytes(site, 6_000);
+    // Bounded walk (cached): list pages must stay snappy with dozens of sites.
+    let disk_bytes = crate::panel_website_resources::site_used_bytes(site, 800);
     let pkg = crate::packages::package_for_account(&site.owner).ok();
     let disk_limit = pkg
         .as_ref()

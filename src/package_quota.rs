@@ -144,6 +144,22 @@ pub fn usage_for_account_opts(
     username: &str,
     opts: UsageCollectOpts,
 ) -> Result<PackageUsage, String> {
+    let cache_key = format!(
+        "{}:{}",
+        username.trim().to_ascii_lowercase(),
+        if opts.approx_site_disk {
+            "dash"
+        } else {
+            "full"
+        }
+    );
+    if let Some(cached) = crate::panel_perf_cache::caches()
+        .package_usage
+        .get(&cache_key)
+    {
+        return Ok(cached);
+    }
+
     let package = package_for_account(username)?;
 
     let owned = owned_site_domains(username)?;
@@ -255,6 +271,9 @@ pub fn usage_for_account_opts(
 
         fqdn_enabled: package.fqdn_enabled,
     };
+    crate::panel_perf_cache::caches()
+        .package_usage
+        .insert(cache_key, usage.clone());
     Ok(usage)
 }
 
