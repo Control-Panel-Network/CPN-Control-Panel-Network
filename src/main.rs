@@ -1279,6 +1279,8 @@ async fn main() -> std::io::Result<()> {
             .service(login_page)
             .service(login_services_status)
             .service(cpn_logo)
+            .service(cpn_installer::panel_static_assets::panel_stylesheet)
+            .service(cpn_installer::panel_static_assets::panel_script)
             .service(favicon_ico)
             .service(favicon_svg)
             .service(apple_touch_icon)

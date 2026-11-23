@@ -15,8 +15,9 @@ use crate::panel_session::{
     request_https_from_headers, session_secret, verify_mfa_pending_token,
 };
 use crate::panel_webauthn::{
-    RegisterAuthenticatorKind, finish_authentication, finish_registration, start_authentication,
-    start_authentication_for_user, start_registration, webauthn_for_request_origin,
+    RegisterAuthenticatorKind, enrich_assertion_challenge, finish_authentication,
+    finish_registration, start_authentication, start_authentication_for_user, start_registration,
+    webauthn_for_request_origin,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -334,6 +335,7 @@ pub async fn passkey_login_start(
                     );
                 }
             };
+            enrich_assertion_challenge(&mut value, None);
             if let Some(obj) = value.as_object_mut() {
                 obj.insert("ceremony_id".into(), serde_json::Value::String(ceremony_id));
             }
@@ -445,6 +447,7 @@ pub async fn passkey_mfa_start(http: HttpRequest, state: web::Data<Arc<AppState>
                     );
                 }
             };
+            enrich_assertion_challenge(&mut value, Some(&username));
             if let Some(obj) = value.as_object_mut() {
                 obj.insert("ceremony_id".into(), serde_json::Value::String(ceremony_id));
             }

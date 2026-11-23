@@ -11,11 +11,21 @@ pub struct HostSidebarInfo {
 }
 
 /// Resolve primary IPv4 and human uptime for sidebar chrome.
+///
+/// Cached briefly: this runs on every authenticated page and must not spawn
+/// `hostname -I` (or a UDP connect) on each navigation.
 pub fn host_sidebar_info() -> HostSidebarInfo {
-    HostSidebarInfo {
+    if let Some(hit) = crate::panel_perf_cache::caches().host_sidebar.get(&"host") {
+        return hit;
+    }
+    let info = HostSidebarInfo {
         ip: primary_ipv4().unwrap_or_else(|| "Unavailable".into()),
         uptime: format_uptime(uptime_seconds()),
-    }
+    };
+    crate::panel_perf_cache::caches()
+        .host_sidebar
+        .insert("host", info.clone());
+    info
 }
 
 /// IPv4 label for MOTD / `cpn panel url` (informational, not a login URL).

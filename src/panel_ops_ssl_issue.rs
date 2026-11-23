@@ -52,6 +52,9 @@ pub fn issue_or_renew(domain: &str) -> Result<String, String> {
 /// Does not treat Cloudflare edge TLS as a local origin certificate.
 pub fn issue_origin_backup(domain: &str) -> Result<String, String> {
     let domain = normalize_domain(domain)?;
+    crate::panel_perf_cache::caches()
+        .ssl_insight
+        .invalidate(&domain);
     match crate::panel_ops_certbot_install::ensure_certbot_on_path() {
         Ok(_) => {}
         Err(e) => {
