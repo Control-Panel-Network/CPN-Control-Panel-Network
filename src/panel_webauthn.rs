@@ -10,11 +10,16 @@
 //! The client tries platform first, then silently retries security-key on
 //! `NotSupportedError` / `NotAllowedError`. Credentials are stored as Passkeys
 //! either way.
+//!
+//! Assertion (login / MFA) prefers `start_passkey_authentication` whenever any
+//! stored credential was enrolled with user verification (Windows Hello and most
+//! modern keys). The security-key auth path sets WebAuthn `hints: ["security-key"]`,
+//! which makes Windows prompt for a USB key and skip Hello after a reboot.
 
 use crate::account::{data_dir, now_unix};
 use crate::account_passkeys::{
     PasskeyAuthenticatorMeta, add_passkey, all_passkeys_for_auth, exclude_credential_ids,
-    passkey_owner, passkeys_for_auth, update_passkey_after_auth,
+    load_passkeys, passkey_owner, passkeys_for_auth, update_passkey_after_auth,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -28,9 +33,9 @@ use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::{
     AuthenticatorAttachment, CreationChallengeResponse, Credential, DiscoverableAuthentication,
-    Passkey, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
-    RequestChallengeResponse, SecurityKey, SecurityKeyAuthentication, SecurityKeyRegistration,
-    Webauthn, WebauthnBuilder,
+    Passkey, PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential,
+    RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey,
+    SecurityKeyAuthentication, SecurityKeyRegistration, Webauthn, WebauthnBuilder,
 };
 
 pub use crate::panel_webauthn_client::passkey_client_script;
@@ -71,8 +76,135 @@ impl RegisterAuthenticatorKind {
 enum CeremonyKind {
     RegisterPasskey(PasskeyRegistration),
     RegisterSecurityKey(SecurityKeyRegistration),
+    /// Presence-only / roaming-key assertion (may set `hints: security-key`).
     Authenticate { state: SecurityKeyAuthentication },
+    /// Passkey assertion (UV required, no security-key-only hint). Prefer for Hello.
+    AuthenticatePasskey { state: PasskeyAuthentication },
     Discoverable(DiscoverableAuthentication),
+}
+
+/// True when any credential was enrolled with UV (Hello / modern passkeys).
+/// Those must use passkey assertion so Windows is not forced onto a USB key UI.
+fn prefers_passkey_authentication(passkeys: &[Passkey]) -> bool {
+    passkeys.iter().any(|passkey| {
+        let cred = Credential::from(passkey.clone());
+        if cred.user_verified {
+            return true;
+        }
+        // Avoid a hard dependency on UserVerificationPolicy in the prelude.
+        let policy = format!("{:?}", cred.registration_policy).to_ascii_lowercase();
+        policy.contains("required") || policy.contains("preferred")
+    })
+}
+
+fn start_passkey_or_securitykey_auth(
+    webauthn: &Webauthn,
+    passkeys: &[Passkey],
+) -> Result<(RequestChallengeResponse, CeremonyKind), String> {
+    if prefers_passkey_authentication(passkeys) {
+        let (rcr, state) = webauthn
+            .start_passkey_authentication(passkeys)
+            .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
+        Ok((rcr, CeremonyKind::AuthenticatePasskey { state }))
+    } else {
+        let keys = passkeys
+            .iter()
+            .map(passkey_to_security_key)
+            .collect::<Vec<_>>();
+        let (rcr, state) = webauthn
+            .start_securitykey_authentication(&keys)
+            .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
+        Ok((rcr, CeremonyKind::Authenticate { state }))
+    }
+}
+
+/// Attach stored transport hints to `allowCredentials` and drop security-key-only
+/// `hints` when a platform/internal credential is present (Windows Hello UX).
+pub fn enrich_assertion_challenge(value: &mut serde_json::Value, username: Option<&str>) {
+    let Some(public_key) = value
+        .get_mut("publicKey")
+        .and_then(|v| v.as_object_mut())
+    else {
+        return;
+    };
+
+    let mut transport_by_id: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut has_platformish = false;
+    let usernames: Vec<String> = match username {
+        Some(user) => vec![user.to_string()],
+        None => all_passkeys_for_auth()
+            .into_iter()
+            .map(|(owner, _)| owner)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+    };
+    for owner in usernames {
+        for entry in load_passkeys(&owner).credentials {
+            if let Some(meta) = entry.authenticator.as_ref() {
+                let path = meta
+                    .registration_path
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                let attachment = meta
+                    .authenticator_attachment
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if path == "platform"
+                    || attachment == "platform"
+                    || meta
+                        .transports
+                        .iter()
+                        .any(|t| t.eq_ignore_ascii_case("internal"))
+                {
+                    has_platformish = true;
+                }
+                if !meta.transports.is_empty() {
+                    transport_by_id.insert(entry.id.clone(), meta.transports.clone());
+                }
+            }
+        }
+    }
+
+    if has_platformish {
+        // Drop library security-key-only hints so Windows Hello can appear.
+        public_key.remove("hints");
+    }
+
+    let Some(allow) = public_key
+        .get_mut("allowCredentials")
+        .and_then(|v| v.as_array_mut())
+    else {
+        return;
+    };
+    for cred in allow {
+        let Some(obj) = cred.as_object_mut() else {
+            continue;
+        };
+        let Some(id) = obj.get("id").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if let Some(transports) = transport_by_id.get(id) {
+            let existing_empty = obj
+                .get("transports")
+                .map(|v| v.is_null() || v.as_array().map(|a| a.is_empty()).unwrap_or(true))
+                .unwrap_or(true);
+            if existing_empty {
+                obj.insert(
+                    "transports".into(),
+                    serde_json::Value::Array(
+                        transports
+                            .iter()
+                            .map(|t| serde_json::Value::String(t.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+        }
+    }
 }
 
 fn passkey_to_security_key(passkey: &Passkey) -> SecurityKey {
@@ -446,12 +578,9 @@ pub fn start_authentication(
     } else {
         let keys = creds
             .iter()
-            .map(|(_, passkey)| passkey_to_security_key(passkey))
+            .map(|(_, passkey)| passkey.clone())
             .collect::<Vec<_>>();
-        let (rcr, state) = webauthn
-            .start_securitykey_authentication(&keys)
-            .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
-        (rcr, CeremonyKind::Authenticate { state })
+        start_passkey_or_securitykey_auth(webauthn, &keys)?
     };
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
@@ -472,16 +601,14 @@ pub fn start_authentication_for_user(
     if keys.is_empty() {
         return Err("No passkey is registered for this account.".into());
     }
-    let sk = keys.iter().map(passkey_to_security_key).collect::<Vec<_>>();
-    let (rcr, state) = webauthn
-        .start_securitykey_authentication(&sk)
+    let (rcr, kind) = start_passkey_or_securitykey_auth(webauthn, &keys)
         .map_err(|_| "Could not start passkey authentication.".to_string())?;
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
         id: id.clone(),
         username: username.to_string(),
         created_at_unix: now_unix(),
-        kind: CeremonyKind::Authenticate { state },
+        kind,
     })?;
     Ok((id, rcr))
 }
@@ -503,6 +630,19 @@ fn map_auth_verify_error(err: impl std::fmt::Display) -> String {
     if lower.contains("counter") || lower.contains("cloned") {
         return "This passkey looks out of sync. Try another authenticator or re-enroll.".into();
     }
+    if lower.contains("user verified")
+        || lower.contains("user_verified")
+        || lower.contains("usernotverified")
+        || (lower.contains("verification") && lower.contains("required"))
+    {
+        return "This passkey needs Windows Hello, a PIN, or biometric unlock. Unlock your device, choose Windows Hello (not a USB security key), or use an authenticator code.".into();
+    }
+    if lower.contains("unknown credential")
+        || (lower.contains("credential") && lower.contains("not found"))
+        || lower.contains("no matching")
+    {
+        return "That authenticator is not registered for this panel account. Use Windows Hello or the security key you enrolled, or sign in with an authenticator code.".into();
+    }
     "Incorrect passkey. Try again or use another sign-in method.".into()
 }
 
@@ -514,6 +654,21 @@ pub fn finish_authentication(
     let record = take_ceremony(ceremony_id)?;
     let expected_user = record.username.clone();
     let (username, result) = match record.kind {
+        CeremonyKind::AuthenticatePasskey { state } => {
+            let result = webauthn
+                .finish_passkey_authentication(credential, &state)
+                .map_err(|err| {
+                    crate::upgrade_tip_log::log_tagged(
+                        "webauthn",
+                        "error",
+                        &format!("auth verify failed: {err}"),
+                    );
+                    map_auth_verify_error(err)
+                })?;
+            let username = passkey_owner(result.cred_id())
+                .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
+            (username, result)
+        }
         CeremonyKind::Authenticate { state } => {
             let result = webauthn
                 .finish_securitykey_authentication(credential, &state)
@@ -578,7 +733,8 @@ pub fn finish_authentication(
 #[cfg(test)]
 mod tests {
     use super::{
-        RegisterAuthenticatorKind, map_auth_verify_error, start_authentication, start_registration,
+        RegisterAuthenticatorKind, enrich_assertion_challenge, map_auth_verify_error,
+        prefers_passkey_authentication, start_authentication, start_registration,
         webauthn_for_request, webauthn_for_request_origin,
     };
     use crate::account::with_test_data_dir;
@@ -821,7 +977,45 @@ mod tests {
                 .to_ascii_lowercase()
                 .contains("localhost")
         );
-        assert!(map_auth_verify_error("unknown credential").contains("Incorrect passkey"));
+        assert!(
+            map_auth_verify_error("unknown credential")
+                .to_ascii_lowercase()
+                .contains("not registered")
+        );
+        assert!(
+            map_auth_verify_error("The user verified bit is not set, and required by policy")
+                .to_ascii_lowercase()
+                .contains("windows hello")
+        );
+    }
+
+    #[test]
+    fn prefers_passkey_auth_is_false_for_empty() {
+        assert!(!prefers_passkey_authentication(&[]));
+    }
+
+    #[test]
+    fn enrich_assertion_challenge_keeps_hints_without_platform_meta() {
+        with_test_data_dir(|| {
+            let mut value = serde_json::json!({
+                "publicKey": {
+                    "challenge": "abc",
+                    "rpId": "panel.example.com",
+                    "hints": ["security-key"],
+                    "allowCredentials": [{
+                        "type": "public-key",
+                        "id": "credHelloInternal01",
+                        "transports": null
+                    }]
+                }
+            });
+            enrich_assertion_challenge(&mut value, Some("missing-user"));
+            assert_eq!(
+                value["publicKey"]["hints"],
+                serde_json::json!(["security-key"]),
+                "without platform meta, do not strip security-key hints"
+            );
+        });
     }
 
     #[test]

@@ -61,6 +61,9 @@ function cpnPasskeyUserMessage(err,kind){
       : 'Passkey registration did not complete. Touch your security key or approve Windows Hello when prompted. A FIDO2 PIN helps on security keys. If you cancelled, try again.';
   }
   // Do not treat a W3C URL in the message as cancel; many WebAuthn errors include one.
+  if(/windows hello|pin, or biometric|authenticator code/i.test(lower)){
+    return cpnStripUrls(raw) || 'This passkey needs Windows Hello or a PIN. Unlock the device, or use an authenticator code.';
+  }
   if(/incorrect passkey|not registered|different account|unknown credential/i.test(lower)){
     return cpnStripUrls(raw) || 'Incorrect passkey. Try again or use another sign-in method.';
   }
@@ -110,6 +113,8 @@ async function cpnDecodeCreateOptions(pk){{
 }}
 async function cpnDecodeGetOptions(pk){{
   pk.challenge=cpnB64urlToBuf(pk.challenge);
+  // Never force USB security-key UX when Windows Hello (platform) is enrolled.
+  try{{ delete pk.hints; }}catch(e){{}}
   if(pk.allowCredentials){{
     for(const c of pk.allowCredentials){{ c.id=cpnB64urlToBuf(c.id); }}
   }}
@@ -546,6 +551,10 @@ mod tests {
         assert!(
             script.contains("delete pk.hints"),
             "client must strip security-key-only hints"
+        );
+        assert!(
+            script.matches("delete pk.hints").count() >= 2,
+            "create and get options must both strip security-key-only hints so Windows Hello can appear"
         );
         assert!(
             script.contains("'platform','security-key'")
