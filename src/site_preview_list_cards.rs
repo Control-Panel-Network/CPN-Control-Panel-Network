@@ -5,7 +5,6 @@ use crate::panel_ops_ssl_public::{
     inspect_public_ssl, offers_origin_backup, origin_backup_form, ssl_list_badge_html,
 };
 use crate::site_preview_thumb::{PreviewFreshness, cached_shot_usable, freshness, load_meta};
-use crate::site_preview_thumb_routes::spawn_background_capture;
 use crate::sites::SiteRecord;
 use crate::website_preview::public_site_url;
 
@@ -98,9 +97,9 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool, list_next: &str) -> Strin
     let visit_e = html_escape(&visit);
     let state = freshness(&site.domain);
     let has_cached = cached_shot_present(&site.domain);
-    if auto_capture && !has_cached && matches!(state, PreviewFreshness::Missing) {
-        spawn_background_capture(site.domain.clone());
-    }
+    // List HTML never starts a headless capture. Thumbnails come from disk cache
+    // or the image route placeholder. Operators refresh explicitly.
+    let _ = auto_capture;
     let meta = load_meta(&site.domain);
     let status_hint = if has_cached && state == PreviewFreshness::Fresh {
         "Cached thumbnail (up to 7 days)"

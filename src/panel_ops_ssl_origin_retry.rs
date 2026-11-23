@@ -11,7 +11,7 @@ use crate::sites::list_sites;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MAX_SITES_PER_PASS: usize = 2;
 const LOOP_SECS: u64 = 15 * 60;
@@ -118,8 +118,22 @@ fn tracing_or_eprint(domain: &str, err: &str) {
 }
 
 /// Kick a background pass from `/websites` or `/subdomains` without blocking HTML.
+///
+/// Page views must not start a new OpenSSL/ACME walk every navigation. The
+/// background loop still retries on its own interval.
 pub fn spawn_origin_backup_pass() {
     start_retry_loop_once();
+    static LAST: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+    let slot = LAST.get_or_init(|| Mutex::new(None));
+    {
+        let Ok(mut guard) = slot.lock() else {
+            return;
+        };
+        if guard.is_some_and(|at| at.elapsed() < Duration::from_secs(10 * 60)) {
+            return;
+        }
+        *guard = Some(Instant::now());
+    }
     let _ = thread::Builder::new()
         .name("cpn-origin-le".into())
         .spawn(run_pass);
@@ -131,6 +145,9 @@ fn start_retry_loop_once() {
         let _ = thread::Builder::new()
             .name("cpn-origin-le-loop".into())
             .spawn(|| {
+                // One immediate pass when websites list is first opened, then
+                // periodic retries. Avoids spawning a pass thread per page view.
+                run_pass();
                 loop {
                     thread::sleep(Duration::from_secs(LOOP_SECS));
                     run_pass();

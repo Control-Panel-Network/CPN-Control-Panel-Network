@@ -80,6 +80,15 @@ fn dir_size_mb(path: &Path, budget_bytes: &mut u64) -> u64 {
 }
 
 fn disk_used_mb_for_sites(sites: &[SiteRecord]) -> u64 {
+    let mut key = String::from("fullmb:");
+    for site in sites {
+        key.push_str(site.domain.trim());
+        key.push('\n');
+    }
+    if let Some(hit) = crate::panel_perf_cache::caches().disk_mb.get(&key) {
+        return hit;
+    }
+
     let mut total = 0u64;
 
     // Cap walk at ~50 GiB equivalent so quota checks stay bounded.
@@ -92,6 +101,7 @@ fn disk_used_mb_for_sites(sites: &[SiteRecord]) -> u64 {
         total = total.saturating_add(dir_size_mb(&home, &mut budget));
     }
 
+    crate::panel_perf_cache::caches().disk_mb.insert(key, total);
     total
 }
 
@@ -186,7 +196,7 @@ pub fn usage_for_account_opts(
 
     let database_disk_bytes = database_disk_bytes_for_owner(username);
 
-    Ok(PackageUsage {
+    let usage = PackageUsage {
         package_id: package.id,
 
         package_name: package.name,
@@ -244,7 +254,8 @@ pub fn usage_for_account_opts(
         database_disk_bytes,
 
         fqdn_enabled: package.fqdn_enabled,
-    })
+    };
+    Ok(usage)
 }
 
 fn limit_reached(used: u64, limit: i64) -> bool {

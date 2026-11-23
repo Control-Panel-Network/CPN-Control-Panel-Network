@@ -1,8 +1,10 @@
 //! Honest local service detection for Panel Dashboard and Databases pages.
 
+use std::collections::HashMap;
 use std::net::TcpStream;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
@@ -121,6 +123,15 @@ pub fn port_open(addr: &str, timeout_ms: u64) -> bool {
 /// TCP `:3306` is checked first so login/dashboard health does not wait on a slow
 /// `systemctl` when the daemon is already accepting connections.
 pub fn detect_database() -> DatabaseStatus {
+    if let Some(hit) = cached_database() {
+        return hit;
+    }
+    let status = detect_database_live();
+    store_database(&status);
+    status
+}
+
+fn detect_database_live() -> DatabaseStatus {
     let listening = port_open("127.0.0.1:3306", 250);
     if listening {
         return DatabaseStatus {
@@ -179,6 +190,10 @@ pub fn openlitespeed_tree_present() -> bool {
 /// TCP/OLS tree is checked before `systemctl` so OLS reverse-proxy hosts (panel
 /// on loopback, HTTPS on :443) stay fast when systemd is busy.
 pub fn detect_web_server_label() -> String {
+    cached_text("web", Duration::from_secs(20), detect_web_server_label_live)
+}
+
+fn detect_web_server_label_live() -> String {
     if openlitespeed_tree_present()
         && (port_open("127.0.0.1:80", 200)
             || port_open("127.0.0.1:443", 200)
@@ -204,6 +219,10 @@ pub fn detect_web_server_label() -> String {
 }
 
 pub fn detect_mail_service_label() -> String {
+    cached_text("mail", Duration::from_secs(20), detect_mail_service_label_live)
+}
+
+fn detect_mail_service_label_live() -> String {
     if let Some(label) = first_active_service(&[
         ("postfix", "Running"),
         ("exim4", "Running"),
@@ -258,6 +277,51 @@ pub fn install_mariadb_server() -> Result<String, String> {
         return Ok("Installed and started MariaDB via apt (mariadb-server).".into());
     }
     Err("No supported package manager found (need dnf or apt-get).".into())
+}
+
+fn ui_text_cache() -> &'static Mutex<HashMap<&'static str, (Instant, String)>> {
+    static CACHE: OnceLock<Mutex<HashMap<&'static str, (Instant, String)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cached_text(key: &'static str, ttl: Duration, compute: impl FnOnce() -> String) -> String {
+    if crate::panel_perf_cache::caches_bypassed() {
+        return compute();
+    }
+    if let Ok(guard) = ui_text_cache().lock()
+        && let Some((at, value)) = guard.get(key)
+        && at.elapsed() < ttl
+    {
+        return value.clone();
+    }
+    let value = compute();
+    if let Ok(mut guard) = ui_text_cache().lock() {
+        guard.insert(key, (Instant::now(), value.clone()));
+    }
+    value
+}
+
+fn database_cache() -> &'static Mutex<Option<(Instant, DatabaseStatus)>> {
+    static CACHE: OnceLock<Mutex<Option<(Instant, DatabaseStatus)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn cached_database() -> Option<DatabaseStatus> {
+    if crate::panel_perf_cache::caches_bypassed() {
+        return None;
+    }
+    let guard = database_cache().lock().ok()?;
+    let (at, status) = guard.as_ref()?;
+    (at.elapsed() < Duration::from_secs(20)).then(|| status.clone())
+}
+
+fn store_database(status: &DatabaseStatus) {
+    if crate::panel_perf_cache::caches_bypassed() {
+        return;
+    }
+    if let Ok(mut guard) = database_cache().lock() {
+        *guard = Some((Instant::now(), status.clone()));
+    }
 }
 
 #[cfg(test)]
