@@ -61,6 +61,9 @@ function cpnPasskeyUserMessage(err,kind){
       : 'Passkey registration did not complete. Touch your security key or approve Windows Hello when prompted. A FIDO2 PIN helps on security keys. If you cancelled, try again.';
   }
   // Do not treat a W3C URL in the message as cancel; many WebAuthn errors include one.
+  if(/challenge expired|ceremony expired|ceremony expired or missing/i.test(lower)){
+    return cpnStripUrls(raw) || 'Passkey challenge expired. Try sign-in with passkey again.';
+  }
   if(/windows hello|pin, or biometric|authenticator code/i.test(lower)){
     return cpnStripUrls(raw) || 'This passkey needs Windows Hello or a PIN. Unlock the device, or use an authenticator code.';
   }

@@ -101,11 +101,55 @@ fn prefers_passkey_authentication(passkeys: &[Passkey]) -> bool {
     })
 }
 
+/// Platform / Hello metadata also forces the passkey assertion path even when
+/// stored UV flags are incomplete (older enrollments).
+fn stored_meta_prefers_passkey(username: Option<&str>) -> bool {
+    let usernames: Vec<String> = match username {
+        Some(user) => vec![user.to_string()],
+        None => all_passkeys_for_auth()
+            .into_iter()
+            .map(|(owner, _)| owner)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+    };
+    for owner in usernames {
+        for entry in load_passkeys(&owner).credentials {
+            let Some(meta) = entry.authenticator.as_ref() else {
+                continue;
+            };
+            let path = meta
+                .registration_path
+                .as_deref()
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let attachment = meta
+                .authenticator_attachment
+                .as_deref()
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if path == "platform"
+                || attachment == "platform"
+                || meta
+                    .transports
+                    .iter()
+                    .any(|t| t.eq_ignore_ascii_case("internal"))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn start_passkey_or_securitykey_auth(
     webauthn: &Webauthn,
     passkeys: &[Passkey],
+    username: Option<&str>,
 ) -> Result<(RequestChallengeResponse, CeremonyKind), String> {
-    if prefers_passkey_authentication(passkeys) {
+    let use_passkey =
+        prefers_passkey_authentication(passkeys) || stored_meta_prefers_passkey(username);
+    if use_passkey {
         let (rcr, state) = webauthn
             .start_passkey_authentication(passkeys)
             .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
@@ -581,7 +625,7 @@ pub fn start_authentication(
             .iter()
             .map(|(_, passkey)| passkey.clone())
             .collect::<Vec<_>>();
-        start_passkey_or_securitykey_auth(webauthn, &keys)?
+        start_passkey_or_securitykey_auth(webauthn, &keys, None)?
     };
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
@@ -602,8 +646,7 @@ pub fn start_authentication_for_user(
     if keys.is_empty() {
         return Err("No passkey is registered for this account.".into());
     }
-    let (rcr, kind) = start_passkey_or_securitykey_auth(webauthn, &keys)
-        .map_err(|_| "Could not start passkey authentication.".to_string())?;
+    let (rcr, kind) = start_passkey_or_securitykey_auth(webauthn, &keys, Some(username))?;
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
         id: id.clone(),
@@ -625,7 +668,15 @@ fn map_auth_verify_error(err: impl std::fmt::Display) -> String {
     {
         return "Passkey could not be verified for this site address. Open http://localhost with the same panel port and try again.".into();
     }
-    if lower.contains("challenge") || lower.contains("ceremony") || lower.contains("expired") {
+    // Prefer challenge/ceremony expiry before generic "incorrect" copy.
+    if lower.contains("expired")
+        || lower.contains("missing") && lower.contains("ceremony")
+        || lower.contains("challenge") && (lower.contains("expired") || lower.contains("mismatch"))
+        || lower.contains("ceremony expired")
+    {
+        return "Passkey challenge expired. Try sign-in with passkey again.".into();
+    }
+    if lower.contains("challenge") || lower.contains("ceremony") {
         return "Passkey challenge expired. Try sign-in with passkey again.".into();
     }
     if lower.contains("counter") || lower.contains("cloned") {
@@ -736,7 +787,7 @@ mod tests {
     use super::{
         RegisterAuthenticatorKind, enrich_assertion_challenge, map_auth_verify_error,
         prefers_passkey_authentication, start_authentication, start_registration,
-        webauthn_for_request, webauthn_for_request_origin,
+        stored_meta_prefers_passkey, webauthn_for_request, webauthn_for_request_origin,
     };
     use crate::account::with_test_data_dir;
 
@@ -996,6 +1047,15 @@ mod tests {
     }
 
     #[test]
+    fn map_auth_verify_error_distinguishes_expired_challenge() {
+        let msg = map_auth_verify_error("Passkey ceremony expired or missing");
+        assert!(
+            msg.to_ascii_lowercase().contains("challenge expired"),
+            "expired ceremony must not look like a generic incorrect passkey: {msg}"
+        );
+    }
+
+    #[test]
     fn enrich_assertion_challenge_keeps_hints_without_platform_meta() {
         with_test_data_dir(|| {
             let mut value = serde_json::json!({
@@ -1015,6 +1075,82 @@ mod tests {
                 value["publicKey"]["hints"],
                 serde_json::json!(["security-key"]),
                 "without platform meta, do not strip security-key hints"
+            );
+        });
+    }
+
+    #[test]
+    fn stored_meta_prefers_passkey_detects_platform_enrollment() {
+        use crate::account_passkeys::{PasskeyAuthenticatorMeta, add_passkey};
+        use webauthn_rs::prelude::{
+            AttestationFormat, AttestationMetadata, COSEAlgorithm, COSEEC2Key, COSEKey, COSEKeyType,
+            Credential, CredentialID, ECDSACurve, ParsedAttestation, ParsedAttestationData, Passkey,
+        };
+        use webauthn_rs_proto::extensions::RegisteredExtensions;
+        use webauthn_rs_proto::options::UserVerificationPolicy;
+
+        with_test_data_dir(|| {
+            let cred_id: CredentialID = b"credHelloInternal01".to_vec().into();
+            let credential = Credential {
+                cred_id: cred_id.clone(),
+                cred: COSEKey {
+                    type_: COSEAlgorithm::ES256,
+                    key: COSEKeyType::EC_EC2(COSEEC2Key {
+                        curve: ECDSACurve::SECP256R1,
+                        x: [1u8; 32].to_vec(),
+                        y: [2u8; 32].to_vec(),
+                    }),
+                },
+                counter: 0,
+                transports: None,
+                user_verified: true,
+                backup_eligible: false,
+                backup_state: false,
+                registration_policy: UserVerificationPolicy::Required,
+                extensions: RegisteredExtensions::none(),
+                attestation: ParsedAttestation {
+                    data: ParsedAttestationData::None,
+                    metadata: AttestationMetadata::None,
+                },
+                attestation_format: AttestationFormat::None,
+            };
+            let passkey = Passkey::from(credential);
+            let meta = PasskeyAuthenticatorMeta {
+                authenticator_attachment: Some("platform".into()),
+                transports: vec!["internal".into()],
+                registration_path: Some("platform".into()),
+                ..Default::default()
+            };
+            add_passkey("hello-user", "Hello", passkey, meta).expect("store hello passkey");
+            assert!(stored_meta_prefers_passkey(Some("hello-user")));
+
+            let stored_id = crate::account_passkeys::load_passkeys("hello-user")
+                .credentials
+                .into_iter()
+                .next()
+                .expect("cred")
+                .id;
+            let mut value = serde_json::json!({
+                "publicKey": {
+                    "challenge": "abc",
+                    "rpId": "panel.example.com",
+                    "hints": ["security-key"],
+                    "allowCredentials": [{
+                        "type": "public-key",
+                        "id": stored_id,
+                        "transports": null
+                    }]
+                }
+            });
+            enrich_assertion_challenge(&mut value, Some("hello-user"));
+            assert!(
+                value["publicKey"].get("hints").is_none(),
+                "platform meta must strip security-key hints so Windows Hello can appear"
+            );
+            assert_eq!(
+                value["publicKey"]["allowCredentials"][0]["transports"],
+                serde_json::json!(["internal"]),
+                "stored internal transport must be attached for Hello UX"
             );
         });
     }
