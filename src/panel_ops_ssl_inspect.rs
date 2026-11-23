@@ -155,7 +155,7 @@ fn inspect_domain_ssl_uncached(domain: &str) -> SslCertInsight {
     match parse_cert_pem(&path) {
         Ok(mut parsed) => {
             parsed.cert_path = Some(path.display().to_string());
-            parsed.covers_domain = domain_covered(&domain, &parsed.sans, &parsed.subject);
+            parsed.covers_domain = domain_covered(domain, &parsed.sans, &parsed.subject);
             finalize_kind(&mut parsed);
             parsed
         }
