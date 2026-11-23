@@ -350,6 +350,18 @@ pub fn classify_authenticator(meta: &PasskeyAuthenticatorMeta) -> &'static str {
     if has_transport(&transports, "nfc") {
         return "Security key (NFC)";
     }
+    // Windows Hello passkeys can also report ble/hybrid alongside internal (cross-device
+    // use). When the browser says platform attachment and internal, it is local Hello,
+    // not a Bluetooth security key.
+    if has_transport(&transports, "internal")
+        && attachment != Some("cross-platform")
+        && path != Some("security-key")
+        && (attachment == Some("platform")
+            || path == Some("platform")
+            || (!aaguid.is_empty() && is_windows_hello_aaguid(aaguid)))
+    {
+        return "Windows Hello";
+    }
     if has_transport(&transports, "ble") {
         return "Security key (Bluetooth)";
     }
@@ -722,6 +734,26 @@ mod tests {
                 ..Default::default()
             }),
             "Security key"
+        );
+        // Hello with internal plus ble/hybrid transports is still local Hello.
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                registration_path: Some("platform".into()),
+                authenticator_attachment: Some("platform".into()),
+                transports: vec!["internal".into(), "hybrid".into(), "ble".into()],
+                ..Default::default()
+            }),
+            "Windows Hello"
+        );
+        // Bluetooth-only roaming key stays a security key.
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                registration_path: Some("security-key".into()),
+                authenticator_attachment: Some("cross-platform".into()),
+                transports: vec!["ble".into()],
+                ..Default::default()
+            }),
+            "Security key (Bluetooth)"
         );
         assert_eq!(
             classify_authenticator(&PasskeyAuthenticatorMeta::default()),
