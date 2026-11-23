@@ -66,8 +66,8 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
             let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
             // Under load, max_children=8 + socket_timeout=8 caused Tachyon Login
             // "Request timed out" while Dovecot bcrypt auth alone can take ~6s.
-            let pool_undersized = raw.contains("pm.max_children = 8")
-                || raw.contains("default_socket_timeout] = 8");
+            let pool_undersized =
+                raw.contains("pm.max_children = 8") || raw.contains("default_socket_timeout] = 8");
             if !raw.contains("/var/lib/cpn-webmail")
                 || !raw.contains("default_socket_timeout")
                 || !raw.contains(":/proc")
