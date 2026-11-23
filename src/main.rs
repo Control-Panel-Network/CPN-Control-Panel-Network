@@ -109,12 +109,13 @@ use cpn_installer::panel_hub_routes::{
     server_php_extensions_set_default, server_php_extensions_set_default_get,
     server_php_extensions_uninstall, server_php_overview, server_php_tuning, server_processes_page,
     server_services_control, server_services_page, settings_audit_export, settings_audit_page,
-    settings_audit_save, settings_connect_page, settings_design_page, settings_error_messages_page,
-    settings_error_messages_preview, settings_error_messages_restore_all,
-    settings_error_messages_restore_forbidden, settings_error_messages_restore_internal,
-    settings_error_messages_restore_not_found, settings_error_messages_save, settings_logs_page,
-    settings_logs_save, settings_markdown_preview, settings_page, settings_port_ip_backup,
-    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_audit_save, settings_connect_page, settings_cpn_settings_save, settings_design_page,
+    settings_error_messages_page, settings_error_messages_preview,
+    settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
+    settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
+    settings_error_messages_save, settings_logs_page, settings_logs_save,
+    settings_markdown_preview, settings_page, settings_port_ip_backup, settings_port_page,
+    settings_setup_page, settings_setup_save, settings_site_messages_page,
     settings_site_messages_preview_site_ready, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
     settings_site_messages_save, settings_system_repair_redirect, settings_ui_prefs_save,
@@ -1555,6 +1556,7 @@ async fn main() -> std::io::Result<()> {
             .service(cloudflare_proxy_post)
             .service(settings_page)
             .service(settings_ui_prefs_save)
+            .service(settings_cpn_settings_save)
             .service(settings_version_page)
             .service(settings_design_page)
             .service(settings_setup_page)

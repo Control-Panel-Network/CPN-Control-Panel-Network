@@ -118,6 +118,7 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/settings/site-messages" => Some("settings.site_messages"),
         "/settings/error-messages" => Some("settings.error_messages"),
         "/settings/design" => Some("settings.design"),
+        "/settings/cpn-settings" => Some("settings.cpn_settings"),
         "/server/system-repair/heal" => Some("repair.heal"),
         "/api/system-repair/heal" => Some("repair.heal"),
         "/settings/migrate" => Some("migrate.apply"),

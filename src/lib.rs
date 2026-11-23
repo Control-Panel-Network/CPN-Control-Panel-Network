@@ -481,6 +481,7 @@ pub mod panel_theme_routes;
 pub mod panel_theme_store;
 pub mod panel_theme_store_extra;
 pub mod panel_themes_api;
+pub mod panel_update_links;
 pub mod panel_user_package;
 pub mod panel_user_prefs;
 pub mod panel_webauthn;

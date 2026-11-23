@@ -4,6 +4,7 @@ use crate::panel_hub_defs::settings_hub_sections;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
 use crate::panel_prefs::load_panel_ui_prefs;
 use crate::panel_theme_chrome::design_settings_panel;
+use crate::panel_user_prefs::load_user_update_notifications;
 
 /// Settings pages that only the panel owner may open (tiles are hidden for other accounts).
 const OWNER_ONLY_SETTINGS: &[&str] = &[
@@ -19,6 +20,40 @@ pub fn settings_hub_main() -> String {
 /// Settings overview. `is_owner` hides owner-only tiles for other accounts; `notice` / `error`
 /// carry the message of a redirect (for example "Admin only") so it is never dropped silently.
 pub fn settings_hub_main_with(is_owner: bool, notice: Option<&str>, error: Option<&str>) -> String {
+    settings_hub_main_for(None, is_owner, notice, error)
+}
+
+/// "CPN Settings" card: per-user preferences for the signed-in account.
+pub fn cpn_settings_section(username: &str) -> String {
+    let checked = if load_user_update_notifications(username) {
+        " checked"
+    } else {
+        ""
+    };
+    format!(
+        r#"<article class="section-card" id="cpn-settings" style="max-width:720px;margin-bottom:18px;">
+  <h2 style="margin:0 0 8px;font-size:1.05rem;">CPN Settings</h2>
+  <p class="muted" style="margin:0 0 12px;line-height:1.45;">Personal preferences for your panel account.</p>
+  <form method="post" action="/settings/cpn-settings" class="stack-form" style="max-width:520px;">
+    <label style="display:flex;gap:8px;align-items:flex-start;">
+      <input type="checkbox" name="update_notifications" value="1" class="cpn-check"{checked} />
+      <span>Update notifications (show a notification when the panel finishes an upgrade, with a link to the GitHub commit)</span>
+    </label>
+    <p class="muted" style="margin:8px 0 0;line-height:1.45;">On by default. Turning this off stops new upgrade-completed notifications and removes the ones already in your list. Upgrade failures are always shown.</p>
+    <button type="submit" class="btn-primary" style="margin-top:12px;">Save CPN Settings</button>
+  </form>
+</article>"#,
+        checked = checked,
+    )
+}
+
+/// Settings overview for a signed-in user (adds the per-user CPN Settings card).
+pub fn settings_hub_main_for(
+    username: Option<&str>,
+    is_owner: bool,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
     let mut body = section_heading(
         "Settings",
         "Panel version, design, onboarding, community links, and listen port.",
@@ -34,6 +69,9 @@ pub fn settings_hub_main_with(is_owner: bool, notice: Option<&str>, error: Optio
             r#"<p class="panel-notice error">{}</p>"#,
             escape_text(msg)
         ));
+    }
+    if let Some(name) = username.filter(|n| !n.trim().is_empty()) {
+        body.push_str(&cpn_settings_section(name));
     }
     if is_owner {
         let prefs = load_panel_ui_prefs();
@@ -323,6 +361,24 @@ mod tests {
         assert!(!other.contains("/settings/site-messages"));
         assert!(other.contains("/settings/design"));
         assert!(other.contains("Admin only &lt;b&gt;"));
+    }
+
+    #[test]
+    fn cpn_settings_card_defaults_to_checked_and_posts_to_save_route() {
+        crate::account::with_test_data_dir(|| {
+            let html = settings_hub_main_for(Some("Admin"), false, None, None);
+            assert!(html.contains("CPN Settings"));
+            assert!(html.contains(r#"action="/settings/cpn-settings""#));
+            assert!(
+                html.contains(r#"name="update_notifications" value="1" class="cpn-check" checked"#)
+            );
+            crate::panel_user_prefs::save_user_update_notifications("Admin", false).unwrap();
+            let off = settings_hub_main_for(Some("Admin"), false, None, None);
+            assert!(!off.contains(r#"class="cpn-check" checked"#));
+            assert!(!off.contains('\u{2014}'));
+            // Anonymous callers (legacy helper) do not get the per-user card.
+            assert!(!settings_hub_main_with(true, None, None).contains("cpn-settings"));
+        });
     }
 
     #[test]
