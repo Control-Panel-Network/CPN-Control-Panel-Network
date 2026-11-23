@@ -48,7 +48,11 @@ impl StorageUnitPref {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserUiPrefs {
     #[serde(default)]
     pub color_mode: ColorMode,
@@ -68,6 +72,23 @@ pub struct UserUiPrefs {
     /// Activity Board expanded. Default false (collapsed).
     #[serde(default)]
     pub activity_board_open: bool,
+    /// Receive "Panel upgrade completed" style update notifications. Default on.
+    #[serde(default = "default_true")]
+    pub update_notifications: bool,
+}
+
+impl Default for UserUiPrefs {
+    fn default() -> Self {
+        Self {
+            color_mode: ColorMode::default(),
+            minimalist_mode: false,
+            storage_unit: StorageUnitPref::default(),
+            ssh_security_review_snooze_until: None,
+            dashboard_widgets: Vec::new(),
+            activity_board_open: false,
+            update_notifications: true,
+        }
+    }
 }
 
 fn user_prefs_path(username: &str) -> PathBuf {
@@ -156,6 +177,18 @@ pub fn save_user_storage_unit(
     prefs.storage_unit = unit;
     write_json(&user_prefs_path(username), &prefs)?;
     Ok(unit)
+}
+
+/// Whether this user wants update-completed notifications (default true).
+pub fn load_user_update_notifications(username: &str) -> bool {
+    load_user_ui_prefs(username).update_notifications
+}
+
+pub fn save_user_update_notifications(username: &str, enabled: bool) -> Result<bool, String> {
+    let mut prefs = load_user_ui_prefs(username);
+    prefs.update_notifications = enabled;
+    write_json(&user_prefs_path(username), &prefs)?;
+    Ok(enabled)
 }
 
 pub fn save_user_ui_prefs(username: &str, prefs: &UserUiPrefs) -> Result<(), String> {
@@ -260,6 +293,27 @@ mod tests {
             assert!(load_user_minimalist_mode("Admin"));
             assert_eq!(load_user_color_mode("Admin"), ColorMode::Light);
         });
+    }
+
+    #[test]
+    fn update_notifications_default_on_and_persist() {
+        with_test_data_dir(|| {
+            assert!(load_user_update_notifications("Admin"));
+            save_user_color_mode("Admin", ColorMode::Dark).unwrap();
+            save_user_update_notifications("Admin", false).unwrap();
+            assert!(!load_user_update_notifications("Admin"));
+            assert_eq!(load_user_color_mode("Admin"), ColorMode::Dark);
+            assert!(load_user_update_notifications("Other"));
+            save_user_update_notifications("Admin", true).unwrap();
+            assert!(load_user_update_notifications("Admin"));
+        });
+    }
+
+    #[test]
+    fn legacy_prefs_without_flag_default_to_on() {
+        let prefs: UserUiPrefs = serde_json::from_str(r#"{"minimalist_mode":true}"#).unwrap();
+        assert!(prefs.update_notifications);
+        assert!(prefs.minimalist_mode);
     }
 
     #[test]

@@ -109,6 +109,13 @@ pub fn sidebar_footer_styles() -> &'static str {
 .notify-toast-text span.notify-toast-time {
   margin-top:2px; font-size:11px; color:rgba(255,255,255,.6);
 }
+.notify-toast-text span.notify-toast-links { margin-top:4px; }
+.notify-toast-link {
+  display:inline-block; margin-right:10px; color:#9ccbff; font-size:12px;
+  font-weight:600; text-decoration:underline;
+}
+.notify-toast-link:hover,
+.notify-toast-link:focus-visible { color:#fff; outline:none; }
 .notify-toast-dismiss {
   flex:0 0 auto; width:28px; height:28px; border:0; border-radius:4px;
   background:transparent; color:rgba(255,255,255,.45); padding:0; cursor:pointer;
@@ -319,6 +326,24 @@ pub fn notifications_popover_script() -> &'static str {
     return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>';
   }
 
+  function safeHttpsUrl(url) {
+    var u = String(url || "");
+    return /^https:\/\/github\.com\/[A-Za-z0-9._\/@#%+~:=?&-]+$/.test(u) ? u : "";
+  }
+
+  function linksHtml(item) {
+    var links = (item && item.links) || [];
+    var out = [];
+    for (var i = 0; i < links.length && i < 4; i++) {
+      var href = safeHttpsUrl(links[i] && links[i].url);
+      if (!href) continue;
+      out.push('<a class="notify-toast-link" href="' + escapeHtml(href)
+        + '" target="_blank" rel="noopener noreferrer">'
+        + escapeHtml(links[i].label || "View on GitHub") + "</a>");
+    }
+    return out.length ? '<span class="notify-toast-links">' + out.join(" ") + "</span>" : "";
+  }
+
   function relativeTime(createdAt) {
     var ts = Number(createdAt) || 0;
     if (!ts) return "";
@@ -376,6 +401,7 @@ pub fn notifications_popover_script() -> &'static str {
         '<span class="notify-toast-icon" aria-hidden="true">' + severityIcon(sev) + "</span>"
         + '<div class="notify-toast-text"><strong>' + escapeHtml(item.title) + "</strong>"
         + (item.body ? "<span>" + escapeHtml(item.body) + "</span>" : "")
+        + linksHtml(item)
         + (item.created_at ? '<span class="notify-toast-time">' + escapeHtml(relativeTime(item.created_at)) + (item.sticky ? " (stays until dismissed)" : "") + "</span>" : "")
         + "</div>"
         + '<button type="button" class="notify-toast-dismiss" aria-label="Dismiss" title="Dismiss">'
@@ -513,6 +539,9 @@ mod tests {
         assert!(js.contains("POPOVER_WIDTH = 340"));
         assert!(js.contains("itemSeverity"));
         assert!(js.contains("notify-toast-dismiss"));
+        assert!(js.contains("function linksHtml"));
+        assert!(js.contains(r#"target="_blank" rel="noopener noreferrer""#));
+        assert!(js.contains("https:\\/\\/github\\.com"));
         assert!(js.contains("payload.dismiss = true"));
         assert!(js.contains("relativeTime"));
         assert!(js.contains("loadEpoch"));

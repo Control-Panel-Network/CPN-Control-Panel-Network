@@ -55,6 +55,57 @@ pub struct PanelNotification {
     /// stay until the user dismisses them. Older JSON defaults to `false`.
     #[serde(default)]
     pub sticky: bool,
+    /// Optional machine tag. `update` marks upgrade-completed items so the
+    /// per-user "update notifications" toggle can hide them.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// Optional safe links (GitHub commit / compare / release) shown under the body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<NotificationLink>,
+}
+
+/// `kind` value for panel / tip upgrade completed notifications.
+pub const KIND_UPDATE: &str = "update";
+
+/// Titles of update notifications written before `kind` existed.
+const LEGACY_UPDATE_TITLES: &[&str] = &["Panel upgrade completed", "Panel version event"];
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NotificationLink {
+    pub label: String,
+    pub url: String,
+}
+
+/// Only plain `https://github.com/...` URLs without markup characters are
+/// ever stored or returned to the browser.
+pub fn is_safe_link_url(url: &str) -> bool {
+    let u = url.trim();
+    u.len() <= 300
+        && u.starts_with("https://github.com/")
+        && u.chars().all(|c| {
+            c.is_ascii_graphic() && !matches!(c, '<' | '>' | '"' | '\'' | '`' | '\\' | '{' | '}')
+        })
+}
+
+fn sanitize_links(links: Vec<NotificationLink>) -> Vec<NotificationLink> {
+    links
+        .into_iter()
+        .filter(|l| is_safe_link_url(&l.url))
+        .map(|l| NotificationLink {
+            label: l.label.trim().chars().take(80).collect(),
+            url: l.url.trim().to_string(),
+        })
+        .filter(|l| !l.label.is_empty())
+        .take(4)
+        .collect()
+}
+
+/// True for update-completed notifications (tagged, or legacy by title).
+pub fn is_update_notification(item: &PanelNotification) -> bool {
+    item.kind == KIND_UPDATE
+        || (item.kind.is_empty()
+            && item.category.trim().eq_ignore_ascii_case(CATEGORY_PANEL)
+            && LEGACY_UPDATE_TITLES.contains(&item.title.trim()))
 }
 
 /// True for categories that are always long-lived (announcements, long warnings).
@@ -251,6 +302,30 @@ pub fn push_notification_full(
     severity: Option<&str>,
     sticky: bool,
 ) -> Result<PanelNotification, String> {
+    push_notification_ext(
+        username,
+        title,
+        body,
+        category,
+        severity,
+        sticky,
+        "",
+        Vec::new(),
+    )
+}
+
+/// Full push including the optional `kind` tag and safe GitHub links.
+#[allow(clippy::too_many_arguments)]
+pub fn push_notification_ext(
+    username: &str,
+    title: &str,
+    body: &str,
+    category: &str,
+    severity: Option<&str>,
+    sticky: bool,
+    kind: &str,
+    links: Vec<NotificationLink>,
+) -> Result<PanelNotification, String> {
     let path = store_path(username);
     let mut store = load_notifications(username);
     let category = category.trim().to_string();
@@ -280,6 +355,8 @@ pub fn push_notification_full(
         created_at: now,
         read: false,
         sticky,
+        kind: kind.trim().chars().take(32).collect(),
+        links: sanitize_links(links),
     };
     store.items.insert(0, item.clone());
     // Cap growth so the file stays small.
@@ -316,9 +393,55 @@ pub fn dismiss(username: &str, ids: &[String]) -> Result<NotificationStore, Stri
     Ok(store)
 }
 
+/// Remove every update-completed notification for a user (used when the
+/// "update notifications" preference is switched off). Returns how many went.
+pub fn remove_update_notifications(username: &str) -> Result<usize, String> {
+    let path = store_path(username);
+    let mut store = load_notifications(username);
+    let before = store.items.len();
+    store.items.retain(|item| !is_update_notification(item));
+    let removed = before - store.items.len();
+    if removed > 0 {
+        write_store(&path, &store)?;
+    }
+    Ok(removed)
+}
+
+/// Notify panel admins that an upgrade completed, honoring each admin's
+/// "update notifications" preference (default on). Returns how many were created.
+pub fn notify_update_admins(title: &str, body: &str, links: Vec<NotificationLink>) -> usize {
+    let mut created = 0;
+    for user in panel_admin_usernames() {
+        if !crate::panel_user_prefs::load_user_update_notifications(&user) {
+            continue;
+        }
+        if push_notification_ext(
+            &user,
+            title,
+            body,
+            CATEGORY_PANEL,
+            None,
+            false,
+            KIND_UPDATE,
+            links.clone(),
+        )
+        .is_ok()
+        {
+            created += 1;
+        }
+    }
+    created
+}
+
 fn item_public_json(item: &PanelNotification) -> serde_json::Value {
     let severity = resolve_severity(item);
     let sticky = is_sticky(item);
+    let links: Vec<serde_json::Value> = item
+        .links
+        .iter()
+        .filter(|l| is_safe_link_url(&l.url))
+        .map(|l| serde_json::json!({ "label": l.label, "url": l.url }))
+        .collect();
     let expires_at = if sticky {
         serde_json::Value::Null
     } else {
@@ -326,6 +449,8 @@ fn item_public_json(item: &PanelNotification) -> serde_json::Value {
     };
     serde_json::json!({
         "sticky": sticky,
+        "kind": item.kind,
+        "links": links,
         "expires_at": expires_at,
         "id": item.id,
         "title": item.title,
@@ -537,6 +662,8 @@ mod tests {
             created_at,
             read: false,
             sticky,
+            kind: String::new(),
+            links: Vec::new(),
         }
     }
 
@@ -636,6 +763,109 @@ mod tests {
             assert_eq!(after.items[0].id, plain.id);
             assert_eq!(load_notifications("Admin").items.len(), 1);
         });
+    }
+
+    fn commit_link(sha: &str) -> NotificationLink {
+        NotificationLink {
+            label: format!("View commit {sha}"),
+            url: format!("https://github.com/Acme/Fork/commit/{sha}"),
+        }
+    }
+
+    #[test]
+    fn update_push_stores_safe_links_and_exposes_them() {
+        with_test_data_dir(|| {
+            let bad = NotificationLink {
+                label: "x".into(),
+                url: "javascript:alert(1)".into(),
+            };
+            let quote = NotificationLink {
+                label: "x".into(),
+                url: "https://github.com/a/b/commit/abc\" onclick=\"x".into(),
+            };
+            let item = push_notification_ext(
+                "Admin",
+                "Panel upgrade completed",
+                "Updated to stable @ 19f7a9a (1.4.12)",
+                CATEGORY_PANEL,
+                None,
+                false,
+                KIND_UPDATE,
+                vec![commit_link("19f7a9a"), bad, quote],
+            )
+            .expect("push");
+            assert_eq!(item.links, vec![commit_link("19f7a9a")]);
+            assert!(is_update_notification(&item));
+            let json = notifications_public_json(&load_notifications("Admin"));
+            assert_eq!(json["items"][0]["kind"], "update");
+            assert_eq!(
+                json["items"][0]["links"][0]["url"],
+                "https://github.com/Acme/Fork/commit/19f7a9a"
+            );
+        });
+    }
+
+    #[test]
+    fn link_url_validation_rejects_markup_and_other_hosts() {
+        assert!(is_safe_link_url("https://github.com/a/b/commit/abc1234"));
+        assert!(!is_safe_link_url("http://github.com/a/b"));
+        assert!(!is_safe_link_url("https://evil.example/a"));
+        assert!(!is_safe_link_url("https://github.com/a/b?x=<script>"));
+        assert!(!is_safe_link_url("https://github.com/a b"));
+    }
+
+    #[test]
+    fn notify_update_admins_honors_user_preference() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            create_account(
+                "updowner",
+                None,
+                true,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            let on = notify_update_admins("Panel upgrade completed", "a", vec![]);
+            assert_eq!(on, 1);
+            assert_eq!(load_notifications("updowner").items.len(), 1);
+
+            crate::panel_user_prefs::save_user_update_notifications("updowner", false).unwrap();
+            let off = notify_update_admins("Panel upgrade completed", "b", vec![]);
+            assert_eq!(off, 0);
+            assert_eq!(load_notifications("updowner").items.len(), 1);
+
+            // Non-update notifications are unaffected by the toggle.
+            notify_panel_admins("Plugin installed", "x", CATEGORY_PLUGINS);
+            assert_eq!(load_notifications("updowner").items.len(), 2);
+
+            // Switching off removes existing update items (and legacy titled ones).
+            push_notification("updowner", "Panel version event", "legacy", CATEGORY_PANEL)
+                .expect("push");
+            assert_eq!(remove_update_notifications("updowner").unwrap(), 2);
+            let left = load_notifications("updowner").items;
+            assert_eq!(left.len(), 1);
+            assert_eq!(left[0].title, "Plugin installed");
+
+            crate::panel_user_prefs::save_user_update_notifications("updowner", true).unwrap();
+            assert_eq!(
+                notify_update_admins("Panel upgrade completed", "c", vec![]),
+                1
+            );
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
+    }
+
+    #[test]
+    fn upgrade_failures_are_not_update_notifications() {
+        let mut item = note("f", CATEGORY_PANEL, 1, false);
+        item.title = "Panel upgrade failed".into();
+        assert!(!is_update_notification(&item));
     }
 
     #[test]

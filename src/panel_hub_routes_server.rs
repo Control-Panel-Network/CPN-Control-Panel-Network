@@ -23,7 +23,7 @@ use crate::panel_hub_pages_server::{
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
-    connect_page, design_settings_page_with_tab, design_settings_tab, settings_hub_main_with,
+    connect_page, design_settings_page_with_tab, design_settings_tab, settings_hub_main_for,
     setup_wizard_page_with, version_management_page,
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
@@ -1271,10 +1271,57 @@ pub async fn settings_page(
             &user,
             "settings",
             "Settings",
-            &settings_hub_main_with(owner, notice.as_deref(), error.as_deref()),
+            &settings_hub_main_for(Some(&user), owner, notice.as_deref(), error.as_deref()),
         )
     })
     .await
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct CpnSettingsForm {
+    #[serde(default)]
+    update_notifications: String,
+}
+
+/// Per-user CPN Settings (update notifications on/off). Any signed-in panel user.
+#[post("/settings/cpn-settings")]
+pub async fn settings_cpn_settings_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<CpnSettingsForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let enabled = matches!(
+        form.update_notifications
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "1" | "true" | "on" | "yes"
+    );
+    let username = user.clone();
+    let result = web::block(move || {
+        crate::panel_user_prefs::save_user_update_notifications(&username, enabled)?;
+        if !enabled {
+            crate::panel_notifications::remove_update_notifications(&username)?;
+        }
+        Ok::<(), String>(())
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Save task failed: {e}")));
+    match result {
+        Ok(()) => redirect_flash(
+            "/settings",
+            Some(if enabled {
+                "Update notifications are on"
+            } else {
+                "Update notifications are off"
+            }),
+            None,
+        ),
+        Err(error) => redirect_flash("/settings", None, Some(&error)),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]

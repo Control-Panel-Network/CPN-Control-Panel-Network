@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **GitHub links on update notifications**: "Panel upgrade completed" (commit and tip upgrades) now carries a "View commit <sha>" link to the commit on the configured update source repo (official repo or the fork set under Update source), plus "View changes" (previous..new compare) when the previous commit is known. Release-package upgrades link to the release tag. Links are validated (`https://github.com/<owner>/<repo>/...` only, hex SHA or safe tag), escaped in the bell list, and open in a new tab with `target="_blank" rel="noopener noreferrer"`. The notification JSON gains `kind` and `links`.
+- **CPN Settings with update notifications toggle**: `/settings` has a new "CPN Settings" card with an "Update notifications" checkbox (per panel user, stored in the user prefs, default on). Turning it off stops new upgrade-completed notifications for that user and removes the ones already listed; upgrade failures and other notification types are unaffected. Save route: `POST /settings/cpn-settings`.
 - **Apache PHP on PHP Configurations**: `/server/php/configs` gains an Apache / httpd PHP control beside the LiteSpeed lsphp host default. Preference is stored in `/var/lib/cpn/php-apache-default.json`. On lsphp hosts CPN prefers Remi parallel packages (`php86-php`, and siblings) so Apache PHP can change without fighting lsphp opcache paths. Basic/Advanced editors honor `runtime=apache` so saves do not overwrite LiteSpeed php.ini. When httpd is missing, the control is disabled with a System Repair heal path (`httpd`).
 
 ## [1.4.12] - 21/11/2026
