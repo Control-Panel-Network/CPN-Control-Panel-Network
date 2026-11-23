@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tachyon Login Request timed out under load**: Webmail PHP-FPM pool defaults raised from `pm.max_children=8` / `default_socket_timeout=8` to `24` / `30s` (idle timeout 20s). Loopback heal rewrites undersized pools so bcrypt IMAP auth and concurrent Login Ajax no longer hit PHP/FPM exhaustion timeouts while Dovecot remains healthy.
+
 ### Added
 
 - **Apache PHP on PHP Configurations**: `/server/php/configs` gains an Apache / httpd PHP control beside the LiteSpeed lsphp host default. Preference is stored in `/var/lib/cpn/php-apache-default.json`. On lsphp hosts CPN prefers Remi parallel packages (`php86-php`, and siblings) so Apache PHP can change without fighting lsphp opcache paths. Basic/Advanced editors honor `runtime=apache` so saves do not overwrite LiteSpeed php.ini. When httpd is missing, the control is disabled with a System Repair heal path (`httpd`).

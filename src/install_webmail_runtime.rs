@@ -394,12 +394,12 @@ pub(crate) fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
          listen.group = root\n\
          listen.mode = 0666\n\
          pm = ondemand\n\
-         pm.max_children = 8\n\
-         pm.process_idle_timeout = 10s\n\
+         pm.max_children = 24\n\
+         pm.process_idle_timeout = 20s\n\
          chdir = {docroot}\n\
          security.limit_extensions = .php\n\
          php_admin_value[open_basedir] = {open_basedir}\n\
-         php_admin_value[default_socket_timeout] = 8\n\
+         php_admin_value[default_socket_timeout] = 30\n\
          php_admin_flag[allow_url_fopen] = off\n"
     );
     install_journal::write_file_tracked(STAGE, Path::new(FPM_POOL), &pool)?;
