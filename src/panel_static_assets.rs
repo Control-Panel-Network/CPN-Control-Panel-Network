@@ -1,8 +1,8 @@
-//! Cacheable panel chrome (CSS and JS) so HTML navigation does not resend it.
+﻿//! Cacheable panel chrome (CSS and JS) so HTML navigation does not resend it.
 //!
 //! Theme variables and color-mode boot stay inline. Private HTML stays `no-store`.
 
-use actix_web::{HttpResponse, get};
+use actix_web::{HttpResponse, route};
 use std::sync::OnceLock;
 
 pub fn asset_version() -> &'static str {
@@ -69,15 +69,63 @@ fn cached_body(content_type: &'static str, body: &'static str) -> HttpResponse {
         .body(body)
 }
 
-#[get("/cpn-panel.css")]
+// GET and HEAD: monitors, proxies, and `curl -I` probe with HEAD and must not see 404.
+#[route("/cpn-panel.css", method = "GET", method = "HEAD")]
 pub async fn panel_stylesheet() -> HttpResponse {
     cached_body("text/css; charset=utf-8", shared_panel_stylesheet())
 }
 
-#[get("/cpn-panel.js")]
+#[route("/cpn-panel.js", method = "GET", method = "HEAD")]
 pub async fn panel_script() -> HttpResponse {
     cached_body(
         "application/javascript; charset=utf-8",
         shared_panel_script(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::http::{Method, StatusCode, header::CACHE_CONTROL};
+    use actix_web::{App, test as atest};
+
+    fn assert_cached(resp: &actix_web::dev::ServiceResponse, content_type: &str) {
+        assert_eq!(resp.status(), StatusCode::OK);
+        let cache = resp
+            .headers()
+            .get(CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert_eq!(cache, "public, max-age=3600");
+        let ct = resp
+            .headers()
+            .get(actix_web::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert!(ct.starts_with(content_type), "content-type was {ct}");
+    }
+
+    #[test]
+    fn css_and_js_serve_for_get_and_head_with_cache_control() {
+        actix_web::rt::System::new().block_on(async {
+            let app =
+                atest::init_service(App::new().service(panel_stylesheet).service(panel_script))
+                    .await;
+            for method in [Method::GET, Method::HEAD] {
+                let css = atest::TestRequest::default()
+                    .method(method.clone())
+                    .uri("/cpn-panel.css?v=test")
+                    .to_request();
+                assert_cached(&atest::call_service(&app, css).await, "text/css");
+                let js = atest::TestRequest::default()
+                    .method(method)
+                    .uri("/cpn-panel.js?v=test")
+                    .to_request();
+                assert_cached(
+                    &atest::call_service(&app, js).await,
+                    "application/javascript",
+                );
+            }
+        });
+    }
 }
