@@ -261,6 +261,7 @@ pub mod panel_hub_pages_version_script;
 pub mod panel_hub_pages_version_source_script;
 pub mod panel_hub_pages_version_ui_script;
 pub mod panel_hub_pages_webmail;
+pub mod panel_hub_passkey_remove;
 pub mod panel_hub_routes;
 pub mod panel_hub_routes_account;
 pub mod panel_hub_routes_account_acl;
