@@ -27,13 +27,21 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
         let _ = chown_data_tree(&data_dir);
     }
     let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
+    // `/?admin` sign-in is delegated to the CPN panel owner (owner-only bridge).
+    let _ = crate::tachyon_admin_bridge_install::ensure_admin_bridge();
     // OpenPGP (SnappyMail-family + Roundcube Enigma when present).
     let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
     Ok(())
 }
 
 /// Set SnappyMail-family `/?admin` password (all installed data roots with application.ini).
-pub fn sync_snappymail_admin_password(password: &str) -> Result<(), String> {
+///
+/// Only the panel owner (bootstrap admin) may drive this. Password changes for normal
+/// users, resellers, and ACL accounts must never touch the webmail admin credential.
+pub fn sync_snappymail_admin_password(username: &str, password: &str) -> Result<(), String> {
+    if !crate::panel_admin::is_panel_admin(username) {
+        return Ok(());
+    }
     let synced = install_snappymail_lineage::sync_lineage_admin_password(password)?;
     if synced == 0 {
         // No application.ini yet (first visit pending). Not a hard failure.
@@ -300,6 +308,30 @@ mod tests {
     use serde_json::json;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn webmail_admin_password_sync_is_panel_owner_only() {
+        use crate::account::{default_password_policy, setup_account, with_test_data_dir};
+        with_test_data_dir(|| {
+            let owner_pw: String = ["Owner", "Passw0rd", "xyz"].concat();
+            setup_account(
+                "ntowner",
+                Some(&owner_pw),
+                false,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .unwrap();
+            // A too-short password is rejected for the owner path only; users, resellers,
+            // and ACL accounts return early and never touch the webmail admin credential.
+            let short = "short";
+            assert!(super::sync_snappymail_admin_password("ntowner", short).is_err());
+            for other in ["plainuser", "reseller1", "acl-sub"] {
+                assert!(super::sync_snappymail_admin_password(other, short).is_ok());
+            }
+        });
+    }
 
     #[test]
     fn sets_determine_user_domain_on() {
