@@ -1,5 +1,35 @@
 //! Client-side panel navigation without full document reloads (issue #617).
 
+use actix_web::HttpRequest;
+use std::cell::Cell;
+
+thread_local! {
+    static SPA_FRAGMENT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// True when the browser SPA navigator asked for a lightweight HTML fragment.
+pub fn request_wants_spa_fragment(http: &HttpRequest) -> bool {
+    http.headers()
+        .get("X-CPN-SPA")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false)
+}
+
+/// Run `f` with SPA fragment mode set for [`panel_shell`](crate::panel_pages::panel_shell).
+pub fn with_spa_fragment<R>(enabled: bool, f: impl FnOnce() -> R) -> R {
+    SPA_FRAGMENT.with(|flag| {
+        let prev = flag.replace(enabled);
+        let out = f();
+        flag.set(prev);
+        out
+    })
+}
+
+pub(crate) fn spa_fragment_active() -> bool {
+    SPA_FRAGMENT.with(Cell::get)
+}
+
 /// Styles for SPA loading / live region.
 pub fn spa_nav_styles() -> &'static str {
     r#"

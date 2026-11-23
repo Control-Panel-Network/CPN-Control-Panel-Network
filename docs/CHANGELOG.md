@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Faster panel navigation**: website list and email pages render off the Actix worker. Site disk, package disk walks, MariaDB schema size (one query), origin certificate checks, sidebar host info, dashboard gauges, and mail health probes are cached for a short time. List pages no longer start screenshot captures or an origin-certificate pass on every click. Shared panel CSS and JavaScript are cacheable files (`/cpn-panel.css`, `/cpn-panel.js`). SPA navigations to websites and email can return a lighter HTML fragment.
+
 ### Added
 
 - **Apache PHP on PHP Configurations**: `/server/php/configs` gains an Apache / httpd PHP control beside the LiteSpeed lsphp host default. Preference is stored in `/var/lib/cpn/php-apache-default.json`. On lsphp hosts CPN prefers Remi parallel packages (`php86-php`, and siblings) so Apache PHP can change without fighting lsphp opcache paths. Basic/Advanced editors honor `runtime=apache` so saves do not overwrite LiteSpeed php.ini. When httpd is missing, the control is disabled with a System Repair heal path (`httpd`).

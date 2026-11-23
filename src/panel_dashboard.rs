@@ -12,6 +12,27 @@ pub struct HostGaugesSnapshot {
 }
 
 pub fn host_gauges_snapshot() -> HostGaugesSnapshot {
+    if !crate::panel_perf_cache::caches_bypassed() {
+        static CACHE: std::sync::OnceLock<
+            std::sync::Mutex<Option<(std::time::Instant, HostGaugesSnapshot)>>,
+        > = std::sync::OnceLock::new();
+        let slot = CACHE.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(guard) = slot.lock()
+            && let Some((at, snap)) = guard.as_ref()
+            && at.elapsed() < std::time::Duration::from_secs(20)
+        {
+            return snap.clone();
+        }
+        let snap = host_gauges_snapshot_live();
+        if let Ok(mut guard) = slot.lock() {
+            *guard = Some((std::time::Instant::now(), snap.clone()));
+        }
+        return snap;
+    }
+    host_gauges_snapshot_live()
+}
+
+fn host_gauges_snapshot_live() -> HostGaugesSnapshot {
     let cores = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);

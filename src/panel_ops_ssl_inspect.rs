@@ -138,13 +138,24 @@ pub fn inspect_domain_ssl(domain: &str) -> SslCertInsight {
             ..SslCertInsight::default()
         };
     };
-    let Some(path) = resolve_cert_path(&domain) else {
+    if let Some(hit) = crate::panel_perf_cache::caches().ssl_insight.get(&domain) {
+        return hit;
+    }
+    let insight = inspect_domain_ssl_uncached(&domain);
+    crate::panel_perf_cache::caches()
+        .ssl_insight
+        .insert(domain, insight.clone());
+    insight
+}
+
+fn inspect_domain_ssl_uncached(domain: &str) -> SslCertInsight {
+    let Some(path) = resolve_cert_path(domain) else {
         return SslCertInsight::default();
     };
     match parse_cert_pem(&path) {
         Ok(mut parsed) => {
             parsed.cert_path = Some(path.display().to_string());
-            parsed.covers_domain = domain_covered(&domain, &parsed.sans, &parsed.subject);
+            parsed.covers_domain = domain_covered(domain, &parsed.sans, &parsed.subject);
             finalize_kind(&mut parsed);
             parsed
         }

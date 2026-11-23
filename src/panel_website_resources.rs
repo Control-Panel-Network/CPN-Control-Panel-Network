@@ -50,22 +50,51 @@ pub fn format_bytes(bytes: u64) -> String {
     crate::panel_storage_fmt::format_bytes_auto(bytes)
 }
 
-/// Used bytes for this site home, excluding nested other-site homes.
-pub fn site_used_bytes(site: &SiteRecord, max_files: usize) -> Option<u64> {
-    let home = site_home_from_record(site);
-    let skip: Vec<PathBuf> = list_sites()
+fn cached_site_homes() -> Vec<(String, PathBuf)> {
+    if let Some(hit) = crate::panel_perf_cache::caches().site_homes.get(&"all") {
+        return hit;
+    }
+    let homes = list_sites()
         .unwrap_or_default()
         .into_iter()
-        .filter(|other| !other.domain.eq_ignore_ascii_case(&site.domain))
-        .map(|other| site_home_from_record(&other))
-        .filter(|path| path.starts_with(&home) && path != &home)
+        .map(|site| {
+            let home = site_home_from_record(&site);
+            (site.domain, home)
+        })
+        .collect::<Vec<_>>();
+    crate::panel_perf_cache::caches()
+        .site_homes
+        .insert("all", homes.clone());
+    homes
+}
+
+/// Used bytes for this site home, excluding nested other-site homes.
+///
+/// Results are cached briefly so list cards and dashboard stats do not re-walk
+/// large trees (or re-read every site JSON) on every navigation.
+pub fn site_used_bytes(site: &SiteRecord, max_files: usize) -> Option<u64> {
+    let cache_key = format!("{}:{}", site.domain.trim().to_ascii_lowercase(), max_files);
+    if let Some(cached) = crate::panel_perf_cache::caches().site_disk.get(&cache_key) {
+        return Some(cached);
+    }
+    let home = site_home_from_record(site);
+    let skip: Vec<PathBuf> = cached_site_homes()
+        .into_iter()
+        .filter(|(domain, path)| {
+            !domain.eq_ignore_ascii_case(&site.domain) && path.starts_with(&home) && path != &home
+        })
+        .map(|(_, path)| path)
         .collect();
     let root = if home.exists() {
         home
     } else {
         PathBuf::from(&site.docroot)
     };
-    approx_dir_bytes_skip(&root, &skip, max_files)
+    let bytes = approx_dir_bytes_skip(&root, &skip, max_files)?;
+    crate::panel_perf_cache::caches()
+        .site_disk
+        .insert(cache_key, bytes);
+    Some(bytes)
 }
 
 pub fn unix_now() -> u64 {

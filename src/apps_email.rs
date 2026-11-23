@@ -28,7 +28,28 @@ pub struct MailStackPublic {
 }
 
 /// Fast local checks only (no outbound network, no IMAP auth).
+///
+/// Cached for a few seconds so Email pages do not spawn `systemctl` and port
+/// probes on every navigation. Callers that just started the stack must
+/// [`invalidate_mail_stack_cache`] first.
 pub fn detect_mail_stack_public() -> MailStackPublic {
+    if let Some(hit) = crate::panel_perf_cache::caches().mail_stack.get(&"stack") {
+        return hit;
+    }
+    let value = detect_mail_stack_public_uncached();
+    crate::panel_perf_cache::caches()
+        .mail_stack
+        .insert("stack", value.clone());
+    value
+}
+
+pub fn invalidate_mail_stack_cache() {
+    crate::panel_perf_cache::caches()
+        .mail_stack
+        .invalidate(&"stack");
+}
+
+fn detect_mail_stack_public_uncached() -> MailStackPublic {
     let packages_ok = email_packages_installed();
     let postfix_running = systemd_unit_active("postfix") || port_open("127.0.0.1:25", 250);
     let dovecot_running = systemd_unit_active("dovecot");
@@ -62,6 +83,7 @@ pub fn mail_backend_ready_fast() -> bool {
 
 /// Install missing packages, apply CPN mail config, enable postfix then dovecot.
 pub fn start_email_stack() -> Result<String, String> {
+    invalidate_mail_stack_cache();
     if !email_packages_installed() {
         install_packages_dnf_or_apt(DNF_MAIL_PKGS, APT_MAIL_PKGS)?;
     }
@@ -94,6 +116,7 @@ pub fn start_email_stack() -> Result<String, String> {
             reload.summary()
         ));
     }
+    invalidate_mail_stack_cache();
     if !mail_backend_ready_fast() {
         let st = detect_mail_stack_public();
         return Err(format!(

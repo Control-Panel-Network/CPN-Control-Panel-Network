@@ -117,12 +117,13 @@ fn tracing_or_eprint(domain: &str, err: &str) {
     eprintln!("cpn origin-backup retry `{domain}`: {short}");
 }
 
-/// Kick a background pass from `/websites` or `/subdomains` without blocking HTML.
+/// Ensure the background origin-backup loop is running.
+///
+/// List page loads used to spawn a fresh `run_pass` thread on every view, which
+/// re-inspected SSL for all sites and competed with panel HTML under host load.
+/// The loop runs one pass on start, then every [`LOOP_SECS`].
 pub fn spawn_origin_backup_pass() {
     start_retry_loop_once();
-    let _ = thread::Builder::new()
-        .name("cpn-origin-le".into())
-        .spawn(run_pass);
 }
 
 fn start_retry_loop_once() {
@@ -131,6 +132,9 @@ fn start_retry_loop_once() {
         let _ = thread::Builder::new()
             .name("cpn-origin-le-loop".into())
             .spawn(|| {
+                // One immediate pass when websites list is first opened, then
+                // periodic retries. Avoids spawning a pass thread per page view.
+                run_pass();
                 loop {
                     thread::sleep(Duration::from_secs(LOOP_SECS));
                     run_pass();

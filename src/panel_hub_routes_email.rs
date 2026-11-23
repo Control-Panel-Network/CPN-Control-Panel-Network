@@ -4,8 +4,8 @@ use crate::installer::AppState;
 use crate::mail_postfix_maps::owner_for_mail_domain;
 use crate::packages::{QuotaResource, require_quota};
 use crate::panel_hub_http::{
-    flash_messages, html_blocking, html_ok, html_ok_pop_flash, login_redirect, redirect_flash,
-    redirect_notice, require_panel_user,
+    captured_session_exp, flash_messages, html_blocking, html_ok, html_ok_pop_flash,
+    login_redirect, panel_shell_blocking, redirect_flash, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_email_auth::{
     email_bimi_page, email_mta_sts_page, push_bimi_cloudflare, push_mta_sts_cloudflare,
@@ -39,19 +39,26 @@ pub async fn email_accounts_route(
         .read()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "Email Accounts",
-        &email_accounts_page(
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
+    html_blocking(move || {
+        let backend_ready =
+            status.mail_backend_ready || crate::apps_email::mail_backend_ready_fast();
+        let body = email_accounts_page(
             &user,
             status.selected_mail,
             status.mail_client_ready,
-            status.mail_backend_ready || crate::apps_email::mail_backend_ready_fast(),
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
+            backend_ready,
+            notice.as_deref(),
+            error.as_deref(),
+        );
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "email", "Email Accounts", &body, session_exp)
+        })
+    })
+    .await
 }
 
 #[get("/email/create")]
