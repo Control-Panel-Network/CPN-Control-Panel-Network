@@ -1,6 +1,12 @@
 //! Panel notification store under `/var/lib/cpn/notifications/<user>.json`.
 //!
-//! Categories: `ssl`, `plugins`, `panel`, `generic`. Prefer
+//! Categories: `ssl`, `plugins`, `panel`, `generic`, plus long-lived
+//! `announcement` and `warning_long`.
+//!
+//! Retention: default notifications are auto-dismissed (removed on read) once
+//! older than 48 hours ([`DEFAULT_TTL_SECS`]). Items with `sticky: true`, or the
+//! `announcement` / `warning_long` categories, never expire and stay until the
+//! user dismisses them. Prefer
 //! [`notify_best_effort`] / [`notify_panel_admins`] from event sites so the inbox
 //! fills automatically without a parallel system.
 
@@ -20,8 +26,16 @@ pub const CATEGORY_PLUGINS: &str = "plugins";
 pub const CATEGORY_PANEL: &str = "panel";
 /// Site create/delete and other panel events.
 pub const CATEGORY_GENERIC: &str = "generic";
+/// Operator / remote announcements. Sticky: kept until the user dismisses them.
+pub const CATEGORY_ANNOUNCEMENT: &str = "announcement";
+/// Long-lived warnings. Sticky: kept until the user dismisses them.
+pub const CATEGORY_WARNING_LONG: &str = "warning_long";
 /// Toast / inbox severity: `error`, `warning`, `success`, or `info`.
 pub const SEVERITIES: &[&str] = &["error", "warning", "success", "info"];
+
+/// Default notifications (upgrade completed, SSL renewed, ...) are removed when
+/// older than this many seconds (48 hours). Sticky notifications are exempt.
+pub const DEFAULT_TTL_SECS: u64 = 48 * 60 * 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PanelNotification {
@@ -37,6 +51,33 @@ pub struct PanelNotification {
     pub created_at: u64,
     #[serde(default)]
     pub read: bool,
+    /// Explicit long-lived flag. Sticky items skip the 48 hour auto-dismiss and
+    /// stay until the user dismisses them. Older JSON defaults to `false`.
+    #[serde(default)]
+    pub sticky: bool,
+}
+
+/// True for categories that are always long-lived (announcements, long warnings).
+pub fn is_sticky_category(category: &str) -> bool {
+    let cat = category.trim().to_ascii_lowercase();
+    cat == CATEGORY_ANNOUNCEMENT || cat == CATEGORY_WARNING_LONG
+}
+
+/// True when the item stays until manually dismissed (flag or sticky category).
+pub fn is_sticky(item: &PanelNotification) -> bool {
+    item.sticky || is_sticky_category(&item.category)
+}
+
+/// True when a default (non-sticky) item is older than [`DEFAULT_TTL_SECS`].
+pub fn is_expired(item: &PanelNotification, now: u64) -> bool {
+    !is_sticky(item) && now.saturating_sub(item.created_at) > DEFAULT_TTL_SECS
+}
+
+/// Drop expired default notifications. Returns how many were removed.
+pub fn prune_expired(store: &mut NotificationStore, now: u64) -> usize {
+    let before = store.items.len();
+    store.items.retain(|item| !is_expired(item, now));
+    before - store.items.len()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -151,12 +192,28 @@ pub fn resolve_severity(item: &PanelNotification) -> &'static str {
     infer_severity(&item.category, &item.title, &item.body)
 }
 
-pub fn load_notifications(username: &str) -> NotificationStore {
+fn load_store_raw(username: &str) -> NotificationStore {
     let path = store_path(username);
     let Ok(raw) = fs::read_to_string(&path) else {
         return NotificationStore::default();
     };
     serde_json::from_str(&raw).unwrap_or_default()
+}
+
+/// Load a user's notifications, auto-dismissing expired default items.
+///
+/// Pruning happens on every read (API, sidebar render, push, mark-read) and is
+/// persisted best-effort, so every browser session sees the same feed.
+pub fn load_notifications(username: &str) -> NotificationStore {
+    load_notifications_at(username, now_unix())
+}
+
+fn load_notifications_at(username: &str, now: u64) -> NotificationStore {
+    let mut store = load_store_raw(username);
+    if prune_expired(&mut store, now) > 0 {
+        let _ = write_store(&store_path(username), &store);
+    }
+    store
 }
 
 pub fn unread_count(store: &NotificationStore) -> usize {
@@ -181,6 +238,19 @@ pub fn push_notification_with_severity(
     category: &str,
     severity: Option<&str>,
 ) -> Result<PanelNotification, String> {
+    push_notification_full(username, title, body, category, severity, false)
+}
+
+/// Push with severity and an explicit `sticky` flag. Sticky items (and the
+/// `announcement` / `warning_long` categories) are never auto-dismissed.
+pub fn push_notification_full(
+    username: &str,
+    title: &str,
+    body: &str,
+    category: &str,
+    severity: Option<&str>,
+    sticky: bool,
+) -> Result<PanelNotification, String> {
     let path = store_path(username);
     let mut store = load_notifications(username);
     let category = category.trim().to_string();
@@ -193,14 +263,23 @@ pub fn push_notification_with_severity(
         .and_then(normalize_severity)
         .unwrap_or_else(|| infer_severity(&category, &title, &body))
         .to_string();
+    let now = now_unix();
+    let mut seq = store.items.len() + 1;
+    let mut id = format!("n-{now}-{seq}");
+    while store.items.iter().any(|existing| existing.id == id) {
+        seq += 1;
+        id = format!("n-{now}-{seq}");
+    }
+    let sticky = sticky || is_sticky_category(&category);
     let item = PanelNotification {
-        id: format!("n-{}-{}", now_unix(), store.items.len() + 1),
+        id,
         title,
         body,
         category,
         severity,
-        created_at: now_unix(),
+        created_at: now,
         read: false,
+        sticky,
     };
     store.items.insert(0, item.clone());
     // Cap growth so the file stays small.
@@ -223,9 +302,31 @@ pub fn mark_read(username: &str, ids: &[String], all: bool) -> Result<Notificati
     Ok(store)
 }
 
+/// Dismiss (remove) specific notifications. Works for sticky items too.
+pub fn dismiss(username: &str, ids: &[String]) -> Result<NotificationStore, String> {
+    let path = store_path(username);
+    let mut store = load_notifications(username);
+    let before = store.items.len();
+    store
+        .items
+        .retain(|item| !ids.iter().any(|id| id == &item.id));
+    if store.items.len() != before {
+        write_store(&path, &store)?;
+    }
+    Ok(store)
+}
+
 fn item_public_json(item: &PanelNotification) -> serde_json::Value {
     let severity = resolve_severity(item);
+    let sticky = is_sticky(item);
+    let expires_at = if sticky {
+        serde_json::Value::Null
+    } else {
+        serde_json::json!(item.created_at.saturating_add(DEFAULT_TTL_SECS))
+    };
     serde_json::json!({
+        "sticky": sticky,
+        "expires_at": expires_at,
         "id": item.id,
         "title": item.title,
         "body": item.body,
@@ -426,6 +527,117 @@ mod tests {
         });
     }
 
+    fn note(id: &str, category: &str, created_at: u64, sticky: bool) -> PanelNotification {
+        PanelNotification {
+            id: id.into(),
+            title: "Panel upgrade completed".into(),
+            body: "Updated to stable".into(),
+            category: category.into(),
+            severity: String::new(),
+            created_at,
+            read: false,
+            sticky,
+        }
+    }
+
+    #[test]
+    fn default_items_expire_after_48_hours() {
+        let now = 10_000_000u64;
+        let mut store = NotificationStore {
+            items: vec![
+                note("fresh", CATEGORY_PANEL, now - 60, false),
+                note("edge", CATEGORY_PANEL, now - DEFAULT_TTL_SECS, false),
+                note("old", CATEGORY_PANEL, now - DEFAULT_TTL_SECS - 1, false),
+                note("ancient", CATEGORY_PANEL, 1, false),
+            ],
+        };
+        assert_eq!(prune_expired(&mut store, now), 2);
+        let ids: Vec<&str> = store.items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["fresh", "edge"]);
+    }
+
+    #[test]
+    fn sticky_and_announcement_items_never_expire() {
+        let now = 10_000_000u64;
+        let old = now - DEFAULT_TTL_SECS * 10;
+        let mut store = NotificationStore {
+            items: vec![
+                note("flag", CATEGORY_PANEL, old, true),
+                note("announce", CATEGORY_ANNOUNCEMENT, old, false),
+                note("warnlong", "WARNING_LONG", old, false),
+                note("plain", CATEGORY_PANEL, old, false),
+            ],
+        };
+        assert_eq!(prune_expired(&mut store, now), 1);
+        let ids: Vec<&str> = store.items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["flag", "announce", "warnlong"]);
+    }
+
+    #[test]
+    fn load_prunes_and_persists_for_all_sessions() {
+        with_test_data_dir(|| {
+            let now = now_unix().max(DEFAULT_TTL_SECS * 4);
+            let old = now - DEFAULT_TTL_SECS - 5;
+            let store = NotificationStore {
+                items: vec![
+                    note("n-old", CATEGORY_PANEL, old, false),
+                    note("n-keep", CATEGORY_ANNOUNCEMENT, old, false),
+                    note("n-new", CATEGORY_PANEL, now, false),
+                ],
+            };
+            write_store(&store_path("Admin"), &store).expect("write");
+            let loaded = load_notifications_at("Admin", now);
+            assert_eq!(loaded.items.len(), 2);
+            // Persisted: a raw re-read no longer contains the expired item.
+            let raw = load_store_raw("Admin");
+            assert!(raw.items.iter().all(|i| i.id != "n-old"));
+            assert_eq!(raw.items.len(), 2);
+        });
+    }
+
+    #[test]
+    fn push_marks_announcement_sticky_and_public_json_reports_it() {
+        with_test_data_dir(|| {
+            let ann = push_notification("Admin", "Maintenance window", "Sat 02:00", "announcement")
+                .expect("push");
+            assert!(ann.sticky);
+            let flagged =
+                push_notification_full("Admin", "Heads up", "x", "panel", Some("warning"), true)
+                    .expect("push");
+            assert!(flagged.sticky);
+            let plain = push_notification("Admin", "Panel upgrade completed", "x", CATEGORY_PANEL)
+                .expect("push");
+            assert!(!plain.sticky);
+            let json = notifications_public_json(&load_notifications("Admin"));
+            let items = json["items"].as_array().expect("items");
+            let find = |id: &str| items.iter().find(|i| i["id"] == id).expect("item").clone();
+            assert_eq!(find(&ann.id)["sticky"], true);
+            assert!(find(&ann.id)["expires_at"].is_null());
+            assert_eq!(find(&plain.id)["sticky"], false);
+            assert_eq!(
+                find(&plain.id)["expires_at"].as_u64(),
+                Some(plain.created_at + DEFAULT_TTL_SECS)
+            );
+        });
+    }
+
+    #[test]
+    fn dismiss_removes_sticky_and_mark_read_keeps_it() {
+        with_test_data_dir(|| {
+            let ann =
+                push_notification("Admin", "Announcement", "x", "announcement").expect("push");
+            let plain =
+                push_notification("Admin", "Upgrade completed", "x", CATEGORY_PANEL).expect("push");
+            let marked = mark_read("Admin", &[], true).expect("mark all");
+            assert_eq!(marked.items.len(), 2);
+            assert_eq!(unread_count(&marked), 0);
+            let after = dismiss("Admin", std::slice::from_ref(&ann.id)).expect("dismiss");
+            assert_eq!(after.items.len(), 1);
+            assert_eq!(after.items[0].id, plain.id);
+            assert_eq!(load_notifications("Admin").items.len(), 1);
+        });
+    }
+
     #[test]
     fn legacy_json_without_severity_still_loads() {
         with_test_data_dir(|| {
@@ -435,18 +647,21 @@ mod tests {
             }
             fs::write(
                 &path,
-                r#"{
+                format!(
+                    r#"{{
   "items": [
-    {
+    {{
       "id": "n-1",
       "title": "SSL expiring",
       "body": "example.com",
       "category": "ssl",
-      "created_at": 1,
+      "created_at": {},
       "read": false
-    }
+    }}
   ]
-}"#,
+}}"#,
+                    now_unix()
+                ),
             )
             .expect("write");
             let store = load_notifications("Legacy");
