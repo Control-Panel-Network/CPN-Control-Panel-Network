@@ -41,6 +41,10 @@ function cpnPasskeyUserMessage(err,kind){
       ? 'Passkey sign-in is already waiting. Approve or cancel the previous prompt, then try again.'
       : 'Passkey registration is already waiting. Approve or cancel the previous prompt, then try again.';
   }
+  if(kind==='register' && /electron|cursor\//i.test(String((navigator&&navigator.userAgent)||''))
+    && (name==='NotAllowedError' || name==='NotSupportedError' || name==='UnknownError')){
+    return 'This embedded browser cannot save a Windows Hello passkey. Open the panel in Chrome or Edge and register the passkey there.';
+  }
   if(name==='NotSupportedError' || /not supported|incongruent|inconsistent|protection policy/i.test(lower)){
     return kind==='login'
       ? 'This authenticator cannot sign in here. Try Windows Hello or a FIDO2 security key.'
@@ -266,6 +270,19 @@ function cpnNormalizeCreateOptions(pk, kind){{
   if(kind==='platform'){{
     // Prefer local Windows Hello over hybrid cloud save prompts.
     pk.authenticatorSelection.authenticatorAttachment='platform';
+    // Windows Hello saves a discoverable passkey; discouraged resident keys and
+    // CredProtect/uvm extensions can make Windows report it cannot save the key.
+    pk.authenticatorSelection.residentKey='required';
+    pk.authenticatorSelection.requireResidentKey=true;
+    pk.authenticatorSelection.userVerification='required';
+    if(pk.extensions){{
+      try{{ delete pk.extensions.credentialProtectionPolicy; }}catch(e){{}}
+      try{{ delete pk.extensions.enforceCredentialProtectionPolicy; }}catch(e){{}}
+      try{{ delete pk.extensions.credProtect; }}catch(e){{}}
+      try{{ delete pk.extensions.uvm; }}catch(e){{}}
+    }}
+    // Local-device hint (not the USB-only security-key hint).
+    pk.hints=['client-device'];
   }}else if(kind==='security-key'){{
     pk.authenticatorSelection.authenticatorAttachment='cross-platform';
   }}
@@ -324,6 +341,7 @@ async function cpnRegisterPasskey(){{
         const canFallback=i===0
           && (name==='NotSupportedError'
             || name==='NotAllowedError'
+            || name==='UnknownError'
             || /incongruent|inconsistent|not supported|protection policy/i.test(msg));
         if(!canFallback) throw err;
       }}
@@ -572,6 +590,14 @@ mod tests {
         assert!(
             script.contains("name==='NotAllowedError'"),
             "Hello NotAllowed must fall back to security-key"
+        );
+        assert!(
+            script.contains("residentKey='required'") && script.contains("hints=['client-device']"),
+            "platform register must request a discoverable local passkey"
+        );
+        assert!(
+            script.contains("delete pk.extensions.credentialProtectionPolicy"),
+            "platform register must drop CredProtect so Windows can save the passkey"
         );
         assert!(
             script.contains("function cpnAuthenticatorMeta"),
