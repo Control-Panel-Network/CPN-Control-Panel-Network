@@ -1083,8 +1083,9 @@ mod tests {
     fn stored_meta_prefers_passkey_detects_platform_enrollment() {
         use crate::account_passkeys::{PasskeyAuthenticatorMeta, add_passkey};
         use webauthn_rs::prelude::{
-            AttestationFormat, AttestationMetadata, COSEAlgorithm, COSEEC2Key, COSEKey, COSEKeyType,
-            Credential, CredentialID, ECDSACurve, ParsedAttestation, ParsedAttestationData, Passkey,
+            AttestationFormat, AttestationMetadata, COSEAlgorithm, COSEEC2Key, COSEKey,
+            COSEKeyType, Credential, CredentialID, ECDSACurve, ParsedAttestation,
+            ParsedAttestationData, Passkey,
         };
         use webauthn_rs_proto::extensions::RegisteredExtensions;
         use webauthn_rs_proto::options::UserVerificationPolicy;
