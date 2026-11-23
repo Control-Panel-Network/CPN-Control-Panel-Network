@@ -60,6 +60,9 @@ vendored-openssl = ["dep:openssl-sys", "openssl-sys/vendored"]
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[dev-dependencies]
+webauthn-rs-proto = "0.6"
+
 [profile.release]
 lto = "thin"
 strip = true
