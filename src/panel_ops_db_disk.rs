@@ -16,9 +16,7 @@ pub fn database_disk_bytes_for_owner(username: &str) -> u64 {
     }
     match database_disk_bytes_uncached(username) {
         Some(total) => {
-            crate::panel_perf_cache::caches()
-                .db_disk
-                .insert(key, total);
+            crate::panel_perf_cache::caches().db_disk.insert(key, total);
             total
         }
         None => 0,

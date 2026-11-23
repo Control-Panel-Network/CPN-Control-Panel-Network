@@ -219,7 +219,11 @@ fn detect_web_server_label_live() -> String {
 }
 
 pub fn detect_mail_service_label() -> String {
-    cached_text("mail", Duration::from_secs(20), detect_mail_service_label_live)
+    cached_text(
+        "mail",
+        Duration::from_secs(20),
+        detect_mail_service_label_live,
+    )
 }
 
 fn detect_mail_service_label_live() -> String {

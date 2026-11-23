@@ -73,11 +73,7 @@ fn cached_site_homes() -> Vec<(String, PathBuf)> {
 /// Results are cached briefly so list cards and dashboard stats do not re-walk
 /// large trees (or re-read every site JSON) on every navigation.
 pub fn site_used_bytes(site: &SiteRecord, max_files: usize) -> Option<u64> {
-    let cache_key = format!(
-        "{}:{}",
-        site.domain.trim().to_ascii_lowercase(),
-        max_files
-    );
+    let cache_key = format!("{}:{}", site.domain.trim().to_ascii_lowercase(), max_files);
     if let Some(cached) = crate::panel_perf_cache::caches().site_disk.get(&cache_key) {
         return Some(cached);
     }

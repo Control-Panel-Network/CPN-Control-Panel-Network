@@ -44,7 +44,9 @@ pub fn detect_mail_stack_public() -> MailStackPublic {
 }
 
 pub fn invalidate_mail_stack_cache() {
-    crate::panel_perf_cache::caches().mail_stack.invalidate(&"stack");
+    crate::panel_perf_cache::caches()
+        .mail_stack
+        .invalidate(&"stack");
 }
 
 fn detect_mail_stack_public_uncached() -> MailStackPublic {
