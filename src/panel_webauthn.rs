@@ -34,8 +34,8 @@ use uuid::Uuid;
 use webauthn_rs::prelude::{
     AuthenticatorAttachment, CreationChallengeResponse, Credential, DiscoverableAuthentication,
     Passkey, PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential,
-    RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey,
-    SecurityKeyAuthentication, SecurityKeyRegistration, Webauthn, WebauthnBuilder,
+    RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey, SecurityKeyAuthentication,
+    SecurityKeyRegistration, Webauthn, WebauthnBuilder,
 };
 
 pub use crate::panel_webauthn_client::passkey_client_script;
@@ -77,9 +77,13 @@ enum CeremonyKind {
     RegisterPasskey(PasskeyRegistration),
     RegisterSecurityKey(SecurityKeyRegistration),
     /// Presence-only / roaming-key assertion (may set `hints: security-key`).
-    Authenticate { state: SecurityKeyAuthentication },
+    Authenticate {
+        state: SecurityKeyAuthentication,
+    },
     /// Passkey assertion (UV required, no security-key-only hint). Prefer for Hello.
-    AuthenticatePasskey { state: PasskeyAuthentication },
+    AuthenticatePasskey {
+        state: PasskeyAuthentication,
+    },
     Discoverable(DiscoverableAuthentication),
 }
 
@@ -121,10 +125,7 @@ fn start_passkey_or_securitykey_auth(
 /// Attach stored transport hints to `allowCredentials` and drop security-key-only
 /// `hints` when a platform/internal credential is present (Windows Hello UX).
 pub fn enrich_assertion_challenge(value: &mut serde_json::Value, username: Option<&str>) {
-    let Some(public_key) = value
-        .get_mut("publicKey")
-        .and_then(|v| v.as_object_mut())
-    else {
+    let Some(public_key) = value.get_mut("publicKey").and_then(|v| v.as_object_mut()) else {
         return;
     };
 
