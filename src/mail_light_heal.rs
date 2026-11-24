@@ -338,6 +338,11 @@ pub fn run_light_email_heal(context: &str) -> LightHealReport {
     if gate.should_run_webmail_heal() {
         report.ran_webmail = true;
         report.notes.push(heal_webmail_fail_soft());
+        // Tachyon is the default webmail: once it is live, retire leftover prior-webmail
+        // files (backed up first, throttled, fail-soft; never touches Maildirs).
+        if let Some(note) = crate::install_snappymail_retire::auto_retire_fail_soft() {
+            report.notes.push(note);
+        }
     }
 
     report

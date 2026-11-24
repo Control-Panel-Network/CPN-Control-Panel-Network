@@ -104,24 +104,38 @@ pub fn migrate_snappymail_into_tachyon() -> Result<String, String> {
         );
     }
 
-    let source = &sources[0];
-    let copied = copy_storage_tree(
-        &source.join("_data_/_default_/storage"),
-        &dest.join("_data_/_default_/storage"),
-    )?;
+    // Import every discovered source (live prior-webmail data plus any classic-panel
+    // copy). Existing Tachyon files are never overwritten, so order only decides ties.
     let _ = ensure_contacts_defaults(&dest_root);
-    let contacts_msg = migrate_contacts_database(source, &dest_root).unwrap_or_else(|e| e);
+    let mut copied = 0u32;
+    let mut contacts_msg = String::from("contacts: no source with a database");
+    for source in &sources {
+        copied += copy_storage_tree(
+            &source.join("_data_/_default_/storage"),
+            &dest.join("_data_/_default_/storage"),
+        )?;
+        if !contacts_msg.starts_with("contacts: imported:") {
+            let msg = migrate_contacts_database(source, &dest_root).unwrap_or_else(|e| e);
+            if contacts_msg.starts_with("contacts: no source")
+                || msg.starts_with("contacts: imported:")
+            {
+                contacts_msg = msg;
+            }
+        }
+    }
+    let source = &sources[0];
     let _ = chown_data_tree(&dest_root);
     write_marker(
         &marker,
         &format!(
-            "source={} files={copied} contacts={contacts_msg}",
-            source.display()
+            "source={} sources={} files={copied} contacts={contacts_msg}",
+            source.display(),
+            sources.len()
         ),
     )?;
     Ok(format!(
-        "Migrated SnappyMail user storage from {} into Tachyon ({copied} files). {contacts_msg} Mailbox messages were not copied (IMAP/Maildir).",
-        source.display()
+        "Migrated SnappyMail user storage from {} source(s) into Tachyon ({copied} files). {contacts_msg} Mailbox messages were not copied (IMAP/Maildir).",
+        sources.len()
     ))
 }
 
