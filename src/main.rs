@@ -1077,6 +1077,9 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         cpn_installer::mail_light_heal::run_light_email_heal_logged("panel start");
     });
+    // Keep the webmail admin owner bridge (login + session reuse) alive across webmail-only
+    // updates that replace the hooked files without running any CPN heal.
+    cpn_installer::tachyon_admin_bridge_install::spawn_bridge_watch();
     // Minimal installs ship firewalld stopped; bring it up with a safe baseline
     // unless the operator stopped it on purpose.
     std::thread::spawn(|| {
@@ -1281,6 +1284,7 @@ async fn main() -> std::io::Result<()> {
             .service(login_page)
             .service(login_services_status)
             .service(cpn_installer::tachyon_admin_bridge::tachyon_admin_verify)
+            .service(cpn_installer::tachyon_admin_session::tachyon_admin_session)
             .service(cpn_logo)
             .service(cpn_installer::panel_static_assets::panel_stylesheet)
             .service(cpn_installer::panel_static_assets::panel_script)

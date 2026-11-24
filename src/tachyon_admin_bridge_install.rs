@@ -9,76 +9,17 @@
 //! removes the config and the PHP hook falls back to the local webmail admin login).
 
 use crate::tachyon_admin_bridge::{BridgeConfig, config_path, load_config};
+use crate::tachyon_admin_bridge_php::{
+    LOGIN_BEGIN, LOGIN_END, LOGIN_VERSION, LOGOUT_BEGIN, LOGOUT_END, PHP_LOGIN_HOOK,
+    PHP_LOGOUT_HOOK, PHP_SSO_HOOK, SSO_BEGIN, SSO_END,
+};
 use rand::Rng;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const MARKER_BEGIN: &str = "// CPN-ADMIN-BRIDGE-BEGIN";
-const MARKER_END: &str = "// CPN-ADMIN-BRIDGE-END";
-const BRIDGE_VERSION_TAG: &str = "v1";
 const DISABLED_MARKER: &str = "/var/lib/cpn-webmail/admin-bridge.disabled";
 const BACKUP_SUFFIX: &str = ".cpn-bridge-orig";
 const MAX_WALK_DEPTH: usize = 9;
-
-/// PHP injected at the top of `DoAdminLogin()` (tabs match upstream style).
-const PHP_HOOK: &str = r##"		// CPN-ADMIN-BRIDGE-BEGIN v1
-		// Webmail admin sign-in is delegated to the CPN panel owner account (owner only).
-		// Mailbox IMAP login is unchanged. Create /var/lib/cpn-webmail/admin-bridge.disabled
-		// and re-run CPN webmail heal to restore the local admin_login / admin_password.
-		$cpnCfgPath = '/var/lib/cpn-webmail/admin-bridge.json';
-		if (@\file_exists($cpnCfgPath)) {
-			$cpnLogin = \trim((string) $this->GetActionParam('Login', ''));
-			$cpnPass = (string) $this->GetActionParam('Password', '');
-			$cpnTotp = (string) $this->GetActionParam('TOTP', '');
-			$cpnOk = false;
-			$cpnCfg = \json_decode((string) @\file_get_contents($cpnCfgPath), true);
-			$cpnUrl = \is_array($cpnCfg) ? (string) ($cpnCfg['url'] ?? '') : '';
-			$cpnToken = \is_array($cpnCfg) ? (string) ($cpnCfg['token'] ?? '') : '';
-			$cpnHost = \strtolower((string) \parse_url($cpnUrl, PHP_URL_HOST));
-			if (\strlen($cpnLogin) && \strlen($cpnPass) && \strlen($cpnToken)
-				&& $this->Config()->Get('security', 'allow_admin_panel', true)
-				&& \in_array($cpnHost, ['127.0.0.1', 'localhost', '[::1]', '::1'], true)
-			) {
-				$cpnBody = \json_encode(['username' => $cpnLogin, 'password' => $cpnPass, 'totp' => $cpnTotp], JSON_UNESCAPED_SLASHES);
-				$cpnEndpoint = \rtrim($cpnUrl, '/') . '/api/internal/tachyon-admin/verify';
-				$cpnHeaders = ['Content-Type: application/json', 'Accept: application/json', 'X-CPN-Bridge-Token: ' . $cpnToken];
-				$cpnRaw = false;
-				if (\function_exists('curl_init')) {
-					$cpnCh = \curl_init($cpnEndpoint);
-					\curl_setopt_array($cpnCh, [
-						CURLOPT_POST => true,
-						CURLOPT_POSTFIELDS => $cpnBody,
-						CURLOPT_HTTPHEADER => $cpnHeaders,
-						CURLOPT_RETURNTRANSFER => true,
-						CURLOPT_TIMEOUT => 10,
-						CURLOPT_CONNECTTIMEOUT => 3,
-						CURLOPT_FOLLOWLOCATION => false,
-						CURLOPT_SSL_VERIFYPEER => false,
-						CURLOPT_SSL_VERIFYHOST => 0,
-					]);
-					$cpnRaw = \curl_exec($cpnCh);
-					unset($cpnCh);
-				} else {
-					$cpnCtx = \stream_context_create([
-						'http' => ['method' => 'POST', 'header' => \implode("\r\n", $cpnHeaders), 'content' => $cpnBody, 'timeout' => 10, 'ignore_errors' => true, 'follow_location' => 0],
-						'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-					]);
-					$cpnRaw = @\file_get_contents($cpnEndpoint, false, $cpnCtx);
-				}
-				$cpnJson = \is_string($cpnRaw) ? \json_decode($cpnRaw, true) : null;
-				$cpnOk = \is_array($cpnJson) && true === ($cpnJson['ok'] ?? false);
-			}
-			unset($cpnPass, $cpnBody, $cpnToken, $cpnCfg);
-			if (!$cpnOk) {
-				$this->LoggerAuthHelper(null, $cpnLogin, true);
-				$this->loginErrorDelay();
-				throw new ClientException(Notifications::AuthError);
-			}
-			$sToken = $this->setAdminAuthToken();
-			return $this->DefaultResponse($sToken ? $this->AppData(true) : false);
-		}
-		// CPN-ADMIN-BRIDGE-END
-"##;
 
 /// Identifiers upstream `DoAdminLogin` must already use so the hook can reuse them.
 const REQUIRED_TOKENS: &[&str] = &[
@@ -98,17 +39,17 @@ pub enum PatchOutcome {
     Unsupported,
 }
 
-/// Remove a previously injected bridge block (any version).
-pub fn strip_bridge_block(raw: &str) -> String {
-    let Some(begin) = raw.find(MARKER_BEGIN) else {
+/// Remove one injected block (any version) delimited by `begin` / `end` marker prefixes.
+fn strip_block(raw: &str, begin: &str, end: &str) -> String {
+    let Some(b) = raw.find(begin) else {
         return raw.to_string();
     };
-    let Some(end_rel) = raw[begin..].find(MARKER_END) else {
+    let Some(end_rel) = raw[b..].find(end) else {
         return raw.to_string();
     };
     // Start at the beginning of the BEGIN line, end after the END line.
-    let line_start = raw[..begin].rfind('\n').map(|i| i + 1).unwrap_or(0);
-    let end_abs = begin + end_rel + MARKER_END.len();
+    let line_start = raw[..b].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let end_abs = b + end_rel + end.len();
     let after = raw[end_abs..]
         .find('\n')
         .map(|i| end_abs + i + 1)
@@ -116,27 +57,64 @@ pub fn strip_bridge_block(raw: &str) -> String {
     format!("{}{}", &raw[..line_start], &raw[after..])
 }
 
-/// Return the patched source, or `None` when the file layout is not supported.
+/// Remove every previously injected bridge block (login, SSO, logout; any version).
+pub fn strip_bridge_block(raw: &str) -> String {
+    let s = strip_block(raw, LOGIN_BEGIN, LOGIN_END);
+    let s = strip_block(&s, SSO_BEGIN, SSO_END);
+    strip_block(&s, LOGOUT_BEGIN, LOGOUT_END)
+}
+
+/// Insert `hook` on the line after the opening brace of `fn_sig` (a `function X(` prefix).
+fn insert_after_fn_open(base: &str, fn_sig: &str, hook: &str) -> Option<String> {
+    let sig = base.find(fn_sig)?;
+    let body_open = base[sig..].find('{')? + sig;
+    let at = base[body_open..].find('\n')? + body_open + 1;
+    Some(format!("{}{}{}", &base[..at], hook, &base[at..]))
+}
+
+/// Insert `hook` on the line before the first line containing `anchor` after `fn_sig`.
+fn insert_before_anchor(base: &str, fn_sig: &str, anchor: &str, hook: &str) -> Option<String> {
+    let sig = base.find(fn_sig)?;
+    let anchor_abs = base[sig..].find(anchor)? + sig;
+    let at = base[..anchor_abs].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    Some(format!("{}{}{}", &base[..at], hook, &base[at..]))
+}
+
+/// Return the patched source, or `None` when the login hook cannot be installed.
+///
+/// The login hook is required. The SSO and logout hooks are best effort: when upstream
+/// layout differs they are skipped and password login still works.
 pub fn patched_source(raw: &str) -> Option<(String, PatchOutcome)> {
-    if raw.contains(&format!("{MARKER_BEGIN} {BRIDGE_VERSION_TAG}")) {
-        return Some((raw.to_string(), PatchOutcome::AlreadyCurrent));
-    }
     let base = strip_bridge_block(raw);
     let sig = base.find("function DoAdminLogin()")?;
     let body_open = base[sig..].find('{')? + sig;
-    // Hook goes on the line right after the opening brace.
-    let insert_at = base[body_open..].find('\n')? + body_open + 1;
-    let fn_body = &base[insert_at..];
-    if !REQUIRED_TOKENS.iter().all(|t| fn_body.contains(t)) {
+    let after_open = base[body_open..].find('\n')? + body_open + 1;
+    if !REQUIRED_TOKENS
+        .iter()
+        .all(|t| base[after_open..].contains(t))
+    {
         return None;
     }
-    let mut out = String::with_capacity(base.len() + PHP_HOOK.len());
-    out.push_str(&base[..insert_at]);
-    out.push_str(PHP_HOOK);
-    out.push_str(&base[insert_at..]);
-    Some((out, PatchOutcome::Patched))
+    let mut out = insert_after_fn_open(&base, "function DoAdminLogin()", PHP_LOGIN_HOOK)?;
+    // Logout first: it sits below AdminAppData in upstream, but order is independent here.
+    if let Some(next) = insert_after_fn_open(&out, "function DoAdminLogout()", PHP_LOGOUT_HOOK) {
+        out = next;
+    }
+    if let Some(next) = insert_before_anchor(
+        &out,
+        "function AdminAppData(",
+        "$aResult['Auth'] = $oActions->IsAdminLoggined(false);",
+        PHP_SSO_HOOK,
+    ) {
+        out = next;
+    }
+    let outcome = if out == raw {
+        PatchOutcome::AlreadyCurrent
+    } else {
+        PatchOutcome::Patched
+    };
+    Some((out, outcome))
 }
-
 fn random_token_hex() -> String {
     let bytes: [u8; 32] = rand::rng().random();
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -282,7 +260,7 @@ pub fn unpatch_all() -> u32 {
         let Ok(raw) = std::fs::read_to_string(&path) else {
             continue;
         };
-        if !raw.contains(MARKER_BEGIN) {
+        if !raw.contains(LOGIN_BEGIN) && !raw.contains(SSO_BEGIN) && !raw.contains(LOGOUT_BEGIN) {
             continue;
         }
         if std::fs::write(&path, strip_bridge_block(&raw)).is_ok() {
@@ -297,7 +275,7 @@ pub fn bridge_active() -> bool {
     load_config().is_some()
         && find_actions_admin_files().iter().any(|p| {
             std::fs::read_to_string(p)
-                .map(|raw| raw.contains(&format!("{MARKER_BEGIN} {BRIDGE_VERSION_TAG}")))
+                .map(|raw| raw.contains(&format!("{LOGIN_BEGIN} {LOGIN_VERSION}")))
                 .unwrap_or(false)
         })
 }
@@ -352,79 +330,64 @@ pub fn ensure_admin_bridge() -> Result<String, String> {
     ))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const SAMPLE: &str = "<?php\nnamespace Tachyon;\nuse MailSo\\Exceptions\\ClientException;\nclass ActionsAdmin\n{\n\tpublic function DoAdminLogin() : array\n\t{\n\t\t$sLogin = trim($this->GetActionParam('Login', ''));\n\t\tif (!ok) {\n\t\t\t$this->LoggerAuthHelper(null, $sLogin, true);\n\t\t\t$this->loginErrorDelay();\n\t\t\tthrow new ClientException(Notifications::AuthError);\n\t\t}\n\t\t$sToken = $this->setAdminAuthToken();\n\t\treturn $this->DefaultResponse($sToken ? $this->AppData(true) : false);\n\t}\n\n\tpublic function DoAdminLogout() : array\n\t{\n\t\treturn [];\n\t}\n}\n";
-
-    #[test]
-    fn hook_is_injected_inside_do_admin_login_only_once() {
-        let (out, outcome) = patched_source(SAMPLE).expect("supported");
-        assert_eq!(outcome, PatchOutcome::Patched);
-        assert!(out.contains("CPN-ADMIN-BRIDGE-BEGIN v1"));
-        assert!(out.contains("/api/internal/tachyon-admin/verify"));
-        let hook_pos = out.find("CPN-ADMIN-BRIDGE-BEGIN").unwrap();
-        let login_pos = out.find("function DoAdminLogin()").unwrap();
-        let logout_pos = out.find("function DoAdminLogout()").unwrap();
-        assert!(login_pos < hook_pos && hook_pos < logout_pos);
-        // Original local check stays below the hook as the fallback when the config is absent.
-        assert!(out.contains("$sLogin = trim("));
-        let (again, outcome2) = patched_source(&out).unwrap();
-        assert_eq!(outcome2, PatchOutcome::AlreadyCurrent);
-        assert_eq!(again, out);
-    }
-
-    #[test]
-    fn strip_restores_original() {
-        let (out, _) = patched_source(SAMPLE).unwrap();
-        assert_eq!(strip_bridge_block(&out), SAMPLE);
-    }
-
-    #[test]
-    fn unsupported_layout_is_not_patched() {
-        assert!(patched_source("<?php\nclass X { function Other() {} }\n").is_none());
-        let no_tokens = "<?php\nclass X {\n\tpublic function DoAdminLogin() : array\n\t{\n\t\treturn [];\n\t}\n}\n";
-        assert!(patched_source(no_tokens).is_none());
-    }
-
-    #[test]
-    fn hook_fails_closed_and_never_logs_password() {
-        let hook = PHP_HOOK;
-        // Config present but unreadable or invalid must deny, not fall through to local auth.
-        assert!(hook.contains("if (!$cpnOk)"));
-        assert!(hook.contains("throw new ClientException(Notifications::AuthError)"));
-        // Only loopback targets are allowed (TLS verify is off for loopback only).
-        assert!(hook.contains("'127.0.0.1', 'localhost'"));
-        assert!(hook.contains("unset($cpnPass"));
-        assert!(!hook.contains("error_log"));
-        assert!(!hook.contains("curl_close"));
-    }
-
-    #[test]
-    fn config_roundtrip_keeps_token_and_updates_url() {
-        let dir = std::env::temp_dir().join(format!(
-            "cpn-bridge-cfg-{}-{}",
-            std::process::id(),
-            crate::account::now_unix()
-        ));
-        let path = dir.join("admin-bridge.json");
-        assert!(write_config_if_needed(&path, "http://127.0.0.1:2086").unwrap());
-        let first: BridgeConfig =
-            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(first.token.len(), 64);
-        assert!(!write_config_if_needed(&path, "http://127.0.0.1:2086").unwrap());
-        assert!(write_config_if_needed(&path, "http://127.0.0.1:2090").unwrap());
-        let second: BridgeConfig =
-            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(first.token, second.token);
-        assert_eq!(second.url, "http://127.0.0.1:2090");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-            assert_eq!(mode, 0o640);
-        }
-        let _ = std::fs::remove_dir_all(&dir);
-    }
+/// True when one admin action file lacks the current hooks (fresh upstream copy after a
+/// webmail-only update, or an older hook version). Unsupported layouts never need a heal.
+pub fn file_needs_heal(raw: &str) -> bool {
+    matches!(patched_source(raw), Some((_, PatchOutcome::Patched)))
 }
+
+/// True when the bridge is expected to be on but something drifted: missing or stale config,
+/// or any `ActionsAdmin.php` (including a brand new version directory from a webmail-only
+/// update) without the current hooks. Cheap enough to poll every minute.
+pub fn bridge_needs_heal() -> bool {
+    if !cfg!(unix)
+        || Path::new(DISABLED_MARKER).is_file()
+        || !crate::install_snappymail_lineage::any_lineage_installed()
+        || crate::account::load_bootstrap().is_none()
+    {
+        return false;
+    }
+    let files = find_actions_admin_files();
+    if files.is_empty() {
+        return false;
+    }
+    match load_config() {
+        Some(cfg) if cfg.url == desired_url() => {}
+        _ => return true,
+    }
+    files.iter().any(|p| {
+        std::fs::read_to_string(p)
+            .map(|raw| file_needs_heal(&raw))
+            .unwrap_or(false)
+    })
+}
+
+/// Background watcher: restores the bridge within about a minute after any webmail-only
+/// update (Email > Webmail, package update, or the webmail admin self-update) replaced the
+/// files the hooks live in. The same `ensure_admin_bridge` also runs from every webmail
+/// heal and tip-upgrade path; this covers updates that never call CPN.
+pub fn spawn_bridge_watch() {
+    let _ = std::thread::Builder::new()
+        .name("cpn-admin-bridge-watch".into())
+        .spawn(|| {
+            let mut last_err_log: u64 = 0;
+            std::thread::sleep(std::time::Duration::from_secs(20));
+            loop {
+                if bridge_needs_heal() {
+                    match ensure_admin_bridge() {
+                        Ok(msg) => eprintln!("[webmail-admin-bridge] [info] re-applied: {msg}"),
+                        Err(e) => {
+                            let now = crate::account::now_unix();
+                            if now.saturating_sub(last_err_log) > 900 {
+                                last_err_log = now;
+                                eprintln!("[webmail-admin-bridge] [warn] heal failed: {e}");
+                            }
+                        }
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            }
+        });
+}
+#[cfg(test)]
+mod tests;
