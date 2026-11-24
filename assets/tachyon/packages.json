@@ -352,6 +352,22 @@
         "version": "0.1"
     },
     {
+        "author": "master3395",
+        "category": "Security",
+        "description": "Check attachments and links on VirusTotal. Works without an API key via GUI links; optional free public API key for inline results. Get key: https://www.virustotal.com/gui/my-apikey",
+        "file": "https://github.com/Control-Panel-Network/CPN-Plugins/raw/main/tachyonVirusTotal/packages/virustotal-1.0.0.tgz",
+        "id": "virustotal",
+        "license": "AGPL-3.0",
+        "name": "VirusTotal",
+        "pgp_sig": "",
+        "release": "2026-11-24",
+        "required": "4.7.0",
+        "sha": "16b94eff52ef92d893d8268205e4f107b5c00998",
+        "type": "plugin",
+        "url": "https://github.com/Control-Panel-Network/CPN-Plugins",
+        "version": "1.0.0"
+    },
+    {
         "author": "PhieF",
         "category": "Messages",
         "description": "Display ICS attachment using ical lib, or JSON-LD details, based on viewICS",
