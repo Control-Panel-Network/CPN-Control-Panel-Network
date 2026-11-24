@@ -246,7 +246,8 @@ pub fn dump_verified(name: &str, dir: &Path) -> Result<PathBuf, String> {
     let bin = mariadb_dump_bin().ok_or("mariadb-dump/mysqldump not found")?;
     let out = dir.join(format!("{name}.sql.gz"));
     let script = "set -o pipefail; \"$1\" --single-transaction --routines --triggers -- \"$2\" | gzip -c > \"$3\" \
-                  && gzip -t \"$3\" && zcat \"$3\" | grep -q 'CREATE TABLE'";
+                  && gzip -t \"$3\" && \
+                  [ \"$(zcat \"$3\" | grep -c 'CREATE TABLE')\" -gt 0 ]";
     let status = Command::new("bash")
         .args(["-c", script, "retire-dump", bin, name])
         .arg(&out)
