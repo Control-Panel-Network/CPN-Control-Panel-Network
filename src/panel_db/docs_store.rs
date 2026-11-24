@@ -338,7 +338,7 @@ mod tests {
     use super::*;
 
     fn key() -> PanelKey {
-        PanelKey::from_bytes([3u8; 32])
+        super::super::crypto::panel_key_test_fixture("panel-db-docs-store")
     }
 
     fn doc(encrypt: bool, body: &[u8]) -> Doc {

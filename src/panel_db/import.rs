@@ -267,7 +267,8 @@ mod tests {
     }
 
     fn store() -> MemDocStore {
-        MemDocStore::new(PanelKey::from_bytes([5u8; 32]))
+        use super::super::crypto::panel_key_test_fixture;
+        MemDocStore::new(panel_key_test_fixture("panel-db-import"))
     }
 
     #[test]

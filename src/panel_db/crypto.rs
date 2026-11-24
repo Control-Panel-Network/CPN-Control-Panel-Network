@@ -153,12 +153,29 @@ fn create_key_file(path: &Path, bytes: &[u8; 32]) -> Result<(), String> {
         .map_err(|e| format!("Could not write panel database key: {e}"))
 }
 
+/// Random key per label, generated once per test process: stable for a label
+/// (encrypt then decrypt), distinct across labels, and never hard-coded.
+#[cfg(test)]
+pub(crate) fn panel_key_test_fixture(label: &str) -> PanelKey {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static KEYS: OnceLock<Mutex<HashMap<String, [u8; 32]>>> = OnceLock::new();
+    let mut keys = KEYS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let bytes = *keys
+        .entry(label.to_string())
+        .or_insert_with(|| rand::rng().random());
+    PanelKey::from_bytes(bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn key() -> PanelKey {
-        PanelKey::from_bytes([7u8; 32])
+        panel_key_test_fixture("panel-db-crypto-primary")
     }
 
     #[test]
@@ -179,7 +196,7 @@ mod tests {
     #[test]
     fn wrong_key_is_rejected_with_clear_error() {
         let sealed = key().encrypt("a\0b", b"x").unwrap();
-        let other = PanelKey::from_bytes([9u8; 32]);
+        let other = panel_key_test_fixture("panel-db-crypto-other");
         let err = other.decrypt("a\0b", &sealed).unwrap_err();
         assert!(err.contains("different key"));
     }
@@ -197,7 +214,7 @@ mod tests {
     #[test]
     fn fingerprints_are_keyed_for_secrets() {
         let a = key().fingerprint(b"1234");
-        let b = PanelKey::from_bytes([1u8; 32]).fingerprint(b"1234");
+        let b = panel_key_test_fixture("panel-db-crypto-fingerprint-b").fingerprint(b"1234");
         assert_ne!(a, b);
         assert_ne!(a, sha256_hex(b"1234"));
         assert_eq!(a.len(), 64);
