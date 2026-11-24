@@ -596,6 +596,7 @@ pub mod upgrade_tip_rustup;
 pub mod upgrade_tip_toolchain;
 pub mod upgrade_tip_verify;
 pub mod upgrade_verify;
+pub mod webmail_cryptkey;
 pub mod webmail_loopback;
 pub mod website_preview;
 pub mod website_preview_live;
