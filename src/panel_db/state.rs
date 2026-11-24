@@ -24,7 +24,17 @@ pub const STATE_FILE: &str = "panel-db-state.json";
 pub const LOCK_FILE: &str = "panel-db-auto.lock";
 const LOCK_STALE: Duration = Duration::from_secs(30 * 60);
 const KEEP_BACKUPS: usize = 5;
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Identifies this build: package version plus the commit it was built from, so a tip
+/// upgrade (same version number, new commit and possibly new migrations) re-runs migrate.
+fn build_key() -> String {
+    let sha = env!("CPN_GIT_SHA");
+    let short: String = sha.chars().take(12).collect();
+    if short.is_empty() {
+        env!("CARGO_PKG_VERSION").to_string()
+    } else {
+        format!("{}+{short}", env!("CARGO_PKG_VERSION"))
+    }
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PanelDbState {
@@ -267,7 +277,7 @@ fn steps_after_backup(
     }
     if ok {
         finish_state(
-            VERSION,
+            &build_key(),
             true,
             &summary,
             Some(backup.dir.display().to_string()),
@@ -286,7 +296,8 @@ pub fn ensure(context: &str, force: bool) -> Result<Outcome, String> {
     }
     let existing = PanelDbConfig::load()?;
     let state = PanelDbState::load();
-    let full = state.needs_full_run(existing.is_some(), VERSION, force);
+    let build = build_key();
+    let full = state.needs_full_run(existing.is_some(), &build, force);
     let admin = AdminSql;
     if let Err(why) = reachable(&admin) {
         return Ok(Outcome::Skipped(why));
@@ -298,12 +309,7 @@ pub fn ensure(context: &str, force: bool) -> Result<Outcome, String> {
         let mut cfg =
             existing.unwrap_or_else(|| PanelDbConfig::generate(crate::account::now_unix()));
         full_run(&admin, &mut cfg, context).map_err(|(e, dir)| {
-            finish_state(
-                VERSION,
-                false,
-                &e,
-                dir.or_else(|| state.last_backup.clone()),
-            );
+            finish_state(&build, false, &e, dir.or_else(|| state.last_backup.clone()));
             e
         })
     } else {
