@@ -26,7 +26,12 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
     fs::create_dir_all(LOCAL_REPO_DIR).map_err(|e| format!("snappy-repo dir: {e}"))?;
 
     let packages = Path::new(LOCAL_REPO_DIR).join("packages.json");
-    if !packages.is_file() {
+    if is_tachyon {
+        // Tachyon Admin Extensions shows "Cannot access the repository" when the
+        // package list is empty. Keep a real extensions index (upstream refresh,
+        // else bundled snapshot) so the page lists packages without a live fetch.
+        refresh_tachyon_packages(&packages)?;
+    } else if !packages.is_file() {
         fs::write(&packages, "[]\n").map_err(|e| format!("packages.json: {e}"))?;
     }
 
@@ -66,6 +71,102 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
         shorten_repository_http_timeout(&repo_php)?;
     }
     Ok(())
+}
+
+/// Bundled Tachyon extensions index (snapshot of the upstream package list).
+const BUNDLED_TACHYON_PACKAGES: &str = include_str!("../assets/tachyon/packages.json");
+const TACHYON_PACKAGES_URL: &str =
+    "https://raw.githubusercontent.com/kimusan/Tachyon/master/packages.json";
+const PACKAGES_MAX_AGE_SECS: u64 = 24 * 3600;
+
+/// True when `body` is a JSON array with at least one entry that has an `id`.
+pub(crate) fn packages_json_is_usable(body: &str) -> bool {
+    match serde_json::from_str::<serde_json::Value>(body) {
+        Ok(serde_json::Value::Array(items)) => items.iter().any(|i| {
+            i.get("id")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.is_empty())
+        }),
+        _ => false,
+    }
+}
+
+fn packages_file_is_fresh(path: &Path) -> bool {
+    fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age.as_secs() < PACKAGES_MAX_AGE_SECS)
+}
+
+fn fetch_upstream_packages() -> Option<String> {
+    let out = Command::new("curl")
+        .args([
+            "--silent",
+            "--show-error",
+            "--fail",
+            "--location",
+            "--connect-timeout",
+            "4",
+            "--max-time",
+            "8",
+            TACHYON_PACKAGES_URL,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let body = String::from_utf8(out.stdout).ok()?;
+    packages_json_is_usable(&body).then_some(body)
+}
+
+/// Ensure the local Tachyon packages.json is a usable extensions index.
+/// Never leaves an empty list: upstream when reachable, else keep a good
+/// existing file, else the bundled snapshot.
+fn refresh_tachyon_packages(path: &Path) -> Result<(), String> {
+    let existing = fs::read_to_string(path).ok();
+    let existing_ok = existing.as_deref().is_some_and(packages_json_is_usable);
+    if existing_ok && packages_file_is_fresh(path) {
+        return Ok(());
+    }
+    let body = match fetch_upstream_packages() {
+        Some(b) => b,
+        None if existing_ok => return Ok(()),
+        None => BUNDLED_TACHYON_PACKAGES.to_string(),
+    };
+    fs::write(path, body).map_err(|e| format!("packages.json: {e}"))?;
+    purge_empty_repository_cache(Path::new(TACHYON_CACHE_DIR));
+    Ok(())
+}
+
+const TACHYON_CACHE_DIR: &str = "/var/lib/cpn-webmail/tachyon/_data_/_default_/cache";
+
+/// Tachyon caches the repository list for 1 hour, including an empty `[]` from
+/// the old stub. Drop only those tiny empty-list entries so the new index shows
+/// immediately (other cache entries are untouched).
+fn purge_empty_repository_cache(root: &Path) {
+    let Ok(l1) = fs::read_dir(root) else { return };
+    for a in l1.flatten().filter(|e| e.path().is_dir()) {
+        let Ok(l2) = fs::read_dir(a.path()) else {
+            continue;
+        };
+        for b in l2.flatten().filter(|e| e.path().is_dir()) {
+            let Ok(files) = fs::read_dir(b.path()) else {
+                continue;
+            };
+            for f in files.flatten() {
+                let p = f.path();
+                let small = f
+                    .metadata()
+                    .map(|m| m.is_file() && m.len() <= 8)
+                    .unwrap_or(false);
+                if small && fs::read_to_string(&p).is_ok_and(|s| s.trim() == "[]") {
+                    let _ = fs::remove_file(&p);
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn detect_app_version(docroot: &str, app_dir: &str) -> Option<String> {
@@ -287,6 +388,18 @@ mod tests {
         assert!(s.contains("packages.json"));
         assert!(s.contains("core-github.json"));
         assert!(s.contains("releases/latest"));
+    }
+
+    #[test]
+    fn bundled_tachyon_packages_are_usable() {
+        assert!(packages_json_is_usable(BUNDLED_TACHYON_PACKAGES));
+    }
+
+    #[test]
+    fn empty_packages_are_not_usable() {
+        assert!(!packages_json_is_usable("[]\n"));
+        assert!(!packages_json_is_usable("not json"));
+        assert!(!packages_json_is_usable("[{\"name\":\"x\"}]"));
     }
 
     #[test]
