@@ -1077,6 +1077,12 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         cpn_installer::mail_light_heal::run_light_email_heal_logged("panel start");
     });
+    // Move panel state into MariaDB (`cpn_panel` / `cpn_mail`). A full, backed-up,
+    // idempotent migration runs once per installed version (package upgrade, tip
+    // upgrade, fresh install); otherwise only a cheap incremental sync. Never blocks boot.
+    std::thread::spawn(|| {
+        cpn_installer::panel_db::state::ensure_logged("panel start");
+    });
     // Keep the webmail admin owner bridge (login + session reuse) alive across webmail-only
     // updates that replace the hooked files without running any CPN heal.
     cpn_installer::tachyon_admin_bridge_install::spawn_bridge_watch();

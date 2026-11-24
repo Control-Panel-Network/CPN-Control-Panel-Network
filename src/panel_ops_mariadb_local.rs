@@ -101,11 +101,21 @@ fn quote_cnf_value(value: &str) -> String {
 
 /// Run the local MariaDB client, trying socket auth then known credential sources.
 pub fn run_local_mariadb(extra_args: &[&str]) -> Result<Output, String> {
+    run_local_mariadb_inner(extra_args, None)
+}
+
+/// Like [`run_local_mariadb`], but feeds `sql` on stdin so statements that carry
+/// secrets (for example `IDENTIFIED BY`) never appear in the process argument list.
+pub fn run_local_mariadb_stdin(extra_args: &[&str], sql: &str) -> Result<Output, String> {
+    run_local_mariadb_inner(extra_args, Some(sql))
+}
+
+fn run_local_mariadb_inner(extra_args: &[&str], stdin_sql: Option<&str>) -> Result<Output, String> {
     let bin = mariadb_client_bin().ok_or_else(|| "MariaDB client is not installed".to_string())?;
     let attempts = local_login_chain();
     let mut last_err = String::new();
     for login in attempts {
-        let output = match invoke_client(bin, &login, extra_args) {
+        let output = match invoke_client(bin, &login, extra_args, stdin_sql) {
             Ok(o) => o,
             Err(e) => {
                 last_err = e;
@@ -128,9 +138,18 @@ pub fn run_local_mariadb(extra_args: &[&str]) -> Result<Output, String> {
     }
 }
 
-fn invoke_client(bin: &str, login: &MariaDbLogin, extra_args: &[&str]) -> Result<Output, String> {
+fn invoke_client(
+    bin: &str,
+    login: &MariaDbLogin,
+    extra_args: &[&str],
+    stdin_sql: Option<&str>,
+) -> Result<Output, String> {
     let mut cmd = Command::new(bin);
-    cmd.stdin(Stdio::null());
+    cmd.stdin(if stdin_sql.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
     if login.needs_defaults_file() {
         let cnf = TempCnf::write(login)?;
         cmd.arg(format!("--defaults-extra-file={}", cnf.path.display()));
@@ -141,8 +160,23 @@ fn invoke_client(bin: &str, login: &MariaDbLogin, extra_args: &[&str]) -> Result
         }
     }
     cmd.args(extra_args);
-    cmd.output()
-        .map_err(|e| format!("Could not run MariaDB client ({}): {e}", login.source))
+    let Some(sql) = stdin_sql else {
+        return cmd
+            .output()
+            .map_err(|e| format!("Could not run MariaDB client ({}): {e}", login.source));
+    };
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Could not run MariaDB client ({}): {e}", login.source))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        // A broken pipe means the client exited early; its status/stderr explain why.
+        let _ = stdin.write_all(sql.as_bytes());
+    }
+    child
+        .wait_with_output()
+        .map_err(|e| format!("MariaDB client did not finish ({}): {e}", login.source))
 }
 
 fn should_retry_auth(stderr: &str) -> bool {

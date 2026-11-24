@@ -124,6 +124,12 @@ enum Commands {
         #[command(subcommand)]
         command: PackageCommands,
     },
+    /// MariaDB store for panel state (`cpn_panel`) and mailbox auth (`cpn_mail`)
+    #[command(name = "panel-db")]
+    PanelDb {
+        #[command(subcommand)]
+        command: cpn_installer::cli_panel_db::PanelDbCommands,
+    },
     /// Copy another hosting panel into CPN, then remove it
     #[command(name = "panel-migrate")]
     PanelMigrate {
@@ -771,6 +777,9 @@ fn run() -> Result<(), String> {
             }
         },
         Commands::Mail { command } => cli_mail::run(command, require_root_for_mutation),
+        Commands::PanelDb { command } => {
+            cpn_installer::cli_panel_db::run(command, require_root_for_mutation)
+        }
         Commands::Network { command } => run_network(command, require_root_for_mutation),
         Commands::Plugin { command } => match command {
             PluginCommands::List { domain } => cli_plugins::list_plugins(domain.as_deref()),

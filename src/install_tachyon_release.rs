@@ -4,11 +4,11 @@
 //! for the Tachyon project) instead of a version baked into the binary. The pinned
 //! release below is only the offline fallback used when the API is unreachable.
 //!
-//! Upgrades add a new `tachyon/v/<version>` directory next to the old one (the old
-//! directory is kept, like the webmail self-updater does), refresh `index.php`, and leave
-//! `include.php` (data folder outside the docroot) and all data untouched. After a new
-//! version directory appears, the repository stubs, admin SSO hooks, SELinux labels, and
-//! PHP opcode cache are re-applied.
+//! Upgrades add a new `tachyon/v/<version>` directory next to the old one, refresh
+//! `index.php`, and leave `include.php` (data folder outside the docroot) and all data
+//! untouched. After a new version directory appears, the repository stubs, admin SSO hooks,
+//! SELinux labels, and PHP opcode cache are re-applied; once the new version verifies, the
+//! superseded version directories are removed (see `install_tachyon_prune`).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -366,8 +366,14 @@ fn upgrade_locked() -> Result<String, String> {
     let _stage_guard = StageDir(stage.clone());
     install_release_files(&release, &archive, &stage)?;
     reapply_after_new_version();
+    // Cutover is done (hooks, labels, PHP-FPM reload): drop the superseded directories once the
+    // new version verifies. A failed cleanup never fails the upgrade; the next heal retries.
+    let cleanup = match crate::install_tachyon_prune::prune_old_versions() {
+        Ok(msg) => msg,
+        Err(e) => format!("cleanup deferred: {e}"),
+    };
     Ok(format!(
-        "Tachyon upgraded {installed} -> {} (previous version directory kept)",
+        "Tachyon upgraded {installed} -> {} ({cleanup})",
         release.version
     ))
 }
