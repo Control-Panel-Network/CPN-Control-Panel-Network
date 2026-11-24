@@ -90,6 +90,7 @@ pub mod install_snappymail_lineage;
 pub mod install_snappymail_migrate;
 pub mod install_snappymail_prefs;
 pub mod install_snappymail_repo;
+pub mod install_tachyon_prune;
 pub mod install_tachyon_release;
 pub mod install_webmail;
 pub mod install_webmail_engines;
