@@ -2,6 +2,7 @@
 """Verify compose pull/up keeps host data on AL10 install lab."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -12,8 +13,8 @@ from lab_ssh_util import connect_cpn_lab  # noqa: E402
 HOST = "127.0.0.1"
 PORT = 2228
 USER = "cpn"
-PASSWORD = "CpnLab2026!"
-ROOT = "CpnPanelAdmin2026!"
+PASSWORD = os.environ.get("CPN_LAB_SSH_PASSWORD", "")
+ROOT = os.environ.get("CPN_LAB_PANEL_ADMIN_PASSWORD", "")
 
 
 def main() -> int:
