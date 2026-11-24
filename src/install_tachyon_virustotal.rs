@@ -259,10 +259,7 @@ fn merge_enabled_list(section_body: &str, plugin_id: &str) -> String {
             continue;
         }
         if trimmed.starts_with(prefix_eq) || trimmed.starts_with(prefix_nospace) {
-            let rhs = trimmed
-                .split_once('=')
-                .map(|(_, r)| r.trim())
-                .unwrap_or("");
+            let rhs = trimmed.split_once('=').map(|(_, r)| r.trim()).unwrap_or("");
             let raw = rhs.trim_matches('"').trim_matches('\'').trim();
             let mut parts: Vec<String> = raw
                 .split(',')
