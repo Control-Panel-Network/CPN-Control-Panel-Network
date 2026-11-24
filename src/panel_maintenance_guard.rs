@@ -45,8 +45,7 @@ fn path_is_exempt(path: &str) -> bool {
     // via session bypass during tip-upgrade, but these loopback calls would otherwise get 503
     // and Tachyon Admin would show a dead-end "Authentication failed". Still gated by
     // loopback peer + bridge token inside the handlers.
-    if path == "/api/internal/tachyon-admin/session"
-        || path == "/api/internal/tachyon-admin/verify"
+    if path == "/api/internal/tachyon-admin/session" || path == "/api/internal/tachyon-admin/verify"
     {
         return true;
     }

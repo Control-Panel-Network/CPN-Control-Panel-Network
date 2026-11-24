@@ -173,7 +173,7 @@ fn webmail_only_update_is_detected_and_hooks_are_restored() {
     assert!(!file_needs_heal(&fixed));
     for hook in ["BRIDGE-BEGIN v3", "SSO-BEGIN v3", "SSO-LOGOUT-BEGIN v1"] {
         assert!(fixed.contains(hook), "{hook} missing after re-apply");
-   }
+    }
     // Unsupported layouts never trigger an endless heal loop.
     assert!(!file_needs_heal("<?php\nclass X {}\n"));
     let _ = std::fs::remove_dir_all(&root);
