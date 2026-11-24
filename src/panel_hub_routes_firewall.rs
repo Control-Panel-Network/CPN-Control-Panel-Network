@@ -37,11 +37,11 @@ fn same_origin_ok(http: &HttpRequest) -> bool {
     true
 }
 
-fn tab_base(tab: &str) -> String {
+pub(crate) fn tab_base(tab: &str) -> String {
     format!("/security/firewall?tab={tab}")
 }
 
-fn require_admin_csrf(
+pub(crate) fn require_admin_csrf(
     http: &HttpRequest,
     user: &str,
     form: &HashMap<String, String>,
@@ -81,21 +81,32 @@ pub async fn security_firewall(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let tab = query.get("tab").map(String::as_str).unwrap_or("rules");
+    let tab = query
+        .get("tab")
+        .cloned()
+        .unwrap_or_else(|| "rules".to_string());
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let search = query.get("q").cloned();
+    let is_admin = is_panel_admin(&user);
+    let peer = peer_ip(&http);
+    let user_c = user.clone();
+    // Host probes and store I/O are blocking; keep them off the Actix worker threads.
+    let page = tokio::task::spawn_blocking(move || {
+        firewall_manager_page(
+            &user_c,
+            &tab,
+            notice.as_deref(),
+            error.as_deref(),
+            is_admin,
+            search.as_deref(),
+            peer.as_deref(),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| "<p>Firewall page is temporarily unavailable.</p>".to_string());
     html_ok(authenticated_panel_shell(
-        &http,
-        &user,
-        "security",
-        "Firewall",
-        &firewall_manager_page(
-            &user,
-            tab,
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            is_panel_admin(&user),
-            query.get("q").map(String::as_str),
-            peer_ip(&http).as_deref(),
-        ),
+        &http, &user, "security", "Firewall", &page,
     ))
 }
 
