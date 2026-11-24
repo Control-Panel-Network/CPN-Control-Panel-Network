@@ -19,6 +19,7 @@ Patch release after v1.4.12. Panel state moves into MariaDB with an automatic, b
 
 ### Fixed
 
+- **Tachyon Admin SSO failed during tip-upgrade with "Authentication failed"**: While a tip/cargo upgrade holds the panel in maintenance, the signed-in owner can still open `/tachyon/?admin` (session bypass), but the PHP bridge called `/api/internal/tachyon-admin/session` and `/verify` without a browser session Cookie, so those loopback posts hit HTTP 503 and SSO (and form login) failed closed. The maintenance guard now exempts those two bridge routes (still loopback + shared token gated). The PHP hooks (login/SSO v3) also forward `cpn_panel_session*` as a Cookie header so older panel builds keep working via the owner maintenance bypass, and form login shows a clear "panel is updating" hint when a maintenance JSON body is returned. Heal/watcher re-apply the v3 hooks after webmail-only updates.
 - **Panel state migrate no longer fails on files that change during the run**: Files rewritten while the verify step ran (for example live session or journal files) are now re-synced and re-verified with bounded retries instead of aborting the migrate.
 - **Prior webmail retire dump verification**: The dump verification step no longer trips on `pipefail`, so the archive-then-delete order completes when the dump is valid.
 - **No hard-coded lab passwords in helper scripts**: Lab and test helper scripts now read credentials from the environment instead of literals in the repository.
