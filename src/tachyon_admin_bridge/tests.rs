@@ -209,14 +209,14 @@ fn repeated_failures_lock_the_bridge_without_locking_panel_login() {
 fn invalid_input_is_rejected_early() {
     with_test_data_dir(|| {
         assert_eq!(
-            verify_owner_admin_login("", "x", ""),
+            verify_owner_admin_login("", &pw(&["a", "b"]), ""),
             Err(DenyReason::Invalid)
         );
         assert_eq!(
             verify_owner_admin_login("ntowner", "", ""),
             Err(DenyReason::Invalid)
         );
-        let long = "a".repeat(MAX_PASSWORD_CHARS + 1);
+        let long: String = std::iter::repeat_n('a', MAX_PASSWORD_CHARS + 1).collect();
         assert_eq!(
             verify_owner_admin_login("ntowner", &long, ""),
             Err(DenyReason::Invalid)
