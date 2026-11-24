@@ -5,7 +5,22 @@ use crate::account::{
 };
 use crate::panel_session::{SESSION_COOKIE, create_session_token, session_cookie_name};
 
-const SECRET: &str = "unit-test-session-secret-value-0123456789";
+/// Random per-process secrets (never a committed constant).
+fn random_hex() -> String {
+    use rand::Rng;
+    let bytes: [u8; 24] = rand::rng().random();
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn secret() -> &'static str {
+    static S: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    S.get_or_init(random_hex)
+}
+
+fn other_secret() -> &'static str {
+    static S: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    S.get_or_init(random_hex)
+}
 
 fn make_owner() {
     setup_account(
@@ -42,7 +57,7 @@ fn add_extra(name: &str, role: &str, parent_owner: &str, parent_reseller: &str) 
 }
 
 fn jar(user: &str) -> String {
-    format!("{SESSION_COOKIE}={}", create_session_token(user, SECRET))
+    format!("{SESSION_COOKIE}={}", create_session_token(user, secret()))
 }
 
 #[test]
@@ -54,12 +69,12 @@ fn owner_session_is_admitted_even_with_totp_enrolled_in_the_past() {
         boot.must_change_password = false;
         persist_bootstrap(&boot).unwrap();
         assert_eq!(
-            owner_from_session_cookie(&jar("ntowner"), "panel.example", SECRET),
+            owner_from_session_cookie(&jar("ntowner"), "panel.example", secret()),
             Ok("ntowner".to_string())
         );
         // Extra unrelated cookies in the jar do not matter.
         let mixed = format!("a=b; {}; c=d", jar("NTOwner"));
-        assert!(owner_from_session_cookie(&mixed, "panel.example", SECRET).is_ok());
+        assert!(owner_from_session_cookie(&mixed, "panel.example", secret()).is_ok());
     });
 }
 
@@ -73,7 +88,7 @@ fn normal_user_reseller_and_acl_sessions_are_denied() {
         add_extra("jailed", "", "", "resell");
         for name in ["plainuser", "resell", "aclsub", "jailed"] {
             assert_eq!(
-                owner_from_session_cookie(&jar(name), "panel.example", SECRET),
+                owner_from_session_cookie(&jar(name), "panel.example", secret()),
                 Err(DenyReason::NotOwner),
                 "{name} must not get webmail admin through SSO"
             );
@@ -87,27 +102,27 @@ fn forged_expired_or_wrong_secret_sessions_are_anonymous() {
         make_owner();
         let wrong = format!(
             "{SESSION_COOKIE}={}",
-            create_session_token("ntowner", "other")
+            create_session_token("ntowner", other_secret())
         );
         assert_eq!(
-            owner_from_session_cookie(&wrong, "panel.example", SECRET),
+            owner_from_session_cookie(&wrong, "panel.example", secret()),
             Err(DenyReason::Invalid)
         );
         assert_eq!(
-            owner_from_session_cookie(&format!("{SESSION_COOKIE}=abc"), "panel.example", SECRET),
+            owner_from_session_cookie(&format!("{SESSION_COOKIE}=abc"), "panel.example", secret()),
             Err(DenyReason::Invalid)
         );
         assert_eq!(
-            owner_from_session_cookie("", "panel.example", SECRET),
+            owner_from_session_cookie("", "panel.example", secret()),
             Err(DenyReason::Invalid)
         );
         assert_eq!(
-            owner_from_session_cookie("other=1", "panel.example", SECRET),
+            owner_from_session_cookie("other=1", "panel.example", secret()),
             Err(DenyReason::Invalid)
         );
         let huge = format!("{SESSION_COOKIE}={}", "a".repeat(MAX_COOKIE_CHARS));
         assert_eq!(
-            owner_from_session_cookie(&huge, "panel.example", SECRET),
+            owner_from_session_cookie(&huge, "panel.example", secret()),
             Err(DenyReason::Invalid)
         );
     });
@@ -121,14 +136,14 @@ fn disabled_or_must_change_owner_session_is_denied() {
         boot.must_change_password = true;
         persist_bootstrap(&boot).unwrap();
         assert_eq!(
-            owner_from_session_cookie(&jar("ntowner"), "panel.example", SECRET),
+            owner_from_session_cookie(&jar("ntowner"), "panel.example", secret()),
             Err(DenyReason::MustChangePassword)
         );
         boot.must_change_password = false;
         boot.disabled = true;
         persist_bootstrap(&boot).unwrap();
         assert_eq!(
-            owner_from_session_cookie(&jar("ntowner"), "panel.example", SECRET),
+            owner_from_session_cookie(&jar("ntowner"), "panel.example", secret()),
             Err(DenyReason::Disabled)
         );
     });
@@ -143,7 +158,7 @@ fn owner_with_reseller_role_flags_is_denied() {
         boot.role = "reseller".into();
         persist_bootstrap(&boot).unwrap();
         assert_eq!(
-            owner_from_session_cookie(&jar("ntowner"), "panel.example", SECRET),
+            owner_from_session_cookie(&jar("ntowner"), "panel.example", secret()),
             Err(DenyReason::RoleNotAllowed)
         );
     });
@@ -156,12 +171,12 @@ fn port_scoped_cookie_names_follow_the_host_header() {
         let mut boot = load_bootstrap().unwrap();
         boot.must_change_password = false;
         persist_bootstrap(&boot).unwrap();
-        let token = create_session_token("ntowner", SECRET);
+        let token = create_session_token("ntowner", secret());
         let scoped = format!("{}={token}", session_cookie_name(Some(2092)));
-        assert!(owner_from_session_cookie(&scoped, "panel.example:2092", SECRET).is_ok());
+        assert!(owner_from_session_cookie(&scoped, "panel.example:2092", secret()).is_ok());
         // A scoped cookie is not accepted for a different port, nor for the bare host.
-        assert!(owner_from_session_cookie(&scoped, "panel.example:2087", SECRET).is_err());
-        assert!(owner_from_session_cookie(&scoped, "panel.example", SECRET).is_err());
+        assert!(owner_from_session_cookie(&scoped, "panel.example:2087", secret()).is_err());
+        assert!(owner_from_session_cookie(&scoped, "panel.example", secret()).is_err());
     });
 }
 
