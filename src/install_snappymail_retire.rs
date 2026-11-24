@@ -181,6 +181,7 @@ fn ensure_tachyon_active_and_healthy(
 fn run_tar(args: &[&str]) -> Result<(), String> {
     let st = Command::new("tar")
         .args(args)
+        .stdout(std::process::Stdio::null())
         .status()
         .map_err(|e| format!("tar failed to start: {e}"))?;
     if st.success() {
