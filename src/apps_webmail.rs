@@ -330,10 +330,19 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
                 .filter(|prev| *prev != mail && client_files_present(*prev));
             block_on_runtime(install_webmail(&state, mail, engine))?;
             let migrate_note = if mail == MailSystem::Tachyon {
-                match crate::install_snappymail_migrate::migrate_snappymail_into_tachyon() {
-                    Ok(msg) => format!(" {msg}"),
-                    Err(err) => format!(" SnappyMail data migrate skipped: {err}"),
+                let mut note =
+                    match crate::install_snappymail_migrate::migrate_snappymail_into_tachyon() {
+                        Ok(msg) => format!(" {msg}"),
+                        Err(err) => format!(" SnappyMail data migrate skipped: {err}"),
+                    };
+                // Retire prior-webmail leftovers only when Tachyon will be the active client.
+                if previous_active.is_none() {
+                    save_active_pref(mail)?;
+                    if let Some(extra) = crate::install_snappymail_retire::auto_retire_fail_soft() {
+                        note.push_str(&format!(" {extra}"));
+                    }
                 }
+                note
             } else {
                 String::new()
             };

@@ -106,6 +106,16 @@ pub enum AppCommands {
         #[arg(long)]
         force: bool,
     },
+    /// Import prior webmail data into Tachyon, back up, then remove leftover prior webmail files
+    #[command(name = "retire-snappymail")]
+    RetireSnappymail {
+        /// Show what would be removed without changing anything
+        #[arg(long)]
+        dry_run: bool,
+        /// Keep the prior webmail MariaDB database (still dumped under /home/backup)
+        #[arg(long)]
+        keep_db: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -234,6 +244,20 @@ pub fn run(
         AppCommands::MigrateSnappymail { to, force } => {
             require_root()?;
             migrate_snappymail(&to, force)
+        }
+        AppCommands::RetireSnappymail { dry_run, keep_db } => {
+            if !dry_run {
+                require_root()?;
+            }
+            let report = crate::install_snappymail_retire::retire_snappymail(
+                crate::install_snappymail_retire::RetireOptions {
+                    dry_run,
+                    keep_db,
+                    allow_switch: true,
+                },
+            )?;
+            println!("{}", report.summary());
+            Ok(())
         }
     }
 }
