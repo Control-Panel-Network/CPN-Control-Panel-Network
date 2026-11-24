@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify Email stack + DKIM + create page on CPN-AlmaLinux-10-install lab."""
+import os
 import sys
 import urllib.parse
 
@@ -15,7 +16,7 @@ if hasattr(sys.stdout, "reconfigure"):
 HOST = "127.0.0.1"
 PORT = 2228
 USER = "cpn"
-PASSWORD = "CpnLab2026!"
+PASSWORD = os.environ.get("CPN_LAB_SSH_PASSWORD", "")
 PANEL = "http://127.0.0.1:2087"
 SUDO = f"echo '{PASSWORD}' | sudo -S "
 
