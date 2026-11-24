@@ -143,8 +143,9 @@ pub fn email_limits_page(user: &str, notice: Option<&str>, error: Option<&str>) 
 }
 
 pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>) -> String {
-    // Live-heal lineage prefs and refresh admin_login from application.ini for the dropdown.
-    let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
+    // Heal lineage prefs (admin_login in application.ini) off the request path; the page reads
+    // whatever is on disk now and the next view sees the refreshed value.
+    crate::panel_webmail_heal_bg::schedule_webmail_prefs_heal();
     let csrf = html_escape(&email_csrf_token(user));
     let choices = mailbox_choices();
     let mut opts = String::from(r#"<option value="">Select mailbox</option>"#);
