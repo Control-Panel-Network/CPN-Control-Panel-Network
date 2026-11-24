@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Probe Email stack on CPN-AlmaLinux-10-install lab."""
+import os
 import sys
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -16,7 +17,7 @@ except ImportError:
 HOST = "127.0.0.1"
 PORT = 2228
 USER = "cpn"
-PASSWORD = "CpnLab2026!"
+PASSWORD = os.environ.get("CPN_LAB_SSH_PASSWORD", "")
 SUDO = f"echo '{PASSWORD}' | sudo -S "
 
 CMDS = [
