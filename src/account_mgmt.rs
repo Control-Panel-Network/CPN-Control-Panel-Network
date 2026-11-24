@@ -199,7 +199,9 @@ pub fn create_account(
         extra_account_path(&username)
     };
     write_account_file(&path, &boot)?;
-    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
+    // Owner-only: extra accounts (users, resellers, ACL) never set the webmail admin password.
+    let _ =
+        crate::install_snappymail_prefs::sync_snappymail_admin_password(&boot.username, &password);
     Ok(AccountSetupResult {
         public: crate::account::to_account_public(&boot),
         generated_password,
@@ -224,7 +226,8 @@ pub fn reset_account_password(
         boot.must_change_password = true;
     }
     write_account_file(&path, &boot)?;
-    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
+    let _ =
+        crate::install_snappymail_prefs::sync_snappymail_admin_password(&boot.username, &password);
     Ok(AccountSetupResult {
         public: crate::account::to_account_public(&boot),
         generated_password,
@@ -270,7 +273,8 @@ pub fn change_own_password(
     boot.password_hash = hash_password(&password, &salt);
     boot.password_policy = policy;
     write_account_file(&path, &boot)?;
-    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
+    let _ =
+        crate::install_snappymail_prefs::sync_snappymail_admin_password(&boot.username, &password);
     Ok(AccountSetupResult {
         public: crate::account::to_account_public(&boot),
         generated_password,

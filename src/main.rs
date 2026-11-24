@@ -1280,6 +1280,7 @@ async fn main() -> std::io::Result<()> {
             .service(status_page)
             .service(login_page)
             .service(login_services_status)
+            .service(cpn_installer::tachyon_admin_bridge::tachyon_admin_verify)
             .service(cpn_logo)
             .service(cpn_installer::panel_static_assets::panel_stylesheet)
             .service(cpn_installer::panel_static_assets::panel_script)

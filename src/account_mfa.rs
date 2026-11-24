@@ -697,7 +697,7 @@ pub fn check_rate_limit(username: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn register_rate_failure(username: &str) {
+pub(crate) fn register_rate_failure(username: &str) {
     let _guard = RATE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let mut store = load_rate_store();
     let key = username.to_ascii_lowercase();
@@ -710,7 +710,7 @@ fn register_rate_failure(username: &str) {
     save_rate_store(&store);
 }
 
-fn clear_rate_limit(username: &str) {
+pub(crate) fn clear_rate_limit(username: &str) {
     let _guard = RATE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let mut store = load_rate_store();
     store.entries.remove(&username.to_ascii_lowercase());
