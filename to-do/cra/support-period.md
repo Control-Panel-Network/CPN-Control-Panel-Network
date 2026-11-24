@@ -24,9 +24,9 @@ For a release tag `vX.Y.Z` published on date `P` (display `dd/mm/yyyy`):
 
 | Release | Published (approx.) | In latest two? | Support end guidance |
 |---------|---------------------|----------------|----------------------|
-| v1.4.12 | 21/11/2026 | Yes (current) | Rolling: until displaced by two newer releases |
-| v1.4.11 | 21/11/2026 | Yes (previous) | Rolling: until displaced by two newer releases |
-| v1.4.10 and older | earlier | No | Outside support; upgrade to a latest-two tag |
+| v1.4.13 | 25/11/2026 | Yes (current) | Rolling: until displaced by two newer releases |
+| v1.4.12 | 21/11/2026 | Yes (previous) | Rolling: until displaced by two newer releases |
+| v1.4.11 and older | earlier | No | Outside support; upgrade to a latest-two tag |
 
 Refresh this snapshot when cutting releases. Do not leave stale "current" rows in public claims.
 
