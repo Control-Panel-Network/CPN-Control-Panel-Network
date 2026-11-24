@@ -27,7 +27,9 @@ pub fn virtual_sql_mail_active() -> bool {
     }
     #[cfg(not(windows))]
     {
-        dovecot_sql_uses_e_users() || e_users_table_reachable()
+        crate::panel_db::mail_ops::cpn_mail_active()
+            || dovecot_sql_uses_e_users()
+            || e_users_table_reachable()
     }
 }
 
@@ -234,12 +236,25 @@ pub fn sync_password_to_virtual_sql(email: &str, password: &str) -> Result<Strin
     if password.len() < 8 {
         return Err("Mailbox password must be at least 8 characters".into());
     }
-    if !virtual_sql_has_mailbox(&email)? {
+    let cpn_mail = crate::panel_db::mail_ops::provisioned();
+    let in_legacy = virtual_sql_has_mailbox(&email).unwrap_or(false);
+    if !in_legacy && !cpn_mail {
         return Err(format!(
             "Mailbox `{email}` was not found in virtual-mail SQL (`e_users`)"
         ));
     }
     let hash = doveadm_blf_crypt(password)?;
+    // Keep `cpn_mail` in step with the classic table (dual-write), or be the only
+    // store once Dovecot has been moved to it.
+    if cpn_mail {
+        crate::panel_db::mail_ops::set_password_hash(&email, &hash)
+            .map_err(|e| format!("Could not update cpn_mail password: {e}"))?;
+        if !in_legacy {
+            return Ok(format!(
+                "Updated cpn_mail password for `{email}` (Dovecot/webmail auth store)."
+            ));
+        }
+    }
     let email_sql = escape_sql(&email);
     let hash_sql = escape_sql(&hash);
     let sql =
