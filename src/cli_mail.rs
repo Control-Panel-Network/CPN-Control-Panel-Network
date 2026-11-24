@@ -22,6 +22,13 @@ pub enum MailCommands {
         #[arg(long)]
         password_stdin: bool,
     },
+    /// Reset webmail client crypto key after a password change (fixes "login passphrase has changed")
+    #[command(name = "webmail-rekey")]
+    WebmailRekey {
+        /// Full mailbox address (`user@domain`)
+        #[arg(long)]
+        address: String,
+    },
     /// Move legacy `/home/<user>` Maildirs into `/home/<domain>/e-mails/<user>/`
     #[command(name = "migrate-homes")]
     MigrateHomes {
@@ -71,6 +78,19 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
             record_cli("cli.mail.passwd", address, true, "mailbox password updated");
             // Do not echo reset_mailbox_password return (CodeQL rust/cleartext-logging).
             println!("Mailbox password updated for `{address}`.");
+            Ok(())
+        }
+        MailCommands::WebmailRekey { address } => {
+            require_root()?;
+            let address = address.trim();
+            let text = crate::webmail_cryptkey::reset_client_cryptkey(address)?;
+            record_cli(
+                "cli.mail.webmail-rekey",
+                address,
+                true,
+                "webmail client key reset",
+            );
+            println!("{text}");
             Ok(())
         }
         MailCommands::MigrateHomes { dry_run } => {

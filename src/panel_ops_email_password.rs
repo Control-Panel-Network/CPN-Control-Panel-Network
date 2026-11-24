@@ -105,7 +105,16 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     crate::apps_sogo_config::sync_users_if_installed();
     let virtual_sql = crate::mail_legacy_sql::virtual_sql_mail_active();
     match provisioned {
-        Ok(detail) => Ok(format!("Password updated for `{address}`. {detail}")),
+        Ok(detail) => {
+            // Webmail seals its per-mailbox key with the login password; reset it so the
+            // user is not stuck on "login passphrase has changed" (mail itself is untouched).
+            let rekey = match crate::webmail_cryptkey::reset_client_cryptkey(&address) {
+                Ok(msg) if msg.starts_with("No sealed") => String::new(),
+                Ok(_) => " Webmail will create a new client key at next login.".to_string(),
+                Err(e) => format!(" Webmail client key reset skipped: {e}."),
+            };
+            Ok(format!("Password updated for `{address}`. {detail}{rekey}"))
+        }
         Err(err) => {
             if virtual_sql {
                 // Dovecot/IMAP on classic stacks reads SQL only; do not claim success.
