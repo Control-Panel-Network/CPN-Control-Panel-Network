@@ -18,8 +18,8 @@ const CPN_FAVICON_URL: &str = "/favicon.ico";
 ///
 /// Runs for every installed SnappyMail-family data root (SnappyMail, Tachyon, NextSnapMail).
 pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
-    // Follow upstream: add a newer Tachyon version directory (throttled, kept side by side)
-    // before per-data-root defaults and the admin SSO bridge are applied below.
+    // Follow upstream: add a newer Tachyon version directory (throttled) before per-data-root
+    // defaults and the admin SSO bridge are applied below.
     match crate::install_tachyon_release::upgrade_tachyon_if_needed(false) {
         Ok(msg) if msg.starts_with("Tachyon upgraded") => {
             eprintln!("[webmail-tachyon-release] [info] {msg}");
@@ -38,6 +38,15 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
     let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
     // `/?admin` sign-in is delegated to the CPN panel owner (owner-only bridge).
     let _ = crate::tachyon_admin_bridge_install::ensure_admin_bridge();
+    // Superseded Tachyon version directories go only after the SSO hooks above are current
+    // and the active version answers (also cleans leftovers from earlier upgrades).
+    match crate::install_tachyon_prune::prune_old_versions() {
+        Ok(msg) if msg.starts_with("Tachyon cleanup") => {
+            eprintln!("[webmail-tachyon-release] [info] {msg}");
+        }
+        Ok(_) => {}
+        Err(e) => eprintln!("[webmail-tachyon-release] [warn] {e}"),
+    }
     // OpenPGP (SnappyMail-family + Roundcube Enigma when present).
     let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
     Ok(())
