@@ -18,6 +18,7 @@ pub use crate::panel_hub_routes_fail2ban::*;
 pub use crate::panel_hub_routes_files::*;
 pub use crate::panel_hub_routes_files_list::*;
 pub use crate::panel_hub_routes_firewall::*;
+pub use crate::panel_hub_routes_firewall_edit::*;
 pub use crate::panel_hub_routes_migrate::*;
 pub use crate::panel_hub_routes_passkeys::*;
 pub use crate::panel_hub_routes_php::*;

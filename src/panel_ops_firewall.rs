@@ -6,7 +6,9 @@ use crate::panel_firewall_store::{
     is_protected_ip, load_store, purge_expired_bans, save_store, validate_ip_or_cidr,
 };
 use crate::panel_host_info::host_sidebar_info;
-use crate::panel_ops_security::{cmd_output_timeout, firewall_status, which_exists};
+use crate::panel_ops_firewall_rules::{apply_port_rule, remove_port_rule};
+use crate::panel_ops_firewall_status::{firewall_status_cached, invalidate_firewall_status_cache};
+use crate::panel_ops_security::{cmd_output_timeout, which_exists};
 use crate::panel_session::session_secret;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
@@ -97,7 +99,9 @@ pub fn start_firewall() -> Result<String, String> {
         return Err("firewalld is not installed".into());
     }
     crate::panel_ops_firewall_heal::clear_operator_stopped();
-    let msg = crate::panel_ops_firewall_heal::start_with_baseline()?;
+    let result = crate::panel_ops_firewall_heal::start_with_baseline();
+    invalidate_firewall_status_cache();
+    let msg = result?;
     ensure_panel_port_open()?;
     Ok(msg)
 }
@@ -105,7 +109,10 @@ pub fn start_firewall() -> Result<String, String> {
 pub fn stop_firewall() -> Result<String, String> {
     // Remember the operator's choice so the start-up heal does not undo it.
     crate::panel_ops_firewall_heal::mark_operator_stopped();
-    if !crate::panel_ops_security::cmd_ok_timeout("systemctl", &["stop", "firewalld"], 30) {
+    let stopped =
+        crate::panel_ops_security::cmd_ok_timeout("systemctl", &["stop", "firewalld"], 30);
+    invalidate_firewall_status_cache();
+    if !stopped {
         crate::panel_ops_firewall_heal::clear_operator_stopped();
         return Err("Could not stop firewalld".into());
     }
@@ -113,7 +120,9 @@ pub fn stop_firewall() -> Result<String, String> {
 }
 
 pub fn reload_firewall() -> Result<String, String> {
-    firewall_cmd(&["--reload"])?;
+    let reloaded = firewall_cmd(&["--reload"]);
+    invalidate_firewall_status_cache();
+    reloaded?;
     ensure_panel_port_open()?;
     Ok("Firewall reloaded; panel port verified open".into())
 }
@@ -136,6 +145,7 @@ pub fn apply_ban_to_host(ip: &str) -> Result<(), String> {
     let rule = rich_drop_rule(ip)?;
     let _ = firewall_cmd(&["--permanent", "--add-rich-rule", &rule]);
     let _ = firewall_cmd(&["--add-rich-rule", &rule]);
+    invalidate_firewall_status_cache();
     Ok(())
 }
 
@@ -143,56 +153,7 @@ pub fn remove_ban_from_host(ip: &str) -> Result<(), String> {
     let rule = rich_drop_rule(ip)?;
     let _ = firewall_cmd(&["--permanent", "--remove-rich-rule", &rule]);
     let _ = firewall_cmd(&["--remove-rich-rule", &rule]);
-    Ok(())
-}
-
-fn apply_port_rule(rule: &FirewallRule) -> Result<(), String> {
-    let port_spec = format!("{}/{}", rule.port, rule.protocol);
-    let any = rule.source == "0.0.0.0/0" || rule.source == "::/0" || rule.source.is_empty();
-    if any {
-        let _ = firewall_cmd(&["--permanent", &format!("--add-port={port_spec}")]);
-        let _ = firewall_cmd(&[&format!("--add-port={port_spec}")]);
-    } else {
-        let family = if rule.source.contains(':') {
-            "ipv6"
-        } else {
-            "ipv4"
-        };
-        let rich = format!(
-            "rule family=\"{family}\" source address=\"{}\" port port=\"{}\" protocol=\"{}\" accept",
-            rule.source, rule.port, rule.protocol
-        );
-        let _ = firewall_cmd(&["--permanent", "--add-rich-rule", &rich]);
-        let _ = firewall_cmd(&["--add-rich-rule", &rich]);
-    }
-    Ok(())
-}
-
-fn remove_port_rule(rule: &FirewallRule) -> Result<(), String> {
-    let port = panel_listen_port();
-    if rule.protocol == "tcp" && rule.port == port.to_string() {
-        return Err(format!(
-            "Refused: cannot remove the panel listen port ({port}/tcp)"
-        ));
-    }
-    let port_spec = format!("{}/{}", rule.port, rule.protocol);
-    let any = rule.source == "0.0.0.0/0" || rule.source == "::/0" || rule.source.is_empty();
-    if any {
-        let _ = firewall_cmd(&["--permanent", &format!("--remove-port={port_spec}")]);
-        let _ = firewall_cmd(&[&format!("--remove-port={port_spec}")]);
-    } else {
-        let family = if rule.source.contains(':') {
-            "ipv6"
-        } else {
-            "ipv4"
-        };
-        let rich = format!(
-            "rule family=\"{family}\" source address=\"{}\" port port=\"{}\" protocol=\"{}\" accept",
-            rule.source, rule.port, rule.protocol
-        );
-        let _ = firewall_cmd(&["--permanent", "--remove-rich-rule", &rich]);
-        let _ = firewall_cmd(&["--remove-rich-rule", &rich]);
-    }
+    invalidate_firewall_status_cache();
     Ok(())
 }
 
@@ -366,7 +327,7 @@ pub fn import_banned_json(raw: &str) -> Result<String, String> {
 }
 
 pub fn status_on() -> bool {
-    firewall_status().active
+    firewall_status_cached().active
 }
 
 pub fn trusted_source_label(source: &TrustedSource) -> &'static str {

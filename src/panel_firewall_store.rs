@@ -157,7 +157,8 @@ pub fn validate_protocol(raw: &str) -> Result<String, String> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "tcp" => Ok("tcp".into()),
         "udp" => Ok("udp".into()),
-        _ => Err("Protocol must be tcp or udp".into()),
+        "both" | "tcp+udp" | "tcp/udp" => Ok("both".into()),
+        _ => Err("Protocol must be tcp, udp, or both".into()),
     }
 }
 
@@ -566,6 +567,14 @@ mod tests {
             let err = add_ban("203.0.113.10", "test", None).unwrap_err();
             assert!(err.contains("Refused"));
         });
+    }
+
+    #[test]
+    fn protocol_accepts_tcp_udp_and_both() {
+        assert_eq!(validate_protocol("TCP").unwrap(), "tcp");
+        assert_eq!(validate_protocol("udp").unwrap(), "udp");
+        assert_eq!(validate_protocol(" Both ").unwrap(), "both");
+        assert!(validate_protocol("icmp").is_err());
     }
 
     #[test]
