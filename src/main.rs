@@ -1077,6 +1077,11 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         cpn_installer::mail_light_heal::run_light_email_heal_logged("panel start");
     });
+    // Rotate any weak or default secret (idempotent; strong random secrets are kept) and
+    // tighten secret file modes. Runs on every start, so it also covers tip upgrades.
+    std::thread::spawn(|| {
+        cpn_installer::secret_hygiene_audit::ensure_logged("panel start");
+    });
     // Move panel state into MariaDB (`cpn_panel` / `cpn_mail`). A full, backed-up,
     // idempotent migration runs once per installed version (package upgrade, tip
     // upgrade, fresh install); otherwise only a cheap incremental sync. Never blocks boot.

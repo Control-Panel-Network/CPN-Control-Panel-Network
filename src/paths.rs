@@ -110,12 +110,12 @@ pub fn installer_bootstrap_token_path() -> PathBuf {
 
 /// Generate a new installer bootstrap token.
 pub fn new_installer_bootstrap_token() -> String {
-    use rand::{Rng, distr::Alphanumeric};
-    rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(INSTALLER_BOOTSTRAP_TOKEN_LEN)
-        .map(char::from)
-        .collect()
+    loop {
+        let token = crate::secret_hygiene::random_alnum(INSTALLER_BOOTSTRAP_TOKEN_LEN);
+        if crate::secret_hygiene::weak_reason(&token, INSTALLER_BOOTSTRAP_TOKEN_LEN).is_none() {
+            return token;
+        }
+    }
 }
 
 /// Read a persisted bootstrap token when the install is still in progress.
@@ -125,6 +125,7 @@ pub fn read_installer_bootstrap_token() -> Option<String> {
     let token = String::from_utf8(bytes).ok()?.trim().to_string();
     if token.len() != INSTALLER_BOOTSTRAP_TOKEN_LEN
         || !token.chars().all(|c| c.is_ascii_alphanumeric())
+        || crate::secret_hygiene::weak_reason(&token, INSTALLER_BOOTSTRAP_TOKEN_LEN).is_some()
     {
         return None;
     }

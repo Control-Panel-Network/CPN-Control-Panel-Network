@@ -117,12 +117,8 @@ fn chmod_mode(path: &Path, mode: u32) {
 }
 
 fn random_access_password() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    format!("mra{nanos:x}").chars().take(24).collect()
+    // CSPRNG only: a clock-derived value is guessable by anyone who knows the install time.
+    crate::secret_hygiene::strong_alnum(32)
 }
 
 /// Ensure `/var/lib/cpn/mr-agent/<domain>/` secrets, chats, locks, and optional config.php.
@@ -167,6 +163,16 @@ pub fn ensure_site_secrets(domain: &str) -> Result<String, String> {
             .map_err(|e| format!("Could not write access.password: {e}"))?;
         chmod_mode(&pass_file, 0o600);
     } else if config.is_file() {
+        // Heal installs created with the old clock-derived access password.
+        if let Ok(raw) = fs::read_to_string(&config)
+            && let Some((updated, fresh)) =
+                crate::secret_hygiene_audit::rewrite_legacy_access_password(&raw)
+            && fs::write(&config, updated).is_ok()
+        {
+            let pass_file = secret.join("access.password");
+            let _ = fs::write(&pass_file, format!("{fresh}\n"));
+            chmod_mode(&pass_file, 0o600);
+        }
         chmod_mode(&config, 0o640);
     }
     Ok(format!("Secrets ready under {}", secret.display()))
@@ -431,6 +437,20 @@ pub fn panel_expand_url(domain: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn access_password_is_csprng_strong_and_never_clock_derived() {
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..200 {
+            let pass = random_access_password();
+            assert!(!crate::secret_hygiene_audit::is_legacy_time_derived_password(&pass));
+            assert!(
+                crate::secret_hygiene::weak_reason(&pass, crate::secret_hygiene::MIN_SECRET_LEN)
+                    .is_none()
+            );
+            assert!(seen.insert(pass));
+        }
+    }
 
     #[test]
     fn folder_is_default_mode() {
