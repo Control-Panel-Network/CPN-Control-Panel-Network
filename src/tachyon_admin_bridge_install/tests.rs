@@ -7,7 +7,7 @@ fn hooks_are_injected_in_the_right_functions_only_once() {
     let (out, outcome) = patched_source(SAMPLE).expect("supported");
     assert_eq!(outcome, PatchOutcome::Patched);
     assert!(out.contains("CPN-ADMIN-BRIDGE-BEGIN v2"));
-    assert!(out.contains("CPN-ADMIN-SSO-BEGIN v1"));
+    assert!(out.contains("CPN-ADMIN-SSO-BEGIN v2"));
     assert!(out.contains("CPN-ADMIN-SSO-LOGOUT-BEGIN v1"));
     assert!(out.contains("/api/internal/tachyon-admin/verify"));
     assert!(out.contains("/api/internal/tachyon-admin/session"));
@@ -96,6 +96,10 @@ fn sso_hook_is_owner_session_only_and_fail_closed() {
     // Cross-site navigations never auto-admit; explicit sign-out disables SSO.
     assert!(hook.contains("HTTP_SEC_FETCH_SITE"));
     assert!(hook.contains("cpn_sso_off"));
+    // $oActions can be the base action class: never call the private setAdminAuthToken().
+    assert!(!hook.contains("setAdminAuthToken"));
+    assert!(!hook.contains("instanceof self"));
+    assert!(hook.contains("SessionAdminKey"));
     assert!(hook.contains("catch (\\Throwable"));
     assert!(!hook.contains("error_log"));
     assert!(PHP_LOGOUT_HOOK.contains("cpn_sso_off"));
@@ -164,7 +168,7 @@ fn webmail_only_update_is_detected_and_hooks_are_restored() {
     assert_eq!(outcome, PatchOutcome::Patched);
     std::fs::write(&found[1], &fixed).unwrap();
     assert!(!file_needs_heal(&fixed));
-    for hook in ["BRIDGE-BEGIN v2", "SSO-BEGIN v1", "SSO-LOGOUT-BEGIN v1"] {
+    for hook in ["BRIDGE-BEGIN v2", "SSO-BEGIN v2", "SSO-LOGOUT-BEGIN v1"] {
         assert!(fixed.contains(hook), "{hook} missing after re-apply");
     }
     // Unsupported layouts never trigger an endless heal loop.

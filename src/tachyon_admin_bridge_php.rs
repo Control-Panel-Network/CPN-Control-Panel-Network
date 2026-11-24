@@ -14,7 +14,7 @@ pub const LOGOUT_BEGIN: &str = "// CPN-ADMIN-SSO-LOGOUT-BEGIN";
 pub const LOGOUT_END: &str = "// CPN-ADMIN-SSO-LOGOUT-END";
 
 pub const LOGIN_VERSION: &str = "v2";
-pub const SSO_VERSION: &str = "v1";
+pub const SSO_VERSION: &str = "v2";
 pub const LOGOUT_VERSION: &str = "v1";
 
 /// Injected at the top of `DoAdminLogin()` (tabs match upstream style).
@@ -92,13 +92,13 @@ pub const PHP_LOGIN_HOOK: &str = r##"		// CPN-ADMIN-BRIDGE-BEGIN v2
 "##;
 
 /// Injected in `AdminAppData()` right before the `Auth` flag is computed.
-pub const PHP_SSO_HOOK: &str = r##"		// CPN-ADMIN-SSO-BEGIN v1
+pub const PHP_SSO_HOOK: &str = r##"		// CPN-ADMIN-SSO-BEGIN v2
 		// Reuse a valid CPN panel OWNER session. The panel verifies the session cookie over
-		// loopback (owner only; users, resellers and ACL accounts are refused there). Skipped
+		// loopback (owner only; users, resellers and ACL accounts are refused there). The Host header
+		// is not forwarded: this request arrives on the internal webmail listener, not the panel host. Skipped
 		// after an explicit admin sign-out and for cross-site navigations. Fails closed.
 		$cpnSCfgPath = '/var/lib/cpn-webmail/admin-bridge.json';
-		if ($oActions instanceof self
-			&& empty($_COOKIE['cpn_sso_off'])
+		if (empty($_COOKIE['cpn_sso_off'])
 			&& $oConfig->Get('security', 'allow_admin_panel', true)
 			&& \in_array((string) ($_SERVER['HTTP_SEC_FETCH_SITE'] ?? ''), ['', 'same-origin', 'same-site', 'none'], true)
 			&& @\file_exists($cpnSCfgPath)
@@ -121,7 +121,7 @@ pub const PHP_SSO_HOOK: &str = r##"		// CPN-ADMIN-SSO-BEGIN v1
 				if ($cpnSJar && \strlen($cpnSToken)
 					&& \in_array($cpnSHost, ['127.0.0.1', 'localhost', '[::1]', '::1'], true)
 				) {
-					$cpnSBody = \json_encode(['cookie' => \implode('; ', $cpnSJar), 'host' => (string) ($_SERVER['HTTP_HOST'] ?? '')], JSON_UNESCAPED_SLASHES);
+					$cpnSBody = \json_encode(['cookie' => \implode('; ', $cpnSJar)], JSON_UNESCAPED_SLASHES);
 					$cpnSEndpoint = \rtrim($cpnSUrl, '/') . '/api/internal/tachyon-admin/session';
 					$cpnSHeaders = ['Content-Type: application/json', 'Accept: application/json', 'X-CPN-Bridge-Token: ' . $cpnSToken];
 					$cpnSRaw = false;
@@ -149,13 +149,21 @@ pub const PHP_SSO_HOOK: &str = r##"		// CPN-ADMIN-SSO-BEGIN v1
 					}
 					$cpnSJson = \is_string($cpnSRaw) ? \json_decode($cpnSRaw, true) : null;
 					if (\is_array($cpnSJson) && true === ($cpnSJson['ok'] ?? false)) {
-						$oActions->setAdminAuthToken();
+						// Same token the form login issues. The login helper is private to the admin
+						// action class, and the object passed here can be the base action class.
+						$cpnSRand = \MailSo\Base\Utils::Sha1Rand();
+						if ($oActions->Cacher(null, true)->Set(KeyPathHelper::SessionAdminKey($cpnSRand), \time())) {
+							$cpnSTok = Utils::EncodeKeyValuesQ(array('token', $cpnSRand));
+							if ($cpnSTok) {
+								\Tachyon\Util\Cookies::set(self::$AUTH_ADMIN_TOKEN_KEY, $cpnSTok);
+							}
+						}
 					}
 				}
 			} catch (\Throwable $cpnSEx) {
 				// Stay signed out; the normal login form still works.
 			}
-			unset($cpnSJar, $cpnSCfg, $cpnSToken, $cpnSBody, $cpnSHeaders, $cpnSRaw, $cpnSJson);
+			unset($cpnSJar, $cpnSCfg, $cpnSToken, $cpnSBody, $cpnSHeaders, $cpnSRaw, $cpnSJson, $cpnSTok, $cpnSRand);
 		}
 		// CPN-ADMIN-SSO-END
 "##;
