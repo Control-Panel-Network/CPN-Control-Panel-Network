@@ -254,15 +254,17 @@ pub async fn email_webmail_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "Webmail",
-        &email_webmail_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
+    html_blocking(move || {
+        let body = email_webmail_page(notice.as_deref(), error.as_deref());
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "email", "Webmail", &body, session_exp)
+        })
+    })
+    .await
 }
 
 #[get("/email/webmail/app")]
@@ -273,12 +275,15 @@ pub async fn email_webmail_app_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "Internal Webmail",
-        &email_webmail_app_page(),
-    ))
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
+    html_blocking(move || {
+        let body = email_webmail_app_page();
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "email", "Internal Webmail", &body, session_exp)
+        })
+    })
+    .await
 }
 
 #[derive(Debug, serde::Deserialize)]

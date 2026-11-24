@@ -3,7 +3,10 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
+const FCONTEXT_STAMP_VER: &str = "1";
 const MODULE: &str = "cpn_webmail_imap";
 const MODULE_VER: &str = "1.2";
 
@@ -14,12 +17,22 @@ const MODULE_VER: &str = "1.2";
 /// AlmaLinux 9 lab (AVC: php-fpm dest=143). The same hosts also denied dest=443
 /// (`http_port_t`) when SnappyMail fetched `packages.json` / core updates.
 pub fn ensure_httpd_mail_ports() {
-    let _ = Command::new("bash")
-        .args([
-            "-c",
-            "command -v setsebool >/dev/null 2>&1 && setsebool -P httpd_can_network_connect 1 || true",
-        ])
-        .status();
+    if !selinux_present() {
+        return;
+    }
+    // `setsebool -P` rebuilds the policy store (seconds to tens of seconds under load), so only
+    // run it when the boolean is not already on.
+    if !httpd_network_connect_is_on() {
+        let _ = Command::new("bash")
+            .args([
+                "-c",
+                "command -v setsebool >/dev/null 2>&1 && setsebool -P httpd_can_network_connect 1 || true",
+            ])
+            .status();
+    }
+    if !module_check_due() {
+        return;
+    }
 
     let tools_ok = Command::new("bash")
         .args([
@@ -103,9 +116,23 @@ allow httpd_t http_port_t:tcp_socket name_connect;
 }
 
 /// Mail port allows plus SnappyMail data_dir fcontext/restorecon.
+///
+/// The fcontext rule and the recursive `restorecon` only run when the stamp file is missing or
+/// stale; they used to run on every Email > Webmail page view.
 pub fn ensure_webmail_selinux() {
+    if !selinux_present() {
+        return;
+    }
     ensure_httpd_mail_ports();
-    let _ = Command::new("bash")
+    let dir = Path::new("/var/lib/cpn/selinux");
+    let stamp = dir.join("cpn_webmail_fcontext.ver");
+    let stamp_ok = fs::read_to_string(&stamp)
+        .map(|s| s.trim() == FCONTEXT_STAMP_VER)
+        .unwrap_or(false);
+    if stamp_ok {
+        return;
+    }
+    let status = Command::new("bash")
         .args([
             "-c",
             "command -v semanage >/dev/null 2>&1 && \
@@ -114,10 +141,66 @@ pub fn ensure_webmail_selinux() {
              restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true",
         ])
         .status();
+    if status.map(|s| s.success()).unwrap_or(false) && fs::create_dir_all(dir).is_ok() {
+        let _ = fs::write(&stamp, format!("{FCONTEXT_STAMP_VER}\n"));
+    }
+}
+
+/// True when the kernel exposes SELinux (selinuxfs mounted); other hosts skip every probe.
+fn selinux_present() -> bool {
+    Path::new("/sys/fs/selinux/enforce").exists()
+}
+
+/// `getsebool` is a cheap read; `setsebool -P` is not.
+fn httpd_network_connect_is_on() -> bool {
+    Command::new("getsebool")
+        .arg("httpd_can_network_connect")
+        .output()
+        .ok()
+        .map(|o| bool_output_is_on(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or(false)
+}
+
+fn bool_output_is_on(stdout: &str) -> bool {
+    stdout
+        .split_whitespace()
+        .last()
+        .map(|v| v.eq_ignore_ascii_case("on"))
+        .unwrap_or(false)
+}
+
+/// The loaded-module check (`semodule -l`) reads the policy store; do it at most this often
+/// per process.
+const MODULE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+static MODULE_CHECK_LAST: Mutex<Option<Instant>> = Mutex::new(None);
+
+fn module_check_due() -> bool {
+    let Ok(mut guard) = MODULE_CHECK_LAST.lock() else {
+        return true;
+    };
+    match *guard {
+        Some(at) if at.elapsed() < MODULE_CHECK_INTERVAL => false,
+        _ => {
+            *guard = Some(Instant::now());
+            true
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn getsebool_output_parsing() {
+        assert!(super::bool_output_is_on(
+            "httpd_can_network_connect --> on\n"
+        ));
+        assert!(!super::bool_output_is_on(
+            "httpd_can_network_connect --> off\n"
+        ));
+        assert!(!super::bool_output_is_on(""));
+    }
+
     #[test]
     fn te_source_mentions_pop_smtp_sieve_http() {
         let te = r#"allow httpd_t pop_port_t:tcp_socket name_connect;

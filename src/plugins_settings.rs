@@ -137,7 +137,7 @@ pub fn builtin_webmail_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
         },
         PluginSettingField {
             key: "internal_webmail".into(),
-            label: "Enable internal webmail embed (Email > Webmail)".into(),
+            label: "Also show webmail inline on Email > Webmail".into(),
             field_type: "checkbox".into(),
             default: String::new(),
         },

@@ -2,7 +2,7 @@
 //! Create lives at `/email/create`. Soft-deleted restore is owner-only.
 
 use crate::account::{default_password_policy, password_policy_hint_html};
-use crate::mail_accounts::{MailSmtpMode, list_accounts_public};
+use crate::mail_accounts::{MailAccountPublic, MailSmtpMode, list_accounts_public};
 use crate::mail_accounts_lifecycle::{list_restorable_mailboxes, restore_days_remaining};
 use crate::panel_admin::is_panel_admin;
 use crate::panel_webmail::{webmail_label, webmail_open_path, webmail_ready};
@@ -133,8 +133,7 @@ fn modify_modal_html() -> String {
     )
 }
 
-fn mailbox_rows_html() -> String {
-    let accounts = list_accounts_public();
+fn mailbox_rows_html(accounts: &[MailAccountPublic]) -> String {
     if accounts.is_empty() {
         return r#"<p class="muted">No mailboxes yet. Use <a href="/email/create">Create mailbox</a> to add one.</p>"#.into();
     }
@@ -144,7 +143,7 @@ fn mailbox_rows_html() -> String {
 <th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th align="left">Actions</th>
 </tr></thead><tbody>"#,
     );
-    for acct in &accounts {
+    for acct in accounts {
         let valid = if acct.smtp_valid { "Valid" } else { "Invalid" };
         let err = acct
             .smtp_error
@@ -378,7 +377,7 @@ pub fn email_accounts_main(
         smtp = html_escape(&smtp_line),
         webmail = webmail,
         client_panel = client_panel,
-        rows = mailbox_rows_html(),
+        rows = mailbox_rows_html(&accounts),
         deleted = deleted_restore_section(username),
         modal = modify_modal_html(),
     )
