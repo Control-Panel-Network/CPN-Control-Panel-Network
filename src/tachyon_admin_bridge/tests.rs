@@ -213,7 +213,7 @@ fn invalid_input_is_rejected_early() {
             Err(DenyReason::Invalid)
         );
         assert_eq!(
-            verify_owner_admin_login("ntowner", "", ""),
+            verify_owner_admin_login("ntowner", &pw(&[]), ""),
             Err(DenyReason::Invalid)
         );
         let long: String = std::iter::repeat_n('a', MAX_PASSWORD_CHARS + 1).collect();
