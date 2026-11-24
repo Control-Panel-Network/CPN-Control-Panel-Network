@@ -10,20 +10,22 @@ use super::backup;
 use super::client::{AdminSql, PanelSql, SqlExec};
 use super::config::{PanelDbConfig, disabled_by_operator, write_private_atomic};
 use super::crypto::PanelKey;
-use super::docs_store::MariaDocStore;
+use super::docs_store::{DocStore, MariaDocStore};
 use super::import::{ImportReport, VerifyReport, import_all, verify};
 use super::mail::{self, CutoverPaths, DOVECOT_SQL_CONF, RealDovecot};
 use super::provision;
 use crate::paths::{default_data_dir, join_data};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 pub const STATE_FILE: &str = "panel-db-state.json";
 pub const LOCK_FILE: &str = "panel-db-auto.lock";
 const LOCK_STALE: Duration = Duration::from_secs(30 * 60);
 const KEEP_BACKUPS: usize = 5;
+const VERIFY_ATTEMPTS: u32 = 4;
+const VERIFY_PAUSE: Duration = Duration::from_secs(2);
 /// Identifies this build: package version plus the commit it was built from, so a tip
 /// upgrade (same version number, new commit and possibly new migrations) re-runs migrate.
 fn build_key() -> String {
@@ -227,6 +229,31 @@ fn sync_only(cfg: &PanelDbConfig) -> Result<Outcome, String> {
     Ok(Outcome::Synced(import.summary()))
 }
 
+/// Import, then verify; files that change while the run is in flight (maintenance
+/// pages, notifications during an upgrade) are re-synced and re-verified a few times.
+fn import_until_stable(
+    root: &Path,
+    store: &dyn DocStore,
+    attempts: u32,
+    pause: Duration,
+) -> Result<(ImportReport, VerifyReport), String> {
+    let mut import = import_all(root, store, false)?;
+    let mut check = verify(root, store)?;
+    for _ in 1..attempts.max(1) {
+        if check.ok() {
+            break;
+        }
+        std::thread::sleep(pause);
+        let again = import_all(root, store, false)?;
+        import.inserted += again.inserted;
+        import.updated += again.updated;
+        import.failed = again.failed;
+        import.failures = again.failures;
+        check = verify(root, store)?;
+    }
+    Ok((import, check))
+}
+
 /// Full migration. The error carries the backup dir (when one was made) so the
 /// caller can record it alongside the failure.
 fn full_run(
@@ -257,8 +284,7 @@ fn steps_after_backup(
     let panel = PanelSql::new(cfg);
     let store = open_store(&panel, cfg)?;
     let root = default_data_dir();
-    let import = import_all(&root, &store, false)?;
-    let check = verify(&root, &store)?;
+    let (import, check) = import_until_stable(&root, &store, VERIFY_ATTEMPTS, VERIFY_PAUSE)?;
     let mail = mail_step(admin, cfg, now)?;
     cfg.save()?;
     let problems = provision::audit_privileges(admin, cfg)?;
@@ -442,5 +468,27 @@ mod tests {
     fn state_defaults_are_not_ok() {
         let s = PanelDbState::default();
         assert!(!s.last_ok && s.last_version.is_empty());
+    }
+
+    #[test]
+    fn import_until_stable_converges_and_reports_clean() {
+        use super::super::docs_store::mem::MemDocStore;
+        let root = std::env::temp_dir().join(format!("cpn-pdb-stable-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("packages.json"), "{}").unwrap();
+        fs::write(root.join("maintenance.json"), "{\"on\":false}").unwrap();
+        let store = MemDocStore::new(super::super::crypto::panel_key_test_fixture("state-stable"));
+        let (import, check) =
+            import_until_stable(&root, &store, 3, Duration::from_millis(1)).unwrap();
+        assert!(import.ok() && check.ok());
+        assert_eq!(import.inserted, 2);
+        // A file that drifted since the last pass is picked up on the next run.
+        fs::write(root.join("maintenance.json"), "{\"on\":true}").unwrap();
+        let (again, check2) =
+            import_until_stable(&root, &store, 3, Duration::from_millis(1)).unwrap();
+        assert!(check2.ok());
+        assert_eq!((again.inserted, again.updated), (0, 1));
+        let _ = fs::remove_dir_all(&root);
     }
 }
