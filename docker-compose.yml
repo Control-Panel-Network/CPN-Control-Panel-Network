@@ -16,6 +16,8 @@
 # Host data dirs: chmod 0755 only (never 777). See docs/DOCKER-DATA-LAYOUT.md.
 # Pre-built Hub image (including Ubuntu): docker-compose.hub.yml
 
+name: cpn
+
 services:
   cpn-installer:
     build:
@@ -48,9 +50,12 @@ services:
     security_opt:
       - apparmor:unconfined
       - seccomp:unconfined
-    cgroupns_mode: host
+    cgroup: host
     environment:
       container: docker
+      # Local-build containers keep package updates inside the guest. The host
+      # image updater is supported only for docker-compose.hub.yml.
+      CPN_OUTER_IMAGE_UPDATE: package-only
     ports:
       - "${CPN_PORT:-2087}:2087"
     tmpfs:

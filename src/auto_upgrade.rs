@@ -115,6 +115,8 @@ pub struct AutoUpgradePublic {
     pub updated_at_unix: u64,
     pub default_enabled: bool,
     pub security_detection_note: String,
+    pub deployment: String,
+    pub docker_host_update: crate::docker_outer_update::DockerHostUpdateStatus,
 }
 
 pub fn now_unix() -> u64 {
@@ -204,6 +206,7 @@ pub fn save_auto_upgrade_config(cfg: &AutoUpgradeConfig) -> Result<(), String> {
 pub fn public_status(cfg: &AutoUpgradeConfig, show_countdown: bool) -> AutoUpgradePublic {
     let base = interval_secs(cfg);
     let until = crate::auto_upgrade_schedule::seconds_until_next_check(cfg);
+    let docker_host_update = crate::docker_outer_update::host_update_status();
     AutoUpgradePublic {
         enabled: cfg.enabled,
         mode: cfg.mode,
@@ -221,6 +224,12 @@ pub fn public_status(cfg: &AutoUpgradeConfig, show_countdown: bool) -> AutoUpgra
         updated_at_unix: cfg.updated_at_unix,
         default_enabled: true,
         security_detection_note: "Security-only matching prefers release metadata (CPN-SECURITY-RELEASE body marker, cpn-security-release.json, or CPN-SECURITY-RELEASE asset) over tag/title keywords (CVE, GHSA, security, secfix, advisory). Older releases without metadata still use heuristics and can miss or mis-classify updates. Prefer All newer releases (the default). Turn automatic updates off under Version Management if you do not want scheduled upgrades.".into(),
+        deployment: if docker_host_update.container_deployment {
+            "docker_image".into()
+        } else {
+            "native_package".into()
+        },
+        docker_host_update,
     }
 }
 

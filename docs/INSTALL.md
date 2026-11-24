@@ -77,6 +77,15 @@ Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest`, plus the release sem
 
 **Hub Compose (no local build):** `docker compose -f docker-compose.hub.yml up -d` (set `CPN_HUB_IMAGE=master3395/cpn-installer:ubuntu26.04` for Ubuntu). Layout, LSWS/mail gaps, and permissions: [`docs/DOCKER-DATA-LAYOUT.md`](DOCKER-DATA-LAYOUT.md).
 
+**Version Management and automatic image updates:** supported Hub Compose
+deployments can install the root-owned host updater described in
+[`docs/DOCKER-DATA-LAYOUT.md`](DOCKER-DATA-LAYOUT.md). Automatic updates stay
+Owner-controlled and default ON. The helper pulls the matching OS stream image
+and recreates the outer container after validating persistent mounts. The panel
+does not receive the Docker socket. Without the helper, Version Management
+shows that outer-image apply is unavailable instead of claiming that an inner
+package update refreshed the running image.
+
 Example with persistence binds and reduced capabilities (prefer [`scripts/docker-run.sh`](../scripts/docker-run.sh) or Hub Compose). Swap the image tag for `almalinux10` or `ubuntu26.04`; do not drop the capability flags:
 
 ```bash
