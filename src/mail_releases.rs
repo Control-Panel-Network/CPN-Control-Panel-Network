@@ -13,8 +13,8 @@ fn curated_fallbacks() -> Vec<MailReleaseInfo> {
         MailReleaseInfo {
             id: "tachyon".into(),
             label: "Tachyon".into(),
-            version: "4.2.3".into(),
-            released_on: "2026-09-11".into(),
+            version: "4.8.0".into(),
+            released_on: "2026-11-24".into(),
         },
         MailReleaseInfo {
             id: "roundcube".into(),

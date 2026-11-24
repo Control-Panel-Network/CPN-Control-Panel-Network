@@ -9,8 +9,6 @@ use tokio::{io::AsyncReadExt, process::Command};
 
 const SNAPPYMAIL_SHA256: &str = "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec";
 const ROUNDCUBE_SHA256: &str = "443cde2ea03b840ce4701fe23c273f01e68702f176d282e60248236bbb5f5f85";
-const TACHYON_SHA256: &str = "d776c2e05e1898f7819b8570715c669383693511c6edfe7ae8f287e68a6200e0";
-
 fn ephemeral_download_path(filename: &str) -> Result<EphemeralDownload, String> {
     EphemeralDownload::create(filename)
 }
@@ -105,7 +103,7 @@ fn reject_if_symlink_clobber(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn verify_sha256(path: &str, expected_hex: &str) -> Result<(), String> {
+pub(crate) fn verify_sha256(path: &str, expected_hex: &str) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|error| format!("Failed to read {path}: {error}"))?;
     let digest = Sha256::digest(&bytes);
     let actual = digest
@@ -354,16 +352,16 @@ pub(crate) async fn install_webmail(
                 .map_err(|error| error.to_string())?;
             let download_area = ephemeral_download_path("tachyon.tar.gz")?;
             let archive = download_area.as_str().to_string();
-            download(
-                state,
-                "https://github.com/kimusan/Tachyon/releases/download/v4.2.3/tachyon-4.2.3.tar.gz",
-                &archive,
-                "Tachyon",
-                2,
-                36,
+            // Newest stable upstream release (digest published by GitHub); the pinned
+            // fallback is used only when the release API is unreachable.
+            let release = tokio::task::spawn_blocking(
+                crate::install_tachyon_release::resolve_release_for_install,
             )
-            .await?;
-            verify_sha256(&archive, TACHYON_SHA256)?;
+            .await
+            .map_err(|error| format!("Tachyon release lookup failed: {error}"))?;
+            state.log(format!("Installing Tachyon {}", release.version), "info");
+            download(state, &release.url, &archive, "Tachyon", 2, 36).await?;
+            verify_sha256(&archive, &release.sha256)?;
             install_php_runtime(state, "PHP for Tachyon").await?;
             extract_archive(
                 state,

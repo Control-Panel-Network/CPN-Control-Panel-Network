@@ -18,6 +18,15 @@ const CPN_FAVICON_URL: &str = "/favicon.ico";
 ///
 /// Runs for every installed SnappyMail-family data root (SnappyMail, Tachyon, NextSnapMail).
 pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
+    // Follow upstream: add a newer Tachyon version directory (throttled, kept side by side)
+    // before per-data-root defaults and the admin SSO bridge are applied below.
+    match crate::install_tachyon_release::upgrade_tachyon_if_needed(false) {
+        Ok(msg) if msg.starts_with("Tachyon upgraded") => {
+            eprintln!("[webmail-tachyon-release] [info] {msg}");
+        }
+        Ok(_) => {}
+        Err(e) => eprintln!("[webmail-tachyon-release] [warn] {e}"),
+    }
     let _ = ensure_actions_php_defaults();
     for data_dir in lineage_data_dirs() {
         let _ = ensure_domain_sieve_enabled(&data_dir);

@@ -504,7 +504,10 @@ mod tests {
         let text = String::from_utf8_lossy(&out.stdout).to_string();
         let _ = fs::remove_dir_all(&dir);
         assert!(text.contains("sqlite-ab-version_version"), "got {text}");
-        assert!(!text.contains("\"sqlite-ab-version\""), "legacy key left: {text}");
+        assert!(
+            !text.contains("\"sqlite-ab-version\""),
+            "legacy key left: {text}"
+        );
     }
 
     #[test]
