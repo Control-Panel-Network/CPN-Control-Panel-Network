@@ -19,6 +19,13 @@ const MARKER_MARIADB: &str = "_data_/_default_/.cpn-contacts-mariadb-v1";
 const MARKER_SQLITE: &str = "_data_/_default_/.cpn-contacts-db-v1";
 const SCHEMA_VERSION: u32 = 1;
 
+/// Webmail `getVersion($driver . '-ab-version')` queries `sys_name = '<name>_version'`.
+const MYSQL_VERSION_KEY: &str = "mysql-ab-version_version";
+const SQLITE_VERSION_KEY: &str = "sqlite-ab-version_version";
+/// Highest address-book schema step shipped by SnappyMail-family PdoSchema for MySQL / SQLite.
+const MYSQL_SCHEMA_LEVEL: u32 = 4;
+const SQLITE_SCHEMA_LEVEL: u32 = 2;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ContactsDbSecret {
     schema_version: u32,
@@ -227,19 +234,33 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS rainloop_ab_properties (
   INDEX id_user_id_contact_rainloop_ab_properties_index (id_user, id_contact),
   INDEX id_contact_prop_type_rainloop_ab_properties_index (id_contact, prop_type)
 ) ENGINE=INNODB CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
-$cols = $pdo->query("SHOW COLUMNS FROM rainloop_ab_properties LIKE 'prop_value_lower'")->fetchAll();
-if (!$cols) {
-  $pdo->exec("ALTER TABLE rainloop_ab_properties ADD prop_value_lower MEDIUMTEXT NOT NULL");
+$colSt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rainloop_ab_properties' AND COLUMN_NAME = 'prop_value_lower'");
+$colSt->execute();
+if ((int)$colSt->fetchColumn() === 0) {
+  try {
+    $pdo->exec("ALTER TABLE rainloop_ab_properties ADD prop_value_lower MEDIUMTEXT NOT NULL");
+  } catch (PDOException $e) {
+    // 1060 = duplicate column (concurrent heal or Test): already healed.
+    if (!isset($e->errorInfo[1]) || (int)$e->errorInfo[1] !== 1060) { throw $e; }
+  }
 }
+$verKey = getenv('CPN_AB_VERSION_KEY');
+$verVal = (int)getenv('CPN_AB_VERSION_VALUE');
+if (!$verKey || $verVal < 1) { fwrite(STDERR, "missing CPN_AB_VERSION_*\n"); exit(1); }
+// Webmail reads sys_name "<driver>-ab-version_version" (note the doubled suffix). Never downgrade.
 $pdo->prepare("INSERT INTO rainloop_system (sys_name, value_int) VALUES (?, ?)
-  ON DUPLICATE KEY UPDATE value_int = VALUES(value_int)")
-  ->execute(["mysql-ab-version", 4]);
+  ON DUPLICATE KEY UPDATE value_int = GREATEST(value_int, VALUES(value_int))")
+  ->execute([$verKey, $verVal]);
+// Remove the legacy key older CPN builds wrote (webmail never read it).
+$pdo->prepare("DELETE FROM rainloop_system WHERE sys_name = ?")->execute(["mysql-ab-version"]);
 echo "ok";
 "#,
         ])
         .env("CPN_AB_DSN", &secret.pdo_dsn)
         .env("CPN_AB_USER", &secret.db_user)
         .env("CPN_AB_PASS", &secret.db_password)
+        .env("CPN_AB_VERSION_KEY", MYSQL_VERSION_KEY)
+        .env("CPN_AB_VERSION_VALUE", MYSQL_SCHEMA_LEVEL.to_string())
         .output()
         .map_err(|e| format!("contacts MariaDB schema init failed to start: {e}"))?;
     if !output.status.success() {
@@ -407,12 +428,23 @@ foreach ($pdo->query("PRAGMA table_info(rainloop_ab_properties)") as $c) {
 if (!$haveLower) {
   $pdo->exec("ALTER TABLE rainloop_ab_properties ADD COLUMN prop_value_lower text NOT NULL DEFAULT ''");
 }
-$st = $pdo->prepare("INSERT OR REPLACE INTO rainloop_system (sys_name, value_int) VALUES (?, ?)");
-$st->execute(["sqlite-ab-version", 2]);
+$verKey = getenv('CPN_AB_VERSION_KEY');
+$verVal = (int)getenv('CPN_AB_VERSION_VALUE');
+if (!$verKey || $verVal < 1) { fwrite(STDERR, "missing CPN_AB_VERSION_*\n"); exit(1); }
+$cur = $pdo->prepare("SELECT MAX(value_int) FROM rainloop_system WHERE sys_name = ?");
+$cur->execute([$verKey]);
+$have = (int)$cur->fetchColumn();
+if ($have < $verVal) {
+  $pdo->prepare("DELETE FROM rainloop_system WHERE sys_name = ?")->execute([$verKey]);
+  $pdo->prepare("INSERT INTO rainloop_system (sys_name, value_int) VALUES (?, ?)")->execute([$verKey, $verVal]);
+}
+$pdo->prepare("DELETE FROM rainloop_system WHERE sys_name = ?")->execute(["sqlite-ab-version"]);
 echo "ok";
 "#,
         ])
         .env("CPN_SNAPPY_AB_DB", db.to_string_lossy().as_ref())
+        .env("CPN_AB_VERSION_KEY", SQLITE_VERSION_KEY)
+        .env("CPN_AB_VERSION_VALUE", SQLITE_SCHEMA_LEVEL.to_string())
         .output()
         .map_err(|e| format!("contacts sqlite init failed to start: {e}"))?;
     if !output.status.success() {
@@ -433,6 +465,50 @@ echo "ok";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_keys_match_webmail_name_plus_version_suffix() {
+        // PdoAddressBook::Test() reads getVersion("<driver>-ab-version") which queries
+        // sys_name "<driver>-ab-version_version". A mismatched key makes it replay v2 and
+        // fail with "Duplicate column name 'prop_value_lower'".
+        assert_eq!(MYSQL_VERSION_KEY, "mysql-ab-version_version");
+        assert_eq!(SQLITE_VERSION_KEY, "sqlite-ab-version_version");
+        assert!(MYSQL_SCHEMA_LEVEL >= 2 && SQLITE_SCHEMA_LEVEL >= 2);
+    }
+
+    #[test]
+    fn sqlite_fallback_is_idempotent_and_writes_version_key() {
+        let has_sqlite = Command::new("php")
+            .args(["-r", "exit(extension_loaded('pdo_sqlite') ? 0 : 1);"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !has_sqlite {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("cpn-ab-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let data = dir.to_string_lossy().to_string();
+        ensure_contacts_sqlite_ready(&data).expect("first heal");
+        ensure_contacts_sqlite_ready(&data).expect("second heal must not fail");
+        let db = dir.join("_data_/_default_/AddressBook.sqlite");
+        let out = Command::new("php")
+            .args([
+                "-r",
+                "$p=new PDO('sqlite:'.getenv('D'));$r=$p->query(\"SELECT sys_name,value_int FROM rainloop_system ORDER BY sys_name\")->fetchAll(PDO::FETCH_NUM);echo json_encode($r);",
+            ])
+            .env("D", db.to_string_lossy().as_ref())
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        let _ = fs::remove_dir_all(&dir);
+        assert!(text.contains("sqlite-ab-version_version"), "got {text}");
+        assert!(
+            !text.contains("\"sqlite-ab-version\""),
+            "legacy key left: {text}"
+        );
+    }
 
     #[test]
     fn patches_contacts_to_mysql_mariadb() {

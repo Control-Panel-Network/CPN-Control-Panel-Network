@@ -171,10 +171,10 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
         },
         AppId::Tachyon => HostPackageMeta {
             category: "Email",
-            version: "4.2.3",
+            version: "4.8.0",
             pricing: "free",
             released_on: "2025-01-01",
-            updated_on: "2026-09-14",
+            updated_on: "2026-11-24",
             install_count: 40,
             featured: true,
             description: "Default CPN webmail (Tachyon). Host package under /opt/cpn-webmail/tachyon. SnappyMail fork with mail, contacts, calendars, and built-in OpenPGP (Thunderbird-like public-key encrypt). PHP 8.2+. Contacts use local MariaDB (admin UI type MySQL).",

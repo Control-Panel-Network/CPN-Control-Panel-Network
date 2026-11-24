@@ -40,7 +40,7 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
     }
 
     if is_tachyon {
-        let version = detect_app_version(docroot, "tachyon").unwrap_or_else(|| "4.2.3".into());
+        let version = detect_app_version(docroot, "tachyon").unwrap_or_else(|| "4.8.0".into());
         // Minimal GitHub Releases API shape for Tachyon::Repository::getLatestCoreInfo().
         let github = Path::new(LOCAL_REPO_DIR).join("core-github.json");
         let github_body = format!(
@@ -68,7 +68,7 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn detect_app_version(docroot: &str, app_dir: &str) -> Option<String> {
+pub(crate) fn detect_app_version(docroot: &str, app_dir: &str) -> Option<String> {
     let versions = Path::new(docroot).join(app_dir).join("v");
     let mut best: Option<String> = None;
     let Ok(entries) = fs::read_dir(&versions) else {
@@ -92,7 +92,7 @@ fn detect_app_version(docroot: &str, app_dir: &str) -> Option<String> {
     best
 }
 
-fn version_gt(a: &str, b: &str) -> bool {
+pub(crate) fn version_gt(a: &str, b: &str) -> bool {
     let pa = parse_ver(a);
     let pb = parse_ver(b);
     pa > pb
