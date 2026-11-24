@@ -52,6 +52,11 @@ pub fn mariadb_cli() -> Option<&'static str> {
     })
 }
 
+/// OpenLiteSpeed runs several workers; each may hold FastCGI connections to this pool.
+/// Keep enough children that a few idle connections can never starve new requests
+/// (a pool of 5 with persistent OLS connections left new requests queued until timeout).
+pub const PMA_FPM_MAX_CHILDREN: u32 = 24;
+
 pub fn fpm_pool_body(share: &Path, owner: &str, group: &str, mode: &str) -> String {
     format!(
         "[cpn-phpmyadmin]\n\
@@ -62,10 +67,12 @@ pub fn fpm_pool_body(share: &Path, owner: &str, group: &str, mode: &str) -> Stri
          listen.group = {group}\n\
          listen.mode = {mode}\n\
          pm = dynamic\n\
-         pm.max_children = 5\n\
-         pm.start_servers = 1\n\
+         pm.max_children = {PMA_FPM_MAX_CHILDREN}\n\
+         pm.start_servers = 2\n\
          pm.min_spare_servers = 1\n\
-         pm.max_spare_servers = 2\n\
+         pm.max_spare_servers = 4\n\
+         pm.max_requests = 500\n\
+         request_terminate_timeout = 120s\n\
          php_admin_value[open_basedir] = {share}:/etc/phpMyAdmin:/etc/phpmyadmin:/var/lib/phpMyAdmin:/var/lib/cpn/phpmyadmin:/tmp\n\
          php_admin_flag[allow_url_fopen] = on\n",
         share = share.display()
@@ -159,6 +166,19 @@ mod tests {
         assert!(body.contains("pm = dynamic"));
         assert!(body.contains("pm.min_spare_servers = 1"));
         assert!(!body.contains("pm = ondemand"));
+    }
+
+    #[test]
+    fn fpm_pool_has_headroom_for_ols_workers() {
+        let body = fpm_pool_body(
+            Path::new("/usr/share/phpMyAdmin"),
+            "nobody",
+            "nobody",
+            "0660",
+        );
+        assert!(body.contains("pm.max_children = 24"));
+        assert!(!body.contains("pm.max_children = 5\n"));
+        assert!(body.contains("request_terminate_timeout = 120s"));
     }
 
     #[test]

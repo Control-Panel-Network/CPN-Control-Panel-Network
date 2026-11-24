@@ -78,7 +78,8 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
         }
     };
     let headers = proxy_request_headers(&req);
-    match forward_http_blocking(&method, &target, &headers, &body_bytes).await {
+    let first_max = proxy_max_time(&method, &target);
+    match forward_http_blocking(&method, &target, &headers, &body_bytes, first_max).await {
         Ok(resp) if resp.status() == StatusCode::SERVICE_UNAVAILABLE => {
             // LiteSpeed 503 when php-fpm sock is down; heal FPM then retry once.
             let _ = tokio::task::spawn_blocking(|| {
@@ -86,7 +87,9 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
                 let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
             })
             .await;
-            match forward_http_blocking(&method, &target, &headers, &body_bytes).await {
+            match forward_http_blocking(&method, &target, &headers, &body_bytes, RETRY_MAX_TIME)
+                .await
+            {
                 Ok(retry) => retry,
                 Err(_) => resp,
             }
@@ -98,12 +101,16 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
                 let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
             })
             .await;
-            match forward_http_blocking(&method, &target, &headers, &body_bytes).await {
+            match forward_http_blocking(&method, &target, &headers, &body_bytes, RETRY_MAX_TIME)
+                .await
+            {
                 Ok(resp) => resp,
-                Err(err2) => HttpResponse::BadGateway()
+                Err(err2) => HttpResponse::GatewayTimeout()
                     .content_type("text/plain; charset=utf-8")
                     .body(format!(
-                        "phpMyAdmin proxy could not reach {} ({err}; retry: {err2}). Health URL: {}.",
+                        "phpMyAdmin proxy could not reach {} ({err}; retry: {err2}). Health URL: {}. \
+                         If requests hang, the php-fpm pool for phpMyAdmin may be saturated; run \
+                         System Repair for phpMyAdmin or reload php-fpm.",
                         BACKEND,
                         phpmyadmin_health_url()
                     )),
@@ -124,13 +131,21 @@ async fn collect_body(mut payload: web::Payload) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-fn proxy_max_time(target: &str) -> &'static str {
+/// Seconds for the retry after a heal (never wait a second full window).
+const RETRY_MAX_TIME: &str = "20";
+/// Fail fast when nothing accepts on loopback.
+const CONNECT_TIMEOUT: &str = "3";
+
+fn proxy_max_time(method: &str, target: &str) -> &'static str {
     if target.contains("ajax_request=1")
         || target.contains("/navigation")
         || target.contains("/config/")
     {
         "35"
+    } else if matches!(method.to_ascii_uppercase().as_str(), "GET" | "HEAD") {
+        "45"
     } else {
+        // Exports and imports may legitimately run long.
         "120"
     }
 }
@@ -174,13 +189,14 @@ async fn forward_http_blocking(
     target: &str,
     headers: &[(String, String)],
     body: &[u8],
+    max_time: &'static str,
 ) -> Result<HttpResponse, String> {
     let method = method.to_string();
     let target = target.to_string();
     let headers = headers.to_vec();
     let body = body.to_vec();
     let proxied = tokio::task::spawn_blocking(move || {
-        forward_http_with_headers(&method, &target, &headers, &body)
+        forward_http_with_headers(&method, &target, &headers, &body, max_time)
     })
     .await
     .map_err(|_| "phpMyAdmin proxy task failed".to_string())??;
@@ -201,14 +217,17 @@ fn forward_http_with_headers(
     target: &str,
     headers: &[(String, String)],
     body: &[u8],
+    max_time: &str,
 ) -> Result<ProxiedHttp, String> {
     let mut cmd = Command::new("curl");
     cmd.args([
         "--silent",
         "--show-error",
         "--include",
+        "--connect-timeout",
+        CONNECT_TIMEOUT,
         "--max-time",
-        proxy_max_time(target),
+        max_time,
         "-X",
         method,
         "--path-as-is",
@@ -428,6 +447,15 @@ pub fn allowed_proxy_method(method: &Method) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_timeouts_are_short_for_reads() {
+        assert_eq!(proxy_max_time("GET", "/index.php"), "45");
+        assert_eq!(proxy_max_time("GET", "/index.php?ajax_request=1"), "35");
+        assert_eq!(proxy_max_time("POST", "/import.php"), "120");
+        assert!(RETRY_MAX_TIME.parse::<u32>().unwrap() <= 20);
+        assert!(CONNECT_TIMEOUT.parse::<u32>().unwrap() <= 5);
+    }
 
     #[test]
     fn mount_paths_match() {
