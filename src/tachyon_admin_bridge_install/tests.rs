@@ -6,11 +6,12 @@ const SAMPLE: &str = "<?php\nnamespace Tachyon;\nuse MailSo\\Exceptions\\ClientE
 fn hooks_are_injected_in_the_right_functions_only_once() {
     let (out, outcome) = patched_source(SAMPLE).expect("supported");
     assert_eq!(outcome, PatchOutcome::Patched);
-    assert!(out.contains("CPN-ADMIN-BRIDGE-BEGIN v2"));
-    assert!(out.contains("CPN-ADMIN-SSO-BEGIN v2"));
+    assert!(out.contains("CPN-ADMIN-BRIDGE-BEGIN v3"));
+    assert!(out.contains("CPN-ADMIN-SSO-BEGIN v3"));
     assert!(out.contains("CPN-ADMIN-SSO-LOGOUT-BEGIN v1"));
     assert!(out.contains("/api/internal/tachyon-admin/verify"));
     assert!(out.contains("/api/internal/tachyon-admin/session"));
+    assert!(out.contains("'Cookie: ' . $cpnSCookie"));
     let login_pos = out.find("function DoAdminLogin()").unwrap();
     let login_hook = out.find("CPN-ADMIN-BRIDGE-BEGIN").unwrap();
     let logout_pos = out.find("function DoAdminLogout()").unwrap();
@@ -50,7 +51,7 @@ fn sso_hooks_are_optional_when_upstream_layout_differs() {
         .unwrap();
     let raw = format!("{no_app}\n}}\n");
     let (out, _) = patched_source(&raw).unwrap();
-    assert!(out.contains("CPN-ADMIN-BRIDGE-BEGIN v2"));
+    assert!(out.contains("CPN-ADMIN-BRIDGE-BEGIN v3"));
     assert!(!out.contains("// CPN-ADMIN-SSO-BEGIN"));
     assert_eq!(
         patched_source(&out).unwrap().1,
@@ -85,6 +86,7 @@ fn login_hook_fails_closed_and_never_logs_password() {
     assert!(!hook.contains("curl_close"));
     // Distinct, fixed messages for the authenticator step.
     assert!(hook.contains("'mfa_required' => 'Authenticator code required."));
+    assert!(hook.contains("'panel_updating'"));
 }
 
 #[test]
@@ -100,6 +102,7 @@ fn sso_hook_is_owner_session_only_and_fail_closed() {
     assert!(!hook.contains("setAdminAuthToken"));
     assert!(!hook.contains("instanceof self"));
     assert!(hook.contains("SessionAdminKey"));
+    assert!(hook.contains("Cookie: "));
     assert!(hook.contains("catch (\\Throwable"));
     assert!(!hook.contains("error_log"));
     assert!(PHP_LOGOUT_HOOK.contains("cpn_sso_off"));
@@ -168,9 +171,9 @@ fn webmail_only_update_is_detected_and_hooks_are_restored() {
     assert_eq!(outcome, PatchOutcome::Patched);
     std::fs::write(&found[1], &fixed).unwrap();
     assert!(!file_needs_heal(&fixed));
-    for hook in ["BRIDGE-BEGIN v2", "SSO-BEGIN v2", "SSO-LOGOUT-BEGIN v1"] {
+    for hook in ["BRIDGE-BEGIN v3", "SSO-BEGIN v3", "SSO-LOGOUT-BEGIN v1"] {
         assert!(fixed.contains(hook), "{hook} missing after re-apply");
-    }
+   }
     // Unsupported layouts never trigger an endless heal loop.
     assert!(!file_needs_heal("<?php\nclass X {}\n"));
     let _ = std::fs::remove_dir_all(&root);
