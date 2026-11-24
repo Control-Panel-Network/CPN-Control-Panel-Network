@@ -56,7 +56,7 @@ fn ols_vhconf(docroot: &str, sock: &str) -> String {
            maxConns                8\n\
            initTimeout             60\n\
            retryTimeout            0\n\
-           persistConn             1\n\
+           persistConn             0\n\
            respBuffer              0\n\
            autoStart               0\n\
          }}\n\
@@ -112,9 +112,11 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     let vhconf = vh_dir.join("vhconf.conf");
     let desired = ols_vhconf(&share.display().to_string(), &sock);
     let previous = fs::read_to_string(&vhconf).unwrap_or_default();
+    let mut vhost_rewritten = false;
     if previous != desired {
         fs::write(&vhconf, desired)
             .map_err(|e| format!("Could not write phpMyAdmin vhconf: {e}"))?;
+        vhost_rewritten = true;
     }
 
     let mut conf = fs::read_to_string(HTTPD_CONF)
@@ -136,6 +138,9 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     if changed {
         fs::write(HTTPD_CONF, conf)
             .map_err(|e| format!("Could not update httpd_config.conf: {e}"))?;
+        let _ = restart_litespeed();
+    } else if vhost_rewritten && port_open("127.0.0.1:8081", 500) {
+        // New extprocessor settings (for example persistConn) need a LiteSpeed reload.
         let _ = restart_litespeed();
     }
     write_signon_bridge(&share)?;
