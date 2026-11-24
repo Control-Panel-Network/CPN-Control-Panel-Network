@@ -4,6 +4,85 @@ This page answers how CPN stores data, when **pull and recreate** is safe, and w
 
 Prefer **native RPM/DEB** on production hosts ([INSTALL.md](INSTALL.md)). Hub images are for lab and maintainer installs.
 
+## Automatic outer-image updates
+
+Hub deployments can use the root-owned host updater. This is different from
+updating the RPM/DEB inside the guest: it pulls the configured OS stream tag
+and recreates the running Compose service when the image digest changes.
+
+The panel container never receives `/var/run/docker.sock`. Version Management
+writes a request under the existing `/var/lib/cpn` bind. A host systemd timer
+checks that request and the Owner automatic-update setting, validates the
+container label, image allowlist, Compose definition, and persistent mounts,
+then performs the pull and recreate. Automatic updates remain enabled by
+default and use the same 6 hour Owner interval as native installs. The host
+timer wakes every 15 minutes so manual requests are picked up promptly.
+
+### One-time host setup
+
+The updater requires root-owned Compose input. Copy the project Compose files
+to a protected host directory first:
+
+```bash
+sudo install -d -m 700 /etc/cpn/compose-source
+sudo install -m 600 docker-compose.hub.yml /etc/cpn/compose-source/
+sudo install -m 600 docker-compose.hub.lsws.yml /etc/cpn/compose-source/
+
+# Existing OLS/LiteSpeed guest: migrate its tree before first recreate.
+sudo ./scripts/prepare-docker-update-mounts.sh --lsws
+
+# Recreate once with the persistent web server overlay.
+sudo CPN_HUB_IMAGE=master3395/cpn-installer:almalinux9 \
+  docker compose \
+  -f /etc/cpn/compose-source/docker-compose.hub.yml \
+  -f /etc/cpn/compose-source/docker-compose.hub.lsws.yml up -d
+
+sudo ./scripts/install-docker-image-updater.sh install \
+  --compose-file /etc/cpn/compose-source/docker-compose.hub.yml \
+  --compose-file /etc/cpn/compose-source/docker-compose.hub.lsws.yml \
+  --image master3395/cpn-installer:almalinux9
+```
+
+Use `almalinux10` or `ubuntu26.04` consistently for those streams. The setup
+renders a root-owned Compose copy, installs
+`cpn-docker-image-update.service` and `.timer`, and writes non-secret status
+under `/var/lib/cpn/docker-host-update/`. The host configuration is mode 600.
+
+For a guest with Postfix or Dovecot enabled, preserve its config and queues
+before enabling updates:
+
+```bash
+sudo install -m 600 docker-compose.hub.mail.yml /etc/cpn/compose-source/
+sudo ./scripts/prepare-docker-update-mounts.sh --mail
+sudo docker compose \
+  -f /etc/cpn/compose-source/docker-compose.hub.yml \
+  -f /etc/cpn/compose-source/docker-compose.hub.lsws.yml \
+  -f /etc/cpn/compose-source/docker-compose.hub.mail.yml up -d
+sudo ./scripts/install-docker-image-updater.sh install \
+  --compose-file /etc/cpn/compose-source/docker-compose.hub.yml \
+  --compose-file /etc/cpn/compose-source/docker-compose.hub.lsws.yml \
+  --compose-file /etc/cpn/compose-source/docker-compose.hub.mail.yml \
+  --image master3395/cpn-installer:almalinux9
+```
+
+The helper refuses to update when OLS/LiteSpeed or mail is present without
+the corresponding persistent mounts. It also rolls back to the prior local
+image when the recreated panel service does not become active.
+
+Manual verification:
+
+```bash
+sudo systemctl start cpn-docker-image-update.service
+sudo systemctl status cpn-docker-image-update.timer
+sudo journalctl -u cpn-docker-image-update.service -n 100 --no-pager
+docker inspect cpn-installer --format '{{.Config.Image}} {{.Image}}'
+```
+
+Version Management supports manual **Upgrade to latest release** for this
+deployment. Selected older releases and commit-level upgrades are intentionally
+blocked because OS stream tags are published per release, while semver tags
+currently cover only the primary AlmaLinux image.
+
 ## Two Docker stories
 
 | Story | What it is | Pull and recreate |

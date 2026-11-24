@@ -1,0 +1,12 @@
+# Overlay for Hub containers that run Postfix and Dovecot inside the guest.
+# Prepare these host directories from the current container before the first
+# recreate. The updater refuses to replace a mail-enabled guest without these
+# mounts, preventing silent loss of mail config or queues.
+
+services:
+  cpn-installer:
+    volumes:
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-postfix:/etc/postfix:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-dovecot:/etc/dovecot:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-mail-spool:/var/spool/postfix:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-var-mail:/var/mail:Z

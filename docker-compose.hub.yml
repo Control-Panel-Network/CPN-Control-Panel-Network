@@ -19,9 +19,13 @@
 # AlmaLinux 8: no Hub tag. Local build: CPN_ALMA_VERSION=8 ./scripts/docker-run.sh
 # For a local RPM build into AlmaLinux 8/9/10, use docker-compose.yml + scripts/docker-run.sh.
 # Persistence and security details: docs/DOCKER-DATA-LAYOUT.md
+# Outer image auto-update: install the root-owned host helper documented there.
+# The panel container intentionally has no Docker socket.
 # Lab/test hosts only. Do not expose 2087 on untrusted networks.
 # Never chmod 777 on data dirs (use 0755).
 # Full --privileged is opt-in only (set privileged: true); there is no auto-fallback.
+
+name: cpn
 
 services:
   cpn-installer:
@@ -49,9 +53,13 @@ services:
     security_opt:
       - apparmor:unconfined
       - seccomp:unconfined
-    cgroupns_mode: host
+    cgroup: host
     environment:
       container: docker
+      CPN_OUTER_IMAGE_UPDATE: host-helper
+    labels:
+      com.cpn.outer-update: "1"
+      com.cpn.outer-update.service: "cpn-installer"
     ports:
       - "${CPN_PORT:-2087}:2087"
     tmpfs:
