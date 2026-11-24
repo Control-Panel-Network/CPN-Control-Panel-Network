@@ -74,6 +74,23 @@ impl DenyReason {
     }
 }
 
+impl DenyReason {
+    /// Short hint safe to return to the webmail hook (never a secret). Only reasons that are
+    /// reached after the password was verified (or that reveal nothing about accounts) are
+    /// exposed, so the form can say what is missing instead of a generic failure.
+    pub fn client_hint(self) -> Option<&'static str> {
+        match self {
+            DenyReason::MfaRequired
+            | DenyReason::MfaFailed
+            | DenyReason::MfaEnrollRequired
+            | DenyReason::PasskeyOnly
+            | DenyReason::MustChangePassword
+            | DenyReason::RateLimited => Some(self.code()),
+            _ => None,
+        }
+    }
+}
+
 pub fn config_path() -> PathBuf {
     std::env::var(CONFIG_PATH_ENV)
         .ok()
@@ -88,12 +105,12 @@ pub fn load_config() -> Option<BridgeConfig> {
     (cfg.version >= 1 && cfg.token.len() >= 32 && !cfg.url.trim().is_empty()).then_some(cfg)
 }
 
-fn names_equal(a: &str, b: &str) -> bool {
+pub(crate) fn names_equal(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
 /// True when the stored account is the panel owner and not a reseller / ACL / jailed login.
-fn owner_role_ok(boot: &PanelBootstrap) -> bool {
+pub(crate) fn owner_role_ok(boot: &PanelBootstrap) -> bool {
     let role = boot.role.trim().to_ascii_lowercase();
     matches!(role.as_str(), "" | "user" | "admin" | "owner")
         && boot.parent_reseller.trim().is_empty()
@@ -183,7 +200,7 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 }
 
 /// Request must come straight from the local PHP hook (not proxied from the internet).
-fn request_is_local_bridge_call(http: &HttpRequest, cfg: &BridgeConfig) -> bool {
+pub(crate) fn request_is_local_bridge_call(http: &HttpRequest, cfg: &BridgeConfig) -> bool {
     let Some(peer) = http.peer_addr() else {
         return false;
     };
@@ -216,11 +233,23 @@ pub struct VerifyBody {
     totp: String,
 }
 
-fn json_reply(status: actix_web::http::StatusCode, ok: bool) -> HttpResponse {
+pub(crate) fn json_reply(status: actix_web::http::StatusCode, ok: bool) -> HttpResponse {
+    json_reply_hint(status, ok, None)
+}
+
+fn json_reply_hint(
+    status: actix_web::http::StatusCode,
+    ok: bool,
+    reason: Option<&str>,
+) -> HttpResponse {
+    let body = match reason {
+        Some(r) => serde_json::json!({ "ok": ok, "reason": r }),
+        None => serde_json::json!({ "ok": ok }),
+    };
     HttpResponse::build(status)
         .content_type("application/json; charset=utf-8")
         .insert_header(("Cache-Control", "no-store"))
-        .body(serde_json::json!({ "ok": ok }).to_string())
+        .body(body.to_string())
 }
 
 /// Loopback endpoint used by the webmail admin PHP hook.
@@ -273,7 +302,11 @@ pub async fn tachyon_admin_verify(http: HttpRequest, body: web::Json<VerifyBody>
                 AuditCategory::Auth,
                 AuditSeverity::Warning,
             );
-            json_reply(actix_web::http::StatusCode::UNAUTHORIZED, false)
+            json_reply_hint(
+                actix_web::http::StatusCode::UNAUTHORIZED,
+                false,
+                reason.client_hint(),
+            )
         }
     }
 }

@@ -566,6 +566,8 @@ pub mod status_pages;
 pub mod system_repair;
 pub mod tachyon_admin_bridge;
 pub mod tachyon_admin_bridge_install;
+pub mod tachyon_admin_bridge_php;
+pub mod tachyon_admin_session;
 pub mod theme_entitlements;
 pub mod themes_catalog;
 pub mod themes_install;
