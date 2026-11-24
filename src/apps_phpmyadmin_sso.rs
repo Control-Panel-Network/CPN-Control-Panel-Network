@@ -175,7 +175,7 @@ pub fn refresh_phpmyadmin_signon() -> Result<String, String> {
 }
 
 /// Distro packages (EL) load `/etc/phpMyAdmin/config.inc.php`, not only the share copy.
-fn phpmyadmin_config_candidates(share: &Path) -> Vec<PathBuf> {
+pub(crate) fn phpmyadmin_config_candidates(share: &Path) -> Vec<PathBuf> {
     let mut paths = vec![
         PathBuf::from("/etc/phpMyAdmin/config.inc.php"),
         PathBuf::from("/etc/phpmyadmin/config.inc.php"),
@@ -233,7 +233,7 @@ exit;
     Ok(())
 }
 
-fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), String> {
+pub(crate) fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), String> {
     let parent = conf_inc.parent().unwrap_or_else(|| Path::new("/"));
     if !parent.exists() {
         return Ok(());

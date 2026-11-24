@@ -13,7 +13,6 @@ use crate::tachyon_admin_bridge_php::{
     LOGIN_BEGIN, LOGIN_END, LOGIN_VERSION, LOGOUT_BEGIN, LOGOUT_END, PHP_LOGIN_HOOK,
     PHP_LOGOUT_HOOK, PHP_SSO_HOOK, SSO_BEGIN, SSO_END,
 };
-use rand::Rng;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -116,8 +115,25 @@ pub fn patched_source(raw: &str) -> Option<(String, PatchOutcome)> {
     Some((out, outcome))
 }
 fn random_token_hex() -> String {
-    let bytes: [u8; 32] = rand::rng().random();
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    crate::secret_hygiene::strong_hex(32)
+}
+
+/// Rotate the bridge token when the stored one is empty, short, or a known default.
+/// Does nothing when the bridge is not installed. Returns true when the token changed.
+pub fn heal_weak_token() -> Result<bool, String> {
+    let path = crate::tachyon_admin_bridge::config_path();
+    let Some(cfg) = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<BridgeConfig>(&raw).ok())
+    else {
+        return Ok(false);
+    };
+    if crate::secret_hygiene::weak_reason(&cfg.token, crate::secret_hygiene::MIN_SECRET_LEN)
+        .is_none()
+    {
+        return Ok(false);
+    }
+    write_config_if_needed(&path, &desired_url())
 }
 
 fn desired_url() -> String {
@@ -129,7 +145,14 @@ pub fn write_config_if_needed(path: &Path, url: &str) -> Result<bool, String> {
     let existing = std::fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str::<BridgeConfig>(&raw).ok())
-        .filter(|c| c.version >= 1 && c.token.len() >= 32);
+        .filter(|c| {
+            c.version >= 1
+                && crate::secret_hygiene::weak_reason(
+                    &c.token,
+                    crate::secret_hygiene::MIN_SECRET_LEN,
+                )
+                .is_none()
+        });
     let token = existing
         .as_ref()
         .map(|c| c.token.clone())
