@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Tachyon VirusTotal enabled by default**: When Tachyon webmail is installed or healed (including tip-upgrade), CPN installs the bundled `virustotal` extension under the Tachyon data plugins tree and adds it to `application.ini` `[plugins] enabled_list`. Works without an API key (GUI links); optional free public key for inline results. No VirusTotal secrets are written by CPN.
+- **Tachyon VirusTotal enabled by default**: When Tachyon webmail is installed or healed (including tip-upgrade), CPN installs the bundled `virustotal` extension under the Tachyon data plugins tree, sets `[plugins] enable = On`, and adds `virustotal` to `enabled_list`. INI key matching uses an exact assignment boundary so `enable` never collides with `enabled_list`. Works without an API key (GUI links); optional free public key for inline results. No VirusTotal secrets are written by CPN.
 
 ## [1.4.13] - 25/11/2026
 
