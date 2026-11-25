@@ -219,10 +219,20 @@ fn join_ini_sections(sections: &[(String, String)]) -> String {
     out
 }
 
+/// True when `trimmed` is an assignment for exact `key` (`key =` / `key=`).
+///
+/// Rejects longer keys that share a prefix (for example `enable` must not match
+/// `enabled_list`).
+fn ini_assignment_key_matches(trimmed: &str, key: &str) -> bool {
+    let Some(rest) = trimmed.strip_prefix(key) else {
+        return false;
+    };
+    let rest = rest.trim_start();
+    rest.starts_with('=')
+}
+
 fn set_section_bool(section_body: &str, key: &str, on: bool) -> String {
     let word = if on { "On" } else { "Off" };
-    let prefix_eq = format!("{key} =");
-    let prefix_nospace = format!("{key}=");
     let mut out = String::with_capacity(section_body.len() + 16);
     let mut replaced = false;
     for line in section_body.lines() {
@@ -232,7 +242,7 @@ fn set_section_bool(section_body: &str, key: &str, on: bool) -> String {
             out.push('\n');
             continue;
         }
-        if trimmed.starts_with(&prefix_eq) || trimmed.starts_with(&prefix_nospace) {
+        if ini_assignment_key_matches(trimmed, key) {
             out.push_str(&format!("{key} = {word}\n"));
             replaced = true;
         } else {
@@ -247,8 +257,6 @@ fn set_section_bool(section_body: &str, key: &str, on: bool) -> String {
 }
 
 fn merge_enabled_list(section_body: &str, plugin_id: &str) -> String {
-    let prefix_eq = "enabled_list =";
-    let prefix_nospace = "enabled_list=";
     let mut out = String::with_capacity(section_body.len() + plugin_id.len() + 8);
     let mut replaced = false;
     for line in section_body.lines() {
@@ -258,7 +266,7 @@ fn merge_enabled_list(section_body: &str, plugin_id: &str) -> String {
             out.push('\n');
             continue;
         }
-        if trimmed.starts_with(prefix_eq) || trimmed.starts_with(prefix_nospace) {
+        if ini_assignment_key_matches(trimmed, "enabled_list") {
             let rhs = trimmed.split_once('=').map(|(_, r)| r.trim()).unwrap_or("");
             let raw = rhs.trim_matches('"').trim_matches('\'').trim();
             let mut parts: Vec<String> = raw
@@ -337,5 +345,55 @@ mod tests {
         assert!(version_needs_refresh(None));
         assert!(version_needs_refresh(Some("0.9.0")));
         assert!(!version_needs_refresh(Some(BUNDLED_VERSION)));
+    }
+
+    #[test]
+    fn enable_key_does_not_match_enabled_list() {
+        assert!(ini_assignment_key_matches("enable = Off", "enable"));
+        assert!(ini_assignment_key_matches("enable=On", "enable"));
+        assert!(!ini_assignment_key_matches("enabled_list = \"virustotal\"", "enable"));
+        assert!(ini_assignment_key_matches(
+            "enabled_list = \"virustotal\"",
+            "enabled_list"
+        ));
+    }
+
+    #[test]
+    fn tachyon_commented_plugins_section_turns_enable_on() {
+        // Real Tachyon application.ini layout (comments between keys).
+        let raw = "\
+[plugins]
+; Enable plugin support
+enable = Off
+
+; Comma-separated list of enabled plugins
+enabled_list = \"\"
+";
+        let out = ensure_plugins_enabled_list(raw, "virustotal");
+        let plugins = out
+            .split('[')
+            .find(|s| s.starts_with("plugins]"))
+            .expect("plugins section");
+        assert!(
+            plugins.lines().any(|l| {
+                let t = l.trim();
+                !t.starts_with(';') && ini_assignment_key_matches(t, "enable") && t.contains("On")
+            }),
+            "plugins.enable must be On, got:\n{plugins}"
+        );
+        assert!(
+            plugins.lines().any(|l| {
+                let t = l.trim();
+                !t.starts_with(';')
+                    && ini_assignment_key_matches(t, "enabled_list")
+                    && t.contains("virustotal")
+            }),
+            "enabled_list must include virustotal, got:\n{plugins}"
+        );
+        // Unrelated Off keys outside [plugins] stay Off when present.
+        let with_logs = format!("[logs]\nenable = Off\n\n{raw}");
+        let out2 = ensure_plugins_enabled_list(&with_logs, "virustotal");
+        assert!(out2.contains("[logs]\nenable = Off"));
+        assert!(out2.contains("enabled_list = \"virustotal\""));
     }
 }
