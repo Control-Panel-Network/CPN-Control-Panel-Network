@@ -351,7 +351,10 @@ mod tests {
     fn enable_key_does_not_match_enabled_list() {
         assert!(ini_assignment_key_matches("enable = Off", "enable"));
         assert!(ini_assignment_key_matches("enable=On", "enable"));
-        assert!(!ini_assignment_key_matches("enabled_list = \"virustotal\"", "enable"));
+        assert!(!ini_assignment_key_matches(
+            "enabled_list = \"virustotal\"",
+            "enable"
+        ));
         assert!(ini_assignment_key_matches(
             "enabled_list = \"virustotal\"",
             "enabled_list"
