@@ -86,11 +86,11 @@ fn parse_plugin_version(index_php: &str) -> Option<String> {
         }
         let Some(rest) = trimmed
             .split_once("VERSION")
-            .map(|(_, r)| r.trim_start_matches(|c: char| c == ' ' || c == '=' || c == '\t'))
+            .map(|(_, r)| r.trim_start_matches([' ', '=', '\t']))
         else {
             continue;
         };
-        let quote = rest.chars().next().filter(|c| *c == '\'' || *c == '"')?;
+        let quote = rest.chars().next().filter(|c| ['\'', '"'].contains(c))?;
         let rest = &rest[1..];
         let end = rest.find(quote)?;
         let ver = rest[..end].trim();
