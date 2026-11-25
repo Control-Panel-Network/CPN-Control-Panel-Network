@@ -250,6 +250,7 @@ mod tests {
             php_version: None,
             aliases: vec![],
             staging_of: None,
+        unix_user: None,
         }
     }
 

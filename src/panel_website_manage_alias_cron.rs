@@ -200,6 +200,7 @@ mod tests {
             php_version: None,
             aliases: vec!["www.cpn-lab-test.example".into()],
             staging_of: None,
+        unix_user: None,
         }
     }
 

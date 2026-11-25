@@ -436,6 +436,7 @@ mod store_target_tests {
             php_version: None,
             aliases: vec![],
             staging_of: None,
+        unix_user: None,
         }];
         assert_eq!(resolve_store_target("", "Host", &sites), "host");
         assert_eq!(resolve_store_target("", "", &sites), "site");

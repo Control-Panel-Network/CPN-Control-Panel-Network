@@ -268,6 +268,7 @@ mod tests {
             php_version: Some("8.5".into()),
             aliases: Vec::new(),
             staging_of: None,
+        unix_user: None,
         }
     }
 

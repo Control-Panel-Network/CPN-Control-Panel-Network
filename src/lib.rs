@@ -570,6 +570,7 @@ pub mod site_preview_list_ui;
 pub mod site_preview_microlink;
 pub mod site_preview_thumb;
 pub mod site_preview_thumb_routes;
+pub mod site_unix_owner;
 pub mod sites;
 pub mod sites_inventory_heal;
 pub mod smtp_settings;

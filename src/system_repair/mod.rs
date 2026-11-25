@@ -278,6 +278,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
             "docker.engine" => host::heal_docker_engine(),
             "site.preview.chromium" => site_preview::heal_chromium(),
             "sites.inventory" => inventory::heal_sites_inventory(),
+            "sites.ownership" => inventory::heal_sites_ownership(),
             other => HealResult {
                 heal_id: other.into(),
                 ok: false,
