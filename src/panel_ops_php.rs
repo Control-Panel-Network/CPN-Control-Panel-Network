@@ -15,6 +15,8 @@ pub struct PhpRuntimeInfo {
 fn which_php() -> Option<String> {
     for candidate in [
         "/usr/bin/php",
+        "/usr/bin/php86",
+        "/usr/bin/php8.6",
         "/usr/bin/php85",
         "/usr/bin/php8.5",
         "/usr/bin/php84",
@@ -28,10 +30,12 @@ fn which_php() -> Option<String> {
         "php83",
         "php84",
         "php85",
+        "php86",
         "php8.2",
         "php8.3",
         "php8.4",
         "php8.5",
+        "php8.6",
     ] {
         if let Ok(out) = Command::new(candidate).arg("-v").output()
             && out.status.success()

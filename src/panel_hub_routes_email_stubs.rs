@@ -2,7 +2,8 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    flash_messages, html_ok, html_ok_pop_flash, login_redirect, require_panel_user,
+    authenticated_panel_shell, flash_messages, html_ok, html_ok_pop_flash, login_redirect,
+    require_panel_user,
 };
 use crate::panel_hub_pages_email_deliver::{
     email_debugger_page, email_marketing_page, email_queue_page, mailscanner_page, rspamd_page,
@@ -11,7 +12,6 @@ use crate::panel_hub_pages_email_deliver::{
 use crate::panel_hub_pages_email_tools::{
     email_limits_page, email_password_page, pattern_forwarding_page, plus_addressing_page,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,7 +25,8 @@ pub async fn email_pattern_fwd(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Pattern Forwarding",
@@ -46,7 +47,8 @@ pub async fn email_limits(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Email Limits",
@@ -74,7 +76,8 @@ pub async fn email_password(
     );
     html_ok_pop_flash(
         &http,
-        panel_shell(
+        authenticated_panel_shell(
+            &http,
             &user,
             "email",
             "Change Password",
@@ -92,7 +95,8 @@ pub async fn email_debugger(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Email Debugger",
@@ -114,7 +118,8 @@ pub async fn email_queue(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Mail Queue",
@@ -135,7 +140,8 @@ pub async fn email_spamassassin(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "SpamAssassin",
@@ -156,7 +162,8 @@ pub async fn email_rspamd(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Rspamd",
@@ -177,7 +184,8 @@ pub async fn email_mailscanner(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "MailScanner",
@@ -198,7 +206,8 @@ pub async fn email_marketing(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Email Marketing",
@@ -219,7 +228,8 @@ pub async fn email_plus(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "email",
         "Plus-Addressing",

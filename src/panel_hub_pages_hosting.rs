@@ -53,6 +53,7 @@ pub fn databases_ftp_hub_main() -> String {
 }
 
 pub fn email_accounts_page(
+    username: &str,
     selected_mail: Option<crate::model::MailSystem>,
     mail_client_ready: bool,
     mail_backend_ready: bool,
@@ -60,6 +61,7 @@ pub fn email_accounts_page(
     error: Option<&str>,
 ) -> String {
     let inner = email_accounts_main(
+        username,
         selected_mail,
         mail_client_ready,
         mail_backend_ready,
@@ -77,7 +79,7 @@ pub fn email_accounts_page(
     )
 }
 
-pub fn email_create_page(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn email_create_page(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
     format!(
         r#"{}{}"#,
         crate::panel_hubs::breadcrumb(&[
@@ -85,7 +87,7 @@ pub fn email_create_page(notice: Option<&str>, error: Option<&str>) -> String {
             ("Email", Some("/email")),
             ("Create Email", None),
         ]),
-        crate::panel_sections::email_create_main(notice, error),
+        crate::panel_sections::email_create_main(username, notice, error),
     )
 }
 
@@ -271,9 +273,15 @@ pub fn ensure_dkim() -> Result<String, String> {
     if !errors.is_empty() {
         return Err(errors.join("; "));
     }
+    let opendkim_note = match crate::panel_ops_opendkim::ensure_opendkim_stack() {
+        Ok(msg) => msg,
+        Err(e) => format!("OpenDKIM deferred: {e}"),
+    };
+    // After (re)issuing keys, upsert SPF/DKIM/DMARC to local DNS and Cloudflare when configured.
+    let dns_note = crate::panel_ops_mail_dns::provision_mail_dns_for_known_domains();
     let folder_count = crate::panel_ops_dkim_keys::list_dkim_domain_rows().len();
     Ok(format!(
-        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated.",
+        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated. {opendkim_note} {dns_note}",
         sites.len()
     ))
 }

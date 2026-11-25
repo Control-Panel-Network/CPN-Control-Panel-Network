@@ -13,8 +13,9 @@ use crate::panel_hub_pages_docker_list::DockerListQuery;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_litespeed::{
-    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
-    run_set_tier, run_set_webadmin_url, run_upgrade,
+    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_license_key, run_apply_serial,
+    run_apply_trial, run_downgrade, run_refresh_license, run_set_tier, run_set_webadmin_url,
+    run_upgrade,
 };
 use crate::panel_hub_pages_server::{
     package_manager_page, php_tuning_page, processes_page, run_service_control, server_hub_main,
@@ -22,12 +23,13 @@ use crate::panel_hub_pages_server::{
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
-    connect_page, design_settings_page_with_tab, design_settings_tab, settings_hub_main_with,
+    connect_page, design_settings_page_with_tab, design_settings_tab, settings_hub_main_for,
     setup_wizard_page_with, version_management_page,
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
 use crate::panel_ops_docker_csrf::{user_can_manage_container, verify_docker_csrf};
 use crate::panel_pages::panel_shell;
+use crate::panel_prefs::set_show_auto_upgrade_countdown;
 use crate::site_messages::{
     SiteMessageDefaults, builtin_site_ready_html, load_defaults, restore_factory_site_ready,
     restore_factory_suspend_message, sanitize_site_ready_html, save_defaults,
@@ -84,6 +86,24 @@ pub async fn server_openlitespeed_page(
             query.get("error").map(String::as_str),
         ),
     ))
+}
+
+#[get("/server/openlitespeed/password")]
+pub async fn server_openlitespeed_password_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let _ = user;
+    redirect_notice(
+        "/server/openlitespeed",
+        None,
+        Some(
+            "Password changes use the form on Open OLS (POST). This URL is not a standalone page.",
+        ),
+    )
 }
 
 #[post("/server/openlitespeed/password")]
@@ -298,6 +318,50 @@ pub async fn server_litespeed_serial(
     }
     let serial = form.get("serial").map(String::as_str).unwrap_or("");
     match run_apply_serial(serial) {
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/license-key")]
+pub async fn server_litespeed_license_key(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let key = form.get("license_key").map(String::as_str).unwrap_or("");
+    match run_apply_license_key(key) {
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/license-refresh")]
+pub async fn server_litespeed_license_refresh(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    match run_refresh_license() {
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/trial")]
+pub async fn server_litespeed_trial(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    match run_apply_trial() {
         Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
         Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }
@@ -1207,10 +1271,93 @@ pub async fn settings_page(
             &user,
             "settings",
             "Settings",
-            &settings_hub_main_with(owner, notice.as_deref(), error.as_deref()),
+            &settings_hub_main_for(Some(&user), owner, notice.as_deref(), error.as_deref()),
         )
     })
     .await
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct CpnSettingsForm {
+    #[serde(default)]
+    update_notifications: String,
+}
+
+/// Per-user CPN Settings (update notifications on/off). Any signed-in panel user.
+#[post("/settings/cpn-settings")]
+pub async fn settings_cpn_settings_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<CpnSettingsForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let enabled = matches!(
+        form.update_notifications
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "1" | "true" | "on" | "yes"
+    );
+    let username = user.clone();
+    let result = web::block(move || {
+        crate::panel_user_prefs::save_user_update_notifications(&username, enabled)?;
+        if !enabled {
+            crate::panel_notifications::remove_update_notifications(&username)?;
+        }
+        Ok::<(), String>(())
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Save task failed: {e}")));
+    match result {
+        Ok(()) => redirect_flash(
+            "/settings",
+            Some(if enabled {
+                "Update notifications are on"
+            } else {
+                "Update notifications are off"
+            }),
+            None,
+        ),
+        Err(error) => redirect_flash("/settings", None, Some(&error)),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SettingsUiPrefsForm {
+    #[serde(default)]
+    show_auto_upgrade_countdown: String,
+}
+
+#[post("/settings/ui-prefs")]
+pub async fn settings_ui_prefs_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SettingsUiPrefsForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_flash("/settings", None, Some("Admin only"));
+    }
+    let show = matches!(
+        form.show_auto_upgrade_countdown.trim(),
+        "1" | "true" | "on" | "yes"
+    );
+    match set_show_auto_upgrade_countdown(show) {
+        Ok(_) => redirect_flash(
+            "/settings",
+            Some(if show {
+                "Version Management countdown is visible"
+            } else {
+                "Version Management countdown is hidden"
+            }),
+            None,
+        ),
+        Err(error) => redirect_flash("/settings", None, Some(&error)),
+    }
 }
 
 #[get("/settings/version")]
@@ -1281,6 +1428,8 @@ pub struct SetupOnboardingForm {
     #[serde(default)]
     skip_rdns: String,
     #[serde(default)]
+    without_mail_domain: String,
+    #[serde(default)]
     external_imap_host: String,
     #[serde(default)]
     external_smtp_host: String,
@@ -1307,13 +1456,22 @@ pub async fn settings_setup_save(
         "external" => MailMode::External,
         _ => MailMode::Local,
     };
+    let without_mail_domain = matches!(
+        form.without_mail_domain
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "1" | "true" | "on" | "yes"
+    ) || matches!(
+        form.skip_rdns.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "on" | "yes"
+    );
     let cfg = MailOnboarding {
         schema_version: 1,
         hostname: form.hostname.trim().to_string(),
-        skip_rdns: matches!(
-            form.skip_rdns.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "on" | "yes"
-        ),
+        // Keep skip_rdns aligned: both mean "no local mail domain on this server".
+        skip_rdns: without_mail_domain,
+        without_mail_domain,
         mail_mode,
         external_imap_host: form.external_imap_host.trim().to_string(),
         external_smtp_host: form.external_smtp_host.trim().to_string(),

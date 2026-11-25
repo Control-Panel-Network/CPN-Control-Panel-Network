@@ -2,9 +2,10 @@
 
 use crate::installer::AppState;
 use crate::packages::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_sidebar_acl::sidebar_acl_standalone_page;
-use crate::panel_pages::panel_shell;
 use crate::sidebar_visibility::{remove_grant_at, set_grant_for_member};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -45,7 +46,8 @@ pub async fn sidebar_acl_get(
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users", None, Some(&error));
     }
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "users",
         "Sidebar visibility",

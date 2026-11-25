@@ -279,6 +279,7 @@ mod tests {
             prerelease: true,
             draft: false,
             html_url: "https://example.invalid".into(),
+            body: String::new(),
             assets: Vec::new(),
             rpm_asset: None,
             binary_asset: None,

@@ -37,6 +37,14 @@ Persisted files:
 
 **Recommendation:** pick one primary HTTPS hostname for day-to-day login and passkeys. Use aliases for emergency or alternate DNS; use TOTP there, or register a second passkey on that hostname.
 
+### SSH: add passkeys (primary hostname)
+
+Windows Hello and security keys cannot register over SSH alone. From the server, issue a browser link (`sudo cpn mfa enroll-url --username USER`; full CLI tables in [MFA-CLI.md](MFA-CLI.md), overview in [CLI.md](CLI.md)). The URL written to `enroll_url_file=` always targets the **primary** `panel_public_url` / `panel_hostname`, so the passkey RP ID matches that primary HTTPS name.
+
+Open the link on a desktop within 15 minutes. Paste into the address bar; do not paste into chat first (previews). On CPN 1.4.11 and older, GET/HEAD burns the single-use token; on intended/fixed builds, confirm with **Continue to Security** (POST consumes the token; GET/HEAD peeks only). When MFA is already enrolled, it lands **Modify User → Security** so you can register **additional** passkeys (second Hello, YubiKey, and so on) without clearing TOTP. One unused pending link exists per user; a new `enroll-url` replaces an unused prior link.
+
+**Host aliases:** `enroll-url` does not mint alias-specific links. To bind a passkey to an alias hostname, sign in on `https://<alias>/` (password plus existing MFA) and use **Modify User → Security → Register passkey** in the browser on that alias, so RP ID matches the alias. Use TOTP on aliases where you have not registered a matching passkey.
+
 ## TOTP
 
 Authenticator apps are bound to the account secret, not the hostname. TOTP works on every hostname that reaches the same install. Session cookies are host-only (`Path=/`, no `Domain=`), so signing in on hostname A does not carry the session to hostname B; sign in again (password + TOTP) on B.

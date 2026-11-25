@@ -1,0 +1,84 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - run: cargo fmt --check
+
+  test:
+    name: test
+    strategy:
+      fail-fast: false
+      matrix:
+        # Single source of truth for minimum Rust in CI.
+        # Update this anchor value when bumping MSRV checks.
+        rust_version:
+          - stable
+          - &rust_oldest_version "1.88.0"
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_version }}
+          components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: cargo check
+        run: cargo check
+
+      - name: clippy
+        run: cargo clippy --no-deps --all-targets --all-features
+
+      - name: test
+        run: cargo test
+
+  wasm:
+    name: WASM
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      # Building the tests as we don't want to unconditionally use sources of
+      # time and entropy for WASM+JS environments.
+      - run: cargo build --target wasm32-unknown-unknown --tests
+
+      - name: Test on Chromium
+        run: wasm-pack test --headless --chrome
+
+      - name: Test on Firefox
+        run: wasm-pack test --headless --firefox

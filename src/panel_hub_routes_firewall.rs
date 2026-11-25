@@ -2,14 +2,15 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_firewall::firewall_manager_page;
 use crate::panel_ops_firewall::{
     add_rule_live, add_trusted_live, ban_ip_live, delete_rule_live, export_banned_json,
     export_rules_json, import_banned_json, import_rules_json, reload_firewall, remove_trusted_live,
     start_firewall, stop_firewall, unban_ip_live, verify_firewall_csrf,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,11 +37,11 @@ fn same_origin_ok(http: &HttpRequest) -> bool {
     true
 }
 
-fn tab_base(tab: &str) -> String {
+pub(crate) fn tab_base(tab: &str) -> String {
     format!("/security/firewall?tab={tab}")
 }
 
-fn require_admin_csrf(
+pub(crate) fn require_admin_csrf(
     http: &HttpRequest,
     user: &str,
     form: &HashMap<String, String>,
@@ -80,20 +81,32 @@ pub async fn security_firewall(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let tab = query.get("tab").map(String::as_str).unwrap_or("rules");
-    html_ok(panel_shell(
-        &user,
-        "security",
-        "Firewall",
-        &firewall_manager_page(
-            &user,
-            tab,
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            is_panel_admin(&user),
-            query.get("q").map(String::as_str),
-            peer_ip(&http).as_deref(),
-        ),
+    let tab = query
+        .get("tab")
+        .cloned()
+        .unwrap_or_else(|| "rules".to_string());
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let search = query.get("q").cloned();
+    let is_admin = is_panel_admin(&user);
+    let peer = peer_ip(&http);
+    let user_c = user.clone();
+    // Host probes and store I/O are blocking; keep them off the Actix worker threads.
+    let page = tokio::task::spawn_blocking(move || {
+        firewall_manager_page(
+            &user_c,
+            &tab,
+            notice.as_deref(),
+            error.as_deref(),
+            is_admin,
+            search.as_deref(),
+            peer.as_deref(),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| "<p>Firewall page is temporarily unavailable.</p>".to_string());
+    html_ok(authenticated_panel_shell(
+        &http, &user, "security", "Firewall", &page,
     ))
 }
 

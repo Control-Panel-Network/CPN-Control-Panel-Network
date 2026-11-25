@@ -25,6 +25,13 @@ export interface LocaleMessages {
   statusFetchError: string;
   startServerError: string;
   startMailError: string;
+  installPathEyebrow: string;
+  installPathTitle: string;
+  installPathIntro: string;
+  installPathFresh: string;
+  installPathMigrate: string;
+  installPathMigrateHint: string;
+  installPathTargetLabel: string;
   selectServerTitle: string;
   selectServerIntro: string;
   listenPortLabel: string;

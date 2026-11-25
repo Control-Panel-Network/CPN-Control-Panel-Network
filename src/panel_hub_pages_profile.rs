@@ -191,20 +191,20 @@ fn security_tab_html(
               <td><span class="muted">{type_label}</span></td>
               <td>{created_fmt}</td>
               <td>
-                <form method="post" action="/account/users/profile/passkey/delete" style="display:inline;"
-                      onsubmit="return confirm('Remove this passkey?');">
-                  <input type="hidden" name="id" value="{id}">
-                  <button type="submit" class="linkish" style="background:none;border:0;color:#d92d20;font-weight:600;cursor:pointer;padding:0;">Remove</button>
-                </form>
+                {remove_form}
               </td>
             </tr>"#,
                 label = html_escape(&key.label),
                 type_label = html_escape(&key.type_label),
                 created_fmt = html_escape(&created_fmt),
                 id = html_escape(&key.id),
+                remove_form = crate::panel_hub_passkey_remove::passkey_remove_form_html(
+                    &key.id, &key.label
+                ),
             ));
         }
         body.push_str("</tbody></table></div>");
+        body.push_str(crate::panel_hub_passkey_remove::passkey_remove_modal_html());
     }
     body.push_str(
         r#"

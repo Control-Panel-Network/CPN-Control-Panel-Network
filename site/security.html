@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security advisories | CPN Control Panel Network</title>
+  <meta name="description" content="Public CVE and advisory disclosure log for CPN Control Panel Network. How to report vulnerabilities privately, and published fixed advisories.">
+  <link rel="canonical" href="https://cpn.newstargeted.com/security">
+  <meta name="theme-color" content="#070b10">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cpn.newstargeted.com/security">
+  <meta property="og:title" content="CPN security advisories">
+  <meta property="og:description" content="Public disclosure log for fixed CPN vulnerabilities. Report privately via GitHub Security Advisories.">
+  <meta property="og:image" content="https://cpn.newstargeted.com/assets/product/cpn-dashboard.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@450;550;650;750&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@650;750;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "CPN security advisories",
+    "url": "https://cpn.newstargeted.com/security",
+    "description": "Public CVE and advisory disclosure log for CPN Control Panel Network.",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "CPN Control Panel Network",
+      "url": "https://cpn.newstargeted.com/"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "News Targeted",
+      "url": "https://newstargeted.com"
+    }
+  }
+  </script>
+</head>
+<body class="page-security">
+  <a class="skip" href="#advisories">Skip to advisories</a>
+
+  <header class="site-nav site-nav-static">
+    <a class="brand" href="./">
+      <img src="assets/brand/cpn-brand-mark.svg" width="34" height="34" alt="CPN">
+      <span class="brand-text">
+        <strong>CPN</strong>
+        <span>News Targeted</span>
+      </span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="./#install">Install</a>
+      <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/INSTALL.md">Docs</a>
+      <a href="/security" aria-current="page">Security</a>
+      <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero" aria-labelledby="security-title">
+      <div class="page-hero-atmosphere" aria-hidden="true"></div>
+      <div class="page-hero-inner">
+        <p class="hero-kicker reveal">
+          <span class="dot" aria-hidden="true"></span>
+          Vulnerability disclosure
+        </p>
+        <h1 id="security-title" class="page-title reveal reveal-delay-1">Security advisories</h1>
+        <p class="hero-lead reveal reveal-delay-2">
+          Fixed-vulnerability disclosures for CPN, with affected versions, severity, and remediation. Unfixed reports stay private.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="report-title">
+      <h2 id="report-title">How to report</h2>
+      <p class="lede">
+        Do not open a public GitHub issue or pull request for security-sensitive findings.
+      </p>
+      <ol class="report-steps">
+        <li>
+          Prefer
+          <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/security/advisories/new">GitHub Private Vulnerability Reporting</a>
+          (Security → Advisories → Report a vulnerability).
+        </li>
+        <li>
+          Or contact a maintainer listed in the
+          <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/SECURITY.md">security policy</a>.
+        </li>
+      </ol>
+      <p class="report-note">
+        Include affected version, how CPN was run, steps to reproduce, and impact. Full policy:
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/SECURITY.md">SECURITY.md</a>.
+        Machine-readable log:
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/security-advisories.json">security-advisories.json</a>.
+        Human mirror:
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/SECURITY-ADVISORIES.md">SECURITY-ADVISORIES.md</a>.
+      </p>
+    </section>
+
+    <section class="section" id="advisories" aria-labelledby="advisories-title">
+      <h2 id="advisories-title">Published advisories</h2>
+      <p class="lede">
+        Entries appear here after a fix ships and users have a reasonable upgrade path. GitHub advisories:
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/security/advisories">security/advisories</a>.
+      </p>
+
+      <div id="advisories-status" class="advisories-status" role="status" aria-live="polite">
+        Loading advisories…
+      </div>
+
+      <div id="advisories-empty" class="advisories-empty" hidden>
+        <p><strong>No published advisories yet.</strong></p>
+        <p>
+          When a vulnerability is fixed, it will be listed here with CVE/GHSA ids (when assigned), severity, affected and fixed versions, and remediation. Until then, report privately using the channels above.
+        </p>
+      </div>
+
+      <div id="advisories-table-wrap" class="advisories-table-wrap" hidden>
+        <table class="advisories-table" id="advisories-table">
+          <thead>
+            <tr>
+              <th scope="col">Id</th>
+              <th scope="col">CVE / GHSA</th>
+              <th scope="col">Severity</th>
+              <th scope="col">Affected</th>
+              <th scope="col">Fixed</th>
+              <th scope="col">Published</th>
+              <th scope="col">Summary</th>
+            </tr>
+          </thead>
+          <tbody id="advisories-tbody"></tbody>
+        </table>
+      </div>
+
+      <div id="advisories-details" class="advisories-details" hidden></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="inner">
+      <p>CPN by <a href="https://newstargeted.com">News Targeted</a>. Alpha software.</p>
+      <p>
+        <a href="./">Home</a>
+        ·
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">GitHub</a>
+        ·
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/CHANGELOG.md">Changelog</a>
+        ·
+        <a href="/security" aria-current="page">Security</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/security-advisories.js" defer></script>
+</body>
+</html>

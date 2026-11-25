@@ -8,16 +8,51 @@ window.cpnFriendlyFetchError = function (err, context) {
   if (msg === "Failed to fetch" || msg.indexOf("NetworkError") >= 0 || msg.indexOf("Load failed") >= 0) {
     return (context || "Request") + " failed: network error (panel may be restarting, or the browser lost connection). Confirm cpn-installer is running, use the same host you signed in on (127.0.0.1 vs localhost use different cookies), then refresh.";
   }
-  if (msg.indexOf("HTTP 401") >= 0) {
+  var trim = msg.trim();
+  if (/^HTTP 401(\s|$)/.test(trim)) {
     return (context || "Request") + " failed: not signed in. Sign in again.";
   }
-  if (msg.indexOf("HTTP 403") >= 0) {
+  if (/^HTTP 403(\s|$)/.test(trim)) {
     return (context || "Request") + " failed: permission denied for this action.";
   }
-  if (msg.indexOf("HTTP 502") >= 0 || msg.indexOf("HTTP 503") >= 0 || msg.indexOf("HTTP 504") >= 0) {
+  if (/^HTTP 502(\s|$)/.test(trim) || /^HTTP 503(\s|$)/.test(trim) || /^HTTP 504(\s|$)/.test(trim)) {
     return (context || "Request") + " failed: panel service unavailable (" + msg + "). Try again shortly.";
   }
   return (context || "Request") + " failed: " + msg;
+};
+window.cpnVersionSetStatus = function (el, msg, kind) {
+  if (!el) return;
+  var k = kind || "neutral";
+  el.textContent = msg || "";
+  el.setAttribute("role", "status");
+  if (k === "ok") {
+    el.className = "panel-notice ok";
+    el.style.marginTop = "10px";
+  } else if (k === "error") {
+    el.className = "panel-notice error";
+    el.style.marginTop = "10px";
+  } else {
+    el.className = "muted";
+    el.style.marginTop = "10px";
+  }
+};
+window.cpnVersionFlashSave = function (title, body) {
+  var wrap = document.getElementById("cpn-version-flash-anchor");
+  if (!wrap) {
+    var src = document.getElementById("cpn-source-status");
+    var parent = src && src.parentElement;
+    wrap = document.createElement("div");
+    wrap.id = "cpn-version-flash-anchor";
+    wrap.setAttribute("aria-live", "polite");
+    if (parent && src) parent.insertBefore(wrap, src);
+    else if (parent) parent.appendChild(wrap);
+    else return;
+  }
+  wrap.innerHTML = '<p class="panel-notice ok" role="status"><strong>'
+    + String(title || "Saved").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    + "</strong>"
+    + (body ? " " + String(body).replace(/&/g, "&amp;").replace(/</g, "&lt;") : "")
+    + "</p>";
 };
 </script>"##
 }
@@ -37,10 +72,12 @@ pub fn version_source_script() -> String {
   var DEFAULT_BRANCH = (branchEl && branchEl.getAttribute("data-default-branch")) || "stable";
   var savedBranch = DEFAULT_BRANCH;
 
-  function sourceStatus(msg, isError) {
-    if (!statusEl) return;
-    statusEl.textContent = msg || "";
-    statusEl.style.color = isError ? "#f87171" : "";
+  function sourceStatus(msg, kind) {
+    if (typeof window.cpnVersionSetStatus === "function") {
+      window.cpnVersionSetStatus(statusEl, msg, kind);
+    } else if (statusEl) {
+      statusEl.textContent = msg || "";
+    }
   }
 
   function branchLabel(name) {
@@ -105,7 +142,7 @@ pub fn version_source_script() -> String {
       }
       selectBranch(keep);
       if (data && data.error && statusEl && !statusEl.textContent) {
-        sourceStatus("Branch list from GitHub unavailable (" + data.error + "); stable and dev are always offered.", false);
+        sourceStatus("Branch list from GitHub unavailable (" + data.error + "); stable and dev are always offered.", "neutral");
       }
     }).catch(function () {
       // Known branches (stable, dev) are already in the select; GitHub list is optional.
@@ -125,10 +162,10 @@ pub fn version_source_script() -> String {
       selectBranch(savedBranch);
       var tokenNote = data && data.token_configured ? "Token is configured on the server." : "No GitHub token stored (optional for public forks).";
       var branchNote = "Commit branch: " + savedBranch + (savedBranch === DEFAULT_BRANCH ? " (production)." : " (lab / pre-release testing).");
-      sourceStatus(branchNote + " " + tokenNote, false);
+      sourceStatus(branchNote + " " + tokenNote, "neutral");
       loadBranches();
     }).catch(function (err) {
-      sourceStatus(window.cpnFriendlyFetchError(err, "Load update source"), true);
+      sourceStatus(window.cpnFriendlyFetchError(err, "Load update source"), "error");
       loadBranches();
     });
   }
@@ -137,7 +174,7 @@ pub fn version_source_script() -> String {
 
   saveBtn.addEventListener("click", function () {
     saveBtn.disabled = true;
-    sourceStatus("Saving update source...", false);
+    sourceStatus("Saving update source...", "neutral");
     var branch = branchEl ? (branchEl.value || DEFAULT_BRANCH) : DEFAULT_BRANCH;
     var body = {
       repo: repoEl.value || "",
@@ -164,10 +201,13 @@ pub fn version_source_script() -> String {
       var tail = savedBranch === DEFAULT_BRANCH
         ? "Upgrade to latest commits follows stable."
         : ("Upgrade to latest commits now follows " + savedBranch + " (lab / pre-release testing).");
-      sourceStatus("Update source saved. " + tail + " Checking for updates...", false);
+      sourceStatus("Update source saved. " + tail + " Checking for updates...", "ok");
+      if (typeof window.cpnVersionFlashSave === "function") {
+        window.cpnVersionFlashSave("Update source saved", tail);
+      }
       if (typeof window.cpnVersionRecheck === "function") window.cpnVersionRecheck(true);
     }).catch(function (err) {
-      sourceStatus(window.cpnFriendlyFetchError(err, "Save update source"), true);
+      sourceStatus(window.cpnFriendlyFetchError(err, "Save update source"), "error");
     }).finally(function () {
       saveBtn.disabled = false;
     });
@@ -193,6 +233,14 @@ mod tests {
         assert!(js.contains("Production servers should stay on stable"));
         assert!(js.contains("cpnVersionRecheck"));
         assert!(version_fetch_helpers_script().contains("cpnFriendlyFetchError"));
+        assert!(version_fetch_helpers_script().contains("cpnVersionSetStatus"));
+        assert!(version_fetch_helpers_script().contains("panel-notice ok"));
+        let helpers = version_fetch_helpers_script();
+        assert!(
+            helpers.contains("^HTTP 403"),
+            "auth errors must not match GitHub rate-limit copy"
+        );
+        assert!(!helpers.contains("indexOf(\"HTTP 403\")"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

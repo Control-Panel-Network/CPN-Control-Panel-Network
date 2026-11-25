@@ -1,11 +1,21 @@
 export type ScreenType =
   | "preparing"
   | "maintenance"
+  | "install_path"
   | "selection"
   | "installing"
   | "mail"
   | "account"
   | "complete";
+
+export type InstallPathMode = "fresh" | "migrate";
+
+export interface ForeignPanelPublic {
+  id: string;
+  name: string;
+  tier: string;
+  website_count?: number;
+}
 
 export type ServerEngine = "openlitespeed" | "nginx" | "caddy";
 export type MailSystem =
@@ -16,7 +26,7 @@ export type MailSystem =
   | "sogo"
   | "thunderbird";
 export type DatabaseEngine = "mariadb" | "none";
-export type PhpVersion = "8.5" | "8.4" | "8.3" | "8.2";
+export type PhpVersion = "8.6" | "8.5" | "8.4" | "8.3" | "8.2";
 
 export type InstallerPhase =
   | "configuring"
@@ -145,6 +155,9 @@ export interface InstallerStatus {
     released_on: string;
   }>;
   maintenance?: MaintenanceInfo | null;
+  foreign_panels?: ForeignPanelPublic[];
+  install_path?: InstallPathMode | null;
+  install_path_target_id?: string | null;
 }
 
 export type InstallerEvent =

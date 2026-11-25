@@ -106,6 +106,16 @@ pub fn sidebar_footer_styles() -> &'static str {
 .notify-toast-text span {
   display:block; font-size:12px; line-height:1.4; color:rgba(255,255,255,.88);
 }
+.notify-toast-text span.notify-toast-time {
+  margin-top:2px; font-size:11px; color:rgba(255,255,255,.6);
+}
+.notify-toast-text span.notify-toast-links { margin-top:4px; }
+.notify-toast-link {
+  display:inline-block; margin-right:10px; color:#9ccbff; font-size:12px;
+  font-weight:600; text-decoration:underline;
+}
+.notify-toast-link:hover,
+.notify-toast-link:focus-visible { color:#fff; outline:none; }
 .notify-toast-dismiss {
   flex:0 0 auto; width:28px; height:28px; border:0; border-radius:4px;
   background:transparent; color:rgba(255,255,255,.45); padding:0; cursor:pointer;
@@ -155,6 +165,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
         r#"<span class="notify-badge" id="cpn-notify-badge" hidden>0</span>"#.to_string()
     };
     let toggle = sidebar_theme_toggle(color_mode);
+    let schemes = crate::panel_chrome_scheme::sidebar_chrome_scheme_markup();
     let feedback = crate::panel_feedback::feedback_markup(username);
     format!(
         r#"<div class="sidebar-footer-actions">
@@ -177,6 +188,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
           <a class="footer-icon-btn" href="/account/users/profile"
             aria-label="Account settings" title="Account settings">{gear}</a>
           {feedback}
+          {schemes}
           {toggle}
         </div>
         <a class="logout" href="/logout">Log out</a>"#,
@@ -184,6 +196,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
         badge = badge,
         gear = gear_svg(),
         feedback = feedback,
+        schemes = schemes,
         toggle = toggle,
     )
 }
@@ -204,6 +217,17 @@ pub fn notifications_popover_script() -> &'static str {
   var POPOVER_WIDTH = 340;
   var POPOVER_GAP = 8;
   var VIEWPORT_PAD = 12;
+  var loadEpoch = 0;
+  var loadAbort = null;
+
+  function bumpLoadEpoch() {
+    loadEpoch += 1;
+    if (loadAbort) {
+      try { loadAbort.abort(); } catch (e) {}
+      loadAbort = null;
+    }
+    return loadEpoch;
+  }
 
   function placePanel() {
     var rect = btn.getBoundingClientRect();
@@ -302,18 +326,63 @@ pub fn notifications_popover_script() -> &'static str {
     return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>';
   }
 
-  function markRead(ids, all) {
+  function safeHttpsUrl(url) {
+    var u = String(url || "");
+    return /^https:\/\/github\.com\/[A-Za-z0-9._\/@#%+~:=?&-]+$/.test(u) ? u : "";
+  }
+
+  function linksHtml(item) {
+    var links = (item && item.links) || [];
+    var out = [];
+    for (var i = 0; i < links.length && i < 4; i++) {
+      var href = safeHttpsUrl(links[i] && links[i].url);
+      if (!href) continue;
+      out.push('<a class="notify-toast-link" href="' + escapeHtml(href)
+        + '" target="_blank" rel="noopener noreferrer">'
+        + escapeHtml(links[i].label || "View on GitHub") + "</a>");
+    }
+    return out.length ? '<span class="notify-toast-links">' + out.join(" ") + "</span>" : "";
+  }
+
+  function relativeTime(createdAt) {
+    var ts = Number(createdAt) || 0;
+    if (!ts) return "";
+    var secs = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+    if (secs < 60) return "just now";
+    var mins = Math.floor(secs / 60);
+    if (mins < 60) return mins + (mins === 1 ? " minute ago" : " minutes ago");
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + (hours === 1 ? " hour ago" : " hours ago");
+    var days = Math.floor(hours / 24);
+    return days + (days === 1 ? " day ago" : " days ago");
+  }
+
+  function markRead(ids, all, dismissItems) {
+    bumpLoadEpoch();
+    var payload = all ? { all: true } : { ids: ids || [] };
+    if (dismissItems) payload.dismiss = true;
     return fetch("/api/panel/notifications/mark-read", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify(all ? { all: true } : { ids: ids || [] })
-    }).then(function (res) { return res.json(); })
-      .then(function (data) { if (data && data.ok) renderItems(data); })
-      .catch(function () {});
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+        return data;
+      });
+    }).then(function (data) {
+      if (data && data.ok) renderItems(data);
+    }).catch(function () {
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = "Could not update notifications.";
+      }
+    });
   }
 
   function renderItems(payload) {
+    if (!payload || payload.ok !== true) return;
     var items = (payload && payload.items) || [];
     updateBadge((payload && payload.unread_count) || 0);
     list.innerHTML = "";
@@ -332,6 +401,8 @@ pub fn notifications_popover_script() -> &'static str {
         '<span class="notify-toast-icon" aria-hidden="true">' + severityIcon(sev) + "</span>"
         + '<div class="notify-toast-text"><strong>' + escapeHtml(item.title) + "</strong>"
         + (item.body ? "<span>" + escapeHtml(item.body) + "</span>" : "")
+        + linksHtml(item)
+        + (item.created_at ? '<span class="notify-toast-time">' + escapeHtml(relativeTime(item.created_at)) + (item.sticky ? " (stays until dismissed)" : "") + "</span>" : "")
         + "</div>"
         + '<button type="button" class="notify-toast-dismiss" aria-label="Dismiss" title="Dismiss">'
         + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
@@ -340,7 +411,7 @@ pub fn notifications_popover_script() -> &'static str {
       if (dismiss && item.id) {
         dismiss.addEventListener("click", function (ev) {
           ev.stopPropagation();
-          markRead([String(item.id)], false);
+          markRead([String(item.id)], false, true);
         });
       }
       li.appendChild(toast);
@@ -349,21 +420,30 @@ pub fn notifications_popover_script() -> &'static str {
   }
 
   function loadNotifications() {
+    var epoch = bumpLoadEpoch();
+    loadAbort = new AbortController();
+    var signal = loadAbort.signal;
     return fetch("/api/panel/notifications", {
       credentials: "same-origin",
-      headers: { "Accept": "application/json" }
+      headers: { "Accept": "application/json" },
+      signal: signal
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
         return data;
       });
     }).then(function (data) {
+      if (epoch !== loadEpoch) return data;
       renderItems(data);
       return data;
-    }).catch(function () {
+    }).catch(function (err) {
+      if (err && err.name === "AbortError") return;
+      if (epoch !== loadEpoch) return;
       empty.hidden = false;
       empty.textContent = "Could not load notifications.";
       list.innerHTML = "";
+    }).finally(function () {
+      if (epoch === loadEpoch) loadAbort = null;
     });
   }
 
@@ -372,6 +452,10 @@ pub fn notifications_popover_script() -> &'static str {
     var next = panel.hidden;
     setOpen(next);
     if (next) loadNotifications();
+  });
+
+  panel.addEventListener("mousedown", function (ev) {
+    ev.stopPropagation();
   });
 
   document.addEventListener("click", function (ev) {
@@ -417,8 +501,11 @@ mod tests {
             assert!(html.contains("cpn-notify-btn"));
             assert!(html.contains("/account/users/profile"));
             assert!(html.contains("cpn-feedback-btn"));
-            assert!(html.find("cpn-feedback-btn") < html.find("cpn-color-toggle"));
+            assert!(html.find("cpn-feedback-btn") < html.find("cpn-chrome-scheme-btn"));
+            assert!(html.find("cpn-chrome-scheme-btn") < html.find("cpn-color-toggle"));
             assert!(html.contains("cpn-feedback-modal"));
+            assert!(html.contains("Make it yours"));
+            assert!(html.contains("cpn-chrome-scheme-btn"));
             assert!(html.contains("cpn-color-toggle"));
             assert!(html.contains(">Log out</a>"));
             assert!(html.contains("Mark all as read"));
@@ -452,6 +539,13 @@ mod tests {
         assert!(js.contains("POPOVER_WIDTH = 340"));
         assert!(js.contains("itemSeverity"));
         assert!(js.contains("notify-toast-dismiss"));
+        assert!(js.contains("function linksHtml"));
+        assert!(js.contains(r#"target="_blank" rel="noopener noreferrer""#));
+        assert!(js.contains("https:\\/\\/github\\.com"));
+        assert!(js.contains("payload.dismiss = true"));
+        assert!(js.contains("relativeTime"));
+        assert!(js.contains("loadEpoch"));
+        assert!(js.contains("AbortController"));
         assert!(!js.contains("CyberPanel"));
     }
 }

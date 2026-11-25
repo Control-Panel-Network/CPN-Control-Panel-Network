@@ -1,17 +1,18 @@
 //! Create and subscribe IMAP system folders for local Maildir mailboxes.
 //!
-//! SnappyMail needs Sent / Drafts / Junk (Spam role) / Trash / Archive so compose
+//! SnappyMail/Tachyon need Sent / Drafts / Junk (Spam role) / Trash / Archive so compose
 //! and send are not blocked on an incomplete "Select system folders" modal.
+//!
+//! Classic CyberPanel Dovecot often uses `prefix = INBOX.` so IMAP full names are
+//! `INBOX.Sent` (not bare `Sent`). Fresh CPN hosts usually use an empty prefix.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// Folder name + optional RFC 6154 SPECIAL-USE flag (Dovecot `15-mailboxes` / doveadm).
 ///
 /// `Junk` carries `\Junk` (SnappyMail junk role / UI label "Spam").
-/// A separate `Spam` mailbox is not created: that would duplicate the Spam entry in
-/// SnappyMail/Tachyon sidebars. Filters can still deliver to `Junk`.
 const SYSTEM_FOLDERS: &[(&str, Option<&str>)] = &[
     ("Sent", Some(r"\Sent")),
     ("Drafts", Some(r"\Drafts")),
@@ -20,39 +21,161 @@ const SYSTEM_FOLDERS: &[(&str, Option<&str>)] = &[
     ("Archive", Some(r"\Archive")),
 ];
 
+/// IMAP LIST / settings_local name for a system folder (honours Dovecot namespace prefix).
+pub fn imap_system_folder_name(bare: &str) -> String {
+    format!("{}{bare}", imap_namespace_prefix())
+}
+
+/// Detect Dovecot private inbox namespace prefix (for example `INBOX.` or empty).
+pub fn imap_namespace_prefix() -> String {
+    detect_imap_namespace_prefix()
+}
+
 /// Ensure standard IMAP folders exist for a local system user (PAM mailbox).
 pub fn ensure_imap_system_folders(user: &str) -> Result<(), String> {
-    if user.is_empty()
-        || user.contains('/')
-        || user.contains("..")
-        || !user
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
-    {
+    if !valid_local_user(user) {
         return Err("Invalid mailbox user for system folders".into());
     }
-    let home = format!("/home/{user}");
-    let maildir = format!("{home}/Maildir");
-    if !Path::new(&maildir).is_dir() {
-        return Err(format!("Maildir missing for `{user}`"));
+    // Prefer domain e-mails homes when discoverable from the registry.
+    if let Some(address) = registry_address_for_local(user)
+        && let Some(maildir) = crate::mail_home_layout::resolve_maildir(&address)
+    {
+        return ensure_maildir_system_folders(&maildir.to_string_lossy(), user, Some(user));
     }
+    let maildir = format!("/home/{user}/Maildir");
+    ensure_maildir_system_folders(&maildir, user, Some(user))
+}
 
-    // Always create Maildir++ layout so folders exist even if doveadm is down.
+/// Ensure system folders for a full email address (virtual SQL / domain e-mails / PAM).
+pub fn ensure_imap_system_folders_for_email(email: &str) -> Result<(), String> {
+    let email = email.trim().to_ascii_lowercase();
+    if !valid_email(&email) {
+        return Err("Invalid mailbox address for system folders".into());
+    }
+    if let Some(maildir) = resolve_maildir_for_email(&email) {
+        let owner = maildir_owner_hint(&maildir);
+        return ensure_maildir_system_folders(&maildir, &email, owner.as_deref());
+    }
+    let local = email.split_once('@').map(|(l, _)| l).unwrap_or("");
+    if valid_local_user(local) && Path::new(&format!("/home/{local}/Maildir")).is_dir() {
+        return ensure_imap_system_folders(local);
+    }
+    doveadm_ensure_system_folders(&email)
+}
+
+pub(crate) fn ensure_maildir_system_folders(
+    maildir: &str,
+    doveadm_user: &str,
+    chown_user: Option<&str>,
+) -> Result<(), String> {
+    if !Path::new(maildir).is_dir() {
+        return Err(format!("Maildir missing at `{maildir}`"));
+    }
     for (name, _) in SYSTEM_FOLDERS {
         for sub in ["cur", "new", "tmp"] {
             let p = format!("{maildir}/.{name}/{sub}");
             fs::create_dir_all(&p).map_err(|e| format!("Cannot create {p}: {e}"))?;
         }
     }
-    let _ = Command::new("chown")
-        .args(["-R", &format!("{user}:{user}"), &maildir])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    if let Some(owner) = chown_user
+        && (valid_local_user(owner) || owner == "vmail")
+    {
+        let _ = Command::new("chown")
+            .args(["-R", &format!("{owner}:{owner}"), maildir])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    doveadm_ensure_system_folders(doveadm_user)
+}
 
-    // Prefer doveadm so IMAP LIST + subscriptions stay consistent with Dovecot.
-    if Command::new("doveadm")
+fn doveadm_ensure_system_folders(doveadm_user: &str) -> Result<(), String> {
+    if !doveadm_available() {
+        return Ok(());
+    }
+    let prefix = imap_namespace_prefix();
+    for (name, special) in SYSTEM_FOLDERS {
+        let imap_name = format!("{prefix}{name}");
+        let _ = Command::new("doveadm")
+            .args(["mailbox", "create", "-u", doveadm_user, &imap_name])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        let _ = Command::new("doveadm")
+            .args(["mailbox", "subscribe", "-u", doveadm_user, &imap_name])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        if let Some(flag) = special {
+            let _ = Command::new("doveadm")
+                .args([
+                    "mailbox",
+                    "update",
+                    "-u",
+                    doveadm_user,
+                    "-s",
+                    flag,
+                    &imap_name,
+                ])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
+    Ok(())
+}
+
+pub use crate::panel_ops_mailbox_heal::heal_all_maildir_system_folders;
+
+fn registry_address_for_local(local: &str) -> Option<String> {
+    let local = local.trim().to_ascii_lowercase();
+    crate::mail_accounts::list_accounts()
+        .into_iter()
+        .find_map(|a| {
+            let addr = a.address.trim().to_ascii_lowercase();
+            let matches = addr.split_once('@').is_some_and(|(l, _)| l == local);
+            matches.then_some(addr)
+        })
+}
+
+fn resolve_maildir_for_email(email: &str) -> Option<String> {
+    if let Some(p) = crate::mail_home_layout::resolve_maildir(email) {
+        return Some(p.to_string_lossy().into_owned());
+    }
+    let (local, domain) = email.split_once('@')?;
+    let candidates = [
+        crate::mail_home_layout::preferred_maildir(domain, local),
+        PathBuf::from(format!(
+            "{}/{domain}/{local}/Maildir",
+            crate::mail_home_layout::CLASSIC_VMAIL_ROOT
+        )),
+        PathBuf::from(format!("/home/{local}/Maildir")),
+    ];
+    for p in candidates {
+        if p.is_dir() {
+            return Some(p.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
+fn maildir_owner_hint(maildir: &str) -> Option<String> {
+    if maildir.starts_with(crate::mail_home_layout::CLASSIC_VMAIL_ROOT) {
+        return Some("vmail".into());
+    }
+    Path::new(maildir)
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string())
+}
+
+fn doveadm_available() -> bool {
+    Command::new("doveadm")
         .args(["help"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -60,62 +183,128 @@ pub fn ensure_imap_system_folders(user: &str) -> Result<(), String> {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+fn valid_local_user(user: &str) -> bool {
+    !user.is_empty()
+        && !user.contains('/')
+        && !user.contains("..")
+        && user
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
+}
+
+fn valid_email(email: &str) -> bool {
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && !domain.is_empty()
+        && !email.contains(' ')
+        && local
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' || c == '+')
+        && domain
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+}
+
+/// Read Dovecot inbox namespace `prefix` (trimmed quotes). Empty when unset.
+pub(crate) fn detect_imap_namespace_prefix() -> String {
+    #[cfg(windows)]
     {
-        for (name, special) in SYSTEM_FOLDERS {
-            let _ = Command::new("doveadm")
-                .args(["mailbox", "create", "-u", user, name])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-            let _ = Command::new("doveadm")
-                .args(["mailbox", "subscribe", "-u", user, name])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-            if let Some(flag) = special {
-                // Best-effort SPECIAL-USE (supported on Dovecot 2.3+).
-                let _ = Command::new("doveadm")
-                    .args(["mailbox", "update", "-u", user, "-s", flag, name])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
+        return String::new();
+    }
+    #[cfg(not(windows))]
+    {
+        let mut files: Vec<PathBuf> = vec![PathBuf::from("/etc/dovecot/dovecot.conf")];
+        if let Ok(rd) = fs::read_dir("/etc/dovecot/conf.d") {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.extension().and_then(|e| e.to_str()) == Some("conf") {
+                    files.push(p);
+                }
+            }
+        }
+        let mut best: Option<String> = None;
+        for path in files {
+            let Ok(raw) = fs::read_to_string(&path) else {
+                continue;
+            };
+            if let Some(prefix) = parse_inbox_namespace_prefix(&raw) {
+                if !prefix.is_empty() {
+                    return prefix;
+                }
+                best = Some(prefix);
+            }
+        }
+        best.unwrap_or_default()
+    }
+}
+
+/// Parse `prefix = ...` from the first namespace block that sets `inbox = yes`.
+pub(crate) fn parse_inbox_namespace_prefix(raw: &str) -> Option<String> {
+    let mut in_namespace = false;
+    let mut depth = 0i32;
+    let mut prefix: Option<String> = None;
+    let mut inbox = false;
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        if !in_namespace {
+            let lower = trimmed.to_ascii_lowercase();
+            if lower.starts_with("namespace") && trimmed.contains('{') {
+                in_namespace = true;
+                depth = 1;
+                prefix = None;
+                inbox = false;
+                continue;
+            }
+            if lower.starts_with("namespace") {
+                in_namespace = true;
+                depth = 0;
+                prefix = None;
+                inbox = false;
+                continue;
+            }
+            continue;
+        }
+        depth += trimmed.matches('{').count() as i32;
+        depth -= trimmed.matches('}').count() as i32;
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("prefix")
+            && let Some(v) = ini_value(trimmed)
+        {
+            prefix = Some(v);
+        }
+        if lower.starts_with("inbox")
+            && let Some(v) = ini_value(trimmed)
+        {
+            inbox = v.eq_ignore_ascii_case("yes");
+        }
+        if depth <= 0 {
+            in_namespace = false;
+            if inbox {
+                return Some(prefix.unwrap_or_default());
             }
         }
     }
-    Ok(())
+    None
 }
 
-/// Heal system folders for every local home with a Maildir (install / SnappyMail heal).
-pub fn heal_all_maildir_system_folders() -> Result<usize, String> {
-    let home = Path::new("/home");
-    if !home.is_dir() {
-        return Ok(0);
-    }
-    let mut count = 0usize;
-    let entries = fs::read_dir(home).map_err(|e| e.to_string())?;
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let Some(user) = name.to_str() else {
-            continue;
-        };
-        if user == "lost+found" || user.starts_with('.') {
-            continue;
-        }
-        let maildir = entry.path().join("Maildir");
-        if !maildir.is_dir() {
-            continue;
-        }
-        if ensure_imap_system_folders(user).is_ok() {
-            count += 1;
-        }
-    }
-    Ok(count)
+fn ini_value(line: &str) -> Option<String> {
+    let (_, rest) = line.split_once('=')?;
+    let v = rest.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+    Some(v.to_string())
 }
 
-/// CPN Dovecot drop-in: auto-create + subscribe system folders with SPECIAL-USE.
+/// CPN Dovecot drop-in for stock `namespace inbox` hosts.
+///
+/// Classic CyberPanel uses an unnamed namespace with `prefix = INBOX.`; we do not
+/// declare a second namespace here (that can break LIST). Those hosts get folders via
+/// `doveadm mailbox create` with the prefixed IMAP names instead.
 pub fn ensure_dovecot_system_mailboxes_conf() -> Result<(), String> {
     let path = Path::new("/etc/dovecot/conf.d/99-cpn-mailboxes.conf");
     let body = r#"# Managed by CPN: auto-create/subscribe IMAP system folders for webmail.
@@ -164,7 +353,7 @@ namespace inbox {
 
 #[cfg(test)]
 mod tests {
-    use super::SYSTEM_FOLDERS;
+    use super::{SYSTEM_FOLDERS, parse_inbox_namespace_prefix};
 
     #[test]
     fn includes_junk_sent_archive() {
@@ -178,5 +367,28 @@ mod tests {
             .find(|(n, _)| *n == "Junk")
             .and_then(|(_, f)| *f);
         assert_eq!(junk_flag, Some(r"\Junk"));
+    }
+
+    #[test]
+    fn parses_cyberpanel_inbox_prefix() {
+        let raw = r#"
+namespace {
+    type = private
+    separator = .
+    prefix = INBOX.
+    inbox = yes
+}
+"#;
+        assert_eq!(parse_inbox_namespace_prefix(raw).as_deref(), Some("INBOX."));
+    }
+
+    #[test]
+    fn parses_empty_prefix_namespace_inbox() {
+        let raw = r#"
+namespace inbox {
+  inbox = yes
+}
+"#;
+        assert_eq!(parse_inbox_namespace_prefix(raw).as_deref(), Some(""));
     }
 }

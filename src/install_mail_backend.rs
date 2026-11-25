@@ -4,12 +4,81 @@ use crate::install_journal::{self, JournalAction};
 use crate::install_mail_listeners::{append_cpn_mail_listeners, ensure_postfix_tls_material};
 use crate::install_recipes::{DnfProgress, command, pkg_install};
 use crate::installer::{AppState, run_command};
-use crate::os_support::require_installable_guest;
+use crate::os_support::{GuestOs, require_installable_guest};
 use std::path::Path;
 use std::process::{Command as StdCommand, Stdio};
 use tokio::process::Command;
 
 const STAGE: &str = "mail_backend";
+
+struct PkgInstallResilientSpec<'a> {
+    packages_dnf: Vec<&'static str>,
+    packages_apt: Vec<&'static str>,
+    description: &'static str,
+    tracking: DnfProgress,
+    rpm_names: &'a [&'static str],
+    label: &'static str,
+}
+
+async fn run_pkg_install_resilient(
+    state: &AppState,
+    guest: &GuestOs,
+    spec: PkgInstallResilientSpec<'_>,
+) -> Result<(), String> {
+    let PkgInstallResilientSpec {
+        packages_dnf,
+        packages_apt,
+        description,
+        tracking,
+        rpm_names,
+        label,
+    } = spec;
+    let build_spec = || {
+        pkg_install(
+            guest,
+            packages_dnf.clone(),
+            packages_apt.clone(),
+            description,
+            tracking,
+        )
+    };
+    match run_command(state, build_spec()).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            if crate::apps_pkg::rpm_or_dpkg_installed(rpm_names) {
+                state.log(
+                    format!(
+                        "{label} install reported an error but required packages are on disk; continuing ({err})"
+                    ),
+                    "info",
+                );
+                return Ok(());
+            }
+            let retriable = err.contains("Terminated")
+                || err.contains("terminated")
+                || err.contains("code 143")
+                || err.contains("code -15")
+                || err.contains("SIGTERM")
+                || err.contains("Killed")
+                || err.contains("Timed out waiting");
+            if !retriable {
+                return Err(err);
+            }
+            state.log(
+                format!("Retrying {label} after interrupted package-manager run"),
+                "info",
+            );
+            install_journal::record(
+                STAGE,
+                JournalAction::Note,
+                label,
+                None,
+                Some(format!("retry after package error: {err}")),
+            )?;
+            run_command(state, build_spec()).await
+        }
+    }
+}
 
 /// Postfix + Dovecot configuration shared by installer and Email host package heal.
 pub fn apply_local_mail_configuration() -> Result<(), String> {
@@ -135,6 +204,20 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
     // Accept mail for hosted domains and deliver it to the local mailbox users.
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mail configuration");
 
+    // Best-effort OpenDKIM (keys under /var/lib/cpn/dkim; DNS via provision_mail_dns on site ready / Email Start / DKIM ensure).
+    match crate::panel_ops_opendkim::ensure_opendkim_stack() {
+        Ok(_) => {}
+        Err(e) => {
+            let _ = install_journal::record(
+                STAGE,
+                JournalAction::Note,
+                "opendkim",
+                None,
+                Some(format!("deferred: {e}")),
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -150,30 +233,76 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         )
         .await;
 
-    run_command(
-        state,
-        pkg_install(
+    if crate::mail_postfix_detect::postfix_mta_present() {
+        state.log(
+            "Reusing existing Postfix (postfix3, postfix, or active listeners). Skipping MTA package install.".to_string(),
+            "info",
+        );
+        install_journal::record(
+            STAGE,
+            JournalAction::Note,
+            "postfix",
+            None,
+            Some("reused existing MTA".into()),
+        )?;
+    } else {
+        run_pkg_install_resilient(
+            state,
             &guest,
-            vec!["postfix", "dovecot"],
-            vec!["postfix", "dovecot-core", "dovecot-imapd"],
-            "Installing Postfix and Dovecot",
-            DnfProgress {
-                download_start: 62,
-                download_end: 68,
-                install_start: 68,
-                install_end: 74,
-                label: "Mail backend",
+            PkgInstallResilientSpec {
+                packages_dnf: vec!["postfix"],
+                packages_apt: vec!["postfix"],
+                description: "Installing Postfix",
+                tracking: DnfProgress {
+                    download_start: 62,
+                    download_end: 66,
+                    install_start: 66,
+                    install_end: 70,
+                    label: "Postfix",
+                },
+                rpm_names: &["postfix", "postfix3"],
+                label: "Postfix",
             },
-        ),
-    )
-    .await?;
-    install_journal::record(
-        STAGE,
-        JournalAction::InstalledPackage,
-        "postfix,dovecot",
-        None,
-        Some("mail backend packages".into()),
-    )?;
+        )
+        .await?;
+        install_journal::record(
+            STAGE,
+            JournalAction::InstalledPackage,
+            "postfix",
+            None,
+            Some("mail MTA package".into()),
+        )?;
+    }
+    if !crate::apps_pkg::rpm_or_dpkg_installed(&["dovecot", "dovecot-core"]) {
+        run_pkg_install_resilient(
+            state,
+            &guest,
+            PkgInstallResilientSpec {
+                packages_dnf: vec!["dovecot"],
+                packages_apt: vec!["dovecot-core", "dovecot-imapd"],
+                description: "Installing Dovecot",
+                tracking: DnfProgress {
+                    download_start: 70,
+                    download_end: 72,
+                    install_start: 72,
+                    install_end: 74,
+                    label: "Dovecot",
+                },
+                rpm_names: &["dovecot", "dovecot-core"],
+                label: "Dovecot",
+            },
+        )
+        .await?;
+        install_journal::record(
+            STAGE,
+            JournalAction::InstalledPackage,
+            "dovecot",
+            None,
+            Some("IMAP backend".into()),
+        )?;
+    } else {
+        state.log("Reusing existing Dovecot installation.".to_string(), "info");
+    }
 
     apply_local_mail_configuration()?;
     install_journal::record(

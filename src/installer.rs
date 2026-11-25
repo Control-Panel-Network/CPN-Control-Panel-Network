@@ -448,7 +448,7 @@ pub(crate) async fn install_php_runtime(
 ) -> Result<(), String> {
     let guest = require_installable_guest()?;
     let today = chrono_today_ymd();
-    // Prefer the persisted install default; otherwise enable preferred 8.5 (EL9+) with fallback.
+    // Prefer the persisted install default; otherwise enable preferred 8.6 (EL9+) with fallback.
     let requested = crate::php_defaults::load_php_default().map(|r| r.requested);
     match tokio::task::spawn_blocking({
         let guest = guest.clone();
@@ -461,13 +461,18 @@ pub(crate) async fn install_php_runtime(
         Ok(Ok(record)) => {
             state.log(record.message.clone(), "info");
             if let Err(err) = crate::php_defaults::assert_stream_ok(&record.stream, &today) {
-                // apt path uses stream "apt"; skip lifecycle for that marker.
-                if record.stream != "apt" {
+                // apt path uses stream "apt"; lsphp uses `lsphp:lsphp85` (no Remi module).
+                if record.stream != "apt" && !record.stream.starts_with("lsphp:") {
                     return Err(err);
                 }
             }
         }
         Ok(Err(error)) => {
+            if crate::php_lsphp_host::should_skip_remi_php_packages() {
+                return Err(format!(
+                    "LiteSpeed PHP is present but could not be adopted: {error}"
+                ));
+            }
             // Fall back to legacy module enable when prepare fails on partial hosts.
             state.log(
                 format!("PHP prepare warning: {error}; trying legacy module enable"),
@@ -480,6 +485,36 @@ pub(crate) async fn install_php_runtime(
         Err(error) => {
             return Err(format!("PHP prepare join failed: {error}"));
         }
+    }
+    if crate::php_lsphp_host::should_skip_remi_php_packages() {
+        let ext = tokio::task::spawn_blocking(crate::php_lsphp_host::ensure_lsphp_panel_extensions)
+            .await
+            .map_err(|error| format!("lsphp extension join failed: {error}"))?;
+        match ext {
+            Ok(note) => state.log(note, "info"),
+            Err(error) => state.log(format!("lsphp extensions warning: {error}"), "error"),
+        }
+        let bin = crate::php_lsphp_host::best_lsphp_cli_binary()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "php".into());
+        let check = format!("{bin} -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);'");
+        let status = Command::new("bash")
+            .args(["-c", &check])
+            .kill_on_drop(true)
+            .status()
+            .await
+            .map_err(|error| format!("LiteSpeed PHP version check failed: {error}"))?;
+        if !status.success() {
+            return Err(
+                "LiteSpeed PHP is older than 8.2 (EOL). Install a newer lsphp series from PHP Extensions."
+                    .into(),
+            );
+        }
+        state.log(
+            format!("Skipped Remi php-fpm install ({label}); using LiteSpeed lsphp runtime."),
+            "info",
+        );
+        return Ok(());
     }
     if guest.uses_apt() {
         run_command(state, apt_update_command()).await?;
@@ -497,7 +532,7 @@ pub(crate) async fn install_php_runtime(
         .map_err(|error| format!("PHP version check failed: {error}"))?;
     if !status.success() {
         return Err(
-            "Installed PHP is older than 8.2 (EOL). Enable Remi php:remi-8.5 (or 8.4/8.3/8.2) and retry."
+            "Installed PHP is older than 8.2 (EOL). Enable Remi php:remi-8.6 (or 8.5/8.4/8.3/8.2) and retry."
                 .into(),
         );
     }
@@ -634,26 +669,57 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             provision_local_mail_backend(&state).await?;
             verify_imap_smtp_listeners().await?;
             crate::install_mail_backend::verify_mail_roundtrip(&state).await?;
+            // Default first mailbox info@<apex> unless Setup Wizard opted out of a mail domain.
+            match crate::panel_ops_mail_default_mailbox::ensure_default_info_mailbox_for_host_email()
+            {
+                Ok(r) => state.log(r.summary(), "info"),
+                Err(e) => state.log(format!("Default info@ mailbox: {e}"), "warn"),
+            }
             install_webmail(&state, mail, engine).await?;
             state
                 .progress("testing", 92, format!("Checking {}", mail.label()))
                 .await;
-            run_command(
-                &state,
-                command(
-                    "systemctl",
-                    vec!["is-active", "--quiet", "php-fpm"],
-                    "Verifying PHP-FPM for webmail",
-                    "testing",
-                    94,
-                ),
-            )
-            .await?;
+            if crate::php_lsphp_host::should_skip_remi_php_packages() {
+                state.log(
+                    "Skipping php-fpm active check (LiteSpeed lsphp host runtime).".to_string(),
+                    "info",
+                );
+            } else {
+                run_command(
+                    &state,
+                    command(
+                        "systemctl",
+                        vec!["is-active", "--quiet", "php-fpm"],
+                        "Verifying PHP-FPM for webmail",
+                        "testing",
+                        94,
+                    ),
+                )
+                .await?;
+            }
+            // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
+            verify_imap_smtp_listeners().await?;
+            // Idempotent light heal after stack + webmail install (same path as upgrade).
+            // Must run before the final HTTP UI check: heal may rewrite loopback listen
+            // config, and guests without `ss` used to relocate off :8080 incorrectly.
+            let heal = crate::mail_light_heal::run_light_email_heal("mail install");
+            for line in heal.summary_lines() {
+                state.log(line, "info");
+            }
+            if heal.ran_mail && !heal.validate_ok {
+                return Err(format!(
+                    "Mail install light heal: config validate failed (reload aborted). {}",
+                    heal.summary_lines().join(" | ")
+                ));
+            }
             state
                 .progress(
                     "testing",
                     97,
-                    format!("Validating HTTP UI and data/temp/logs denial ({})", mail.label()),
+                    format!(
+                        "Validating HTTP UI and data/temp/logs denial after light heal ({})",
+                        mail.label()
+                    ),
                 )
                 .await;
             // Keep blocking work off the Actix worker (curl + body checks).
@@ -661,8 +727,6 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             tokio::task::spawn_blocking(move || verify_webmail_http_surface(&mail_key))
                 .await
                 .map_err(|error| format!("webmail health join failed: {error}"))??;
-            // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
-            verify_imap_smtp_listeners().await?;
             {
                 let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;

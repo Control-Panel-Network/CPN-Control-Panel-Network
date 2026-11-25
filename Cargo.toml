@@ -1,6 +1,6 @@
 [package]
 name = "cpn-installer"
-version = "1.4.9"
+version = "1.4.13"
 edition = "2024"
 description = "CPN Server Panel installer (web UI and SSH/CLI)"
 license = "GPL-3.0-only"
@@ -20,17 +20,17 @@ path = "src/bin/cpn.rs"
 
 [dependencies]
 actix-web = "4.18.2"
-actix-ws = "0.3"
+actix-ws = "0.4"
 aes-gcm = "0.11"
 base64 = "0.23.1"
 clap = { version = "4", features = ["derive"] }
 data-encoding = "2"
 futures-util = "0.3"
 hmac = "0.13"
-lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "native-tls"] }
+lettre = { version = "0.11.24", default-features = false, features = ["builder", "smtp-transport", "native-tls"] }
 pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+qrcode = { version = "0.15", default-features = false, features = ["svg"] }
 rand = "0.9"
 rpassword = "7"
 rust-embed = "8"
@@ -39,14 +39,16 @@ serde_json = "1"
 sha1 = "0.11"
 sha2 = "0.11"
 tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
-url = "2"
+url = "2.5.9"
 uuid = { version = "1", features = ["serde", "v4", "v5"] }
-webauthn-rs = { version = "0.5", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals", "danger-user-presence-only-security-keys"] }
+webauthn-rs = { version = "0.6", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals", "danger-user-presence-only-security-keys"] }
 # `webauthn-rs` (passkeys) links OpenSSL through `openssl-sys`. This optional direct
 # dependency only exists so the `vendored-openssl` feature can build OpenSSL from
 # source (needs a C compiler plus Perl; NASM is optional on Windows MSVC). Default
 # builds keep linking the system OpenSSL exactly as before.
 openssl-sys = { version = "0.9", optional = true }
+# Pull rustix >=1.1.6 for RUSTSEC-2026-0486 (transitive via tempfile).
+rustix = "1.1.6"
 
 [features]
 default = []
@@ -58,6 +60,9 @@ vendored-openssl = ["dep:openssl-sys", "openssl-sys/vendored"]
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[dev-dependencies]
+webauthn-rs-proto = "0.6"
+
 [profile.release]
 lto = "thin"
 strip = true
@@ -66,3 +71,7 @@ panic = "abort"
 
 # Self-contained workspace so a broken parent `../Cargo.toml` cannot block builds.
 [workspace]
+
+# kanidm/crypto-glue 0.2.2 still pins rsa 0.10.0-rc.* (RUSTSEC-2023-0071). Vendor patch until crates.io bump.
+[patch.crates-io]
+crypto-glue = { path = "vendor/crypto-glue" }

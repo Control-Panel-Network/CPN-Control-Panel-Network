@@ -715,6 +715,30 @@ html[data-color-mode="dark"] .stack-form select,
 html[data-color-mode="dark"] .stack-form textarea {
   background:var(--canvas,#1a1d26); border-color:var(--hairline,#2a2f3a); color:#f2f4f7;
 }
+/* Keep themed dialogs aligned with dark canvas/ink (avoids UA white dialog). */
+[data-color-mode="dark"] .cpn-modal,
+html[data-color-mode="dark"] .cpn-modal {
+  background:var(--canvas,#1a1d26); color:var(--ink,#f2f4f7);
+  border-color:var(--hairline,#2a2f3a);
+}
+[data-color-mode="dark"] .cpn-modal h2,
+[data-color-mode="dark"] .cpn-modal .stack-form label,
+html[data-color-mode="dark"] .cpn-modal h2,
+html[data-color-mode="dark"] .cpn-modal .stack-form label {
+  color:var(--ink,#f2f4f7);
+}
+[data-color-mode="dark"] .cpn-modal .muted,
+html[data-color-mode="dark"] .cpn-modal .muted {
+  color:var(--muted,#98a2b3);
+}
+[data-color-mode="dark"] .cpn-modal .stack-form input,
+[data-color-mode="dark"] .cpn-modal .stack-form select,
+[data-color-mode="dark"] .cpn-modal .stack-form textarea,
+html[data-color-mode="dark"] .cpn-modal .stack-form input,
+html[data-color-mode="dark"] .cpn-modal .stack-form select,
+html[data-color-mode="dark"] .cpn-modal .stack-form textarea {
+  background:var(--surface-soft,#161922); border-color:var(--hairline,#2a2f3a); color:var(--ink,#f2f4f7);
+}
 [data-color-mode="dark"] .mfa-codes-panel,
 [data-color-mode="dark"] .mfa-totp-setup,
 html[data-color-mode="dark"] .mfa-codes-panel,
@@ -803,6 +827,20 @@ mod tests {
         assert_eq!(ColorMode::parse("nope"), None);
         assert_eq!(DesignPreset::parse("custom"), Some(DesignPreset::Custom));
         assert_eq!(DesignPreset::parse("x"), None);
+    }
+
+    #[test]
+    fn dark_mode_styles_keep_cpn_modal_on_themed_surface() {
+        let css = color_mode_styles();
+        assert!(
+            css.contains("[data-color-mode=\"dark\"] .cpn-modal")
+                && css.contains("background:var(--canvas"),
+            "dark mode must paint .cpn-modal with canvas (not UA white)"
+        );
+        assert!(
+            css.contains(".cpn-modal .stack-form label") && css.contains("color:var(--ink"),
+            "dark modal labels must use ink tokens for contrast on the modal surface"
+        );
     }
 
     #[test]

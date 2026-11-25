@@ -38,6 +38,7 @@ fn run_dnf_install(packages: &[&str]) -> Result<(), String> {
 
 fn branch_to_lsphp_prefix(branch: &str) -> Option<&'static str> {
     match branch.trim() {
+        "8.6" => Some("lsphp86"),
         "8.5" => Some("lsphp85"),
         "8.4" => Some("lsphp84"),
         "8.3" => Some("lsphp83"),
@@ -114,7 +115,13 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
         }
     };
 
-    if dnf_available() && record.stream != "apt" {
+    if dnf_available() && record.stream != "apt" && !record.stream.starts_with("lsphp:") {
+        if crate::php_lsphp_host::should_skip_remi_php_packages() {
+            return Ok(format!(
+                "Host PHP default is {} ({}). Remi php-fpm install skipped because LiteSpeed lsphp is present.",
+                record.branch, record.message
+            ));
+        }
         // switch-to already syncs modular packages; ensure core set is present for
         // first-boot / missing php-fpm, then restart so PMA picks up the binary.
         if let Err(err) = run_dnf_install(&[
@@ -203,6 +210,7 @@ mod tests {
 
     #[test]
     fn maps_branches() {
+        assert_eq!(branch_to_lsphp_prefix("8.6"), Some("lsphp86"));
         assert_eq!(branch_to_lsphp_prefix("8.5"), Some("lsphp85"));
         assert!(branch_to_lsphp_prefix("9.0").is_none());
     }

@@ -593,6 +593,51 @@ pub fn verify_after_upgrade(
         );
     }
 
+    // CyberPanel-style light email heal on upgrade (not heavy Reset Email).
+    // Fail-soft for stack heal; config validate is required when mail heal ran.
+    {
+        use crate::mail_light_heal::{run_light_email_heal, should_run_light_email_heal};
+        if should_run_light_email_heal() || crate::mail_light_heal::should_run_webmail_heal() {
+            let heal = run_light_email_heal("post-upgrade verify");
+            for line in heal.summary_lines() {
+                eprintln!("cpn-installer: upgrade verify: {line}");
+            }
+            let detail = if heal.skipped {
+                heal.skip_reason.unwrap_or_else(|| "skipped".into())
+            } else {
+                heal.summary_lines().join(" | ").chars().take(500).collect()
+            };
+            push(
+                &mut report,
+                "mail.light_heal",
+                heal.ok || heal.skipped,
+                detail,
+                false,
+            );
+            if heal.ran_mail {
+                push(
+                    &mut report,
+                    "mail.config_validate",
+                    heal.validate_ok,
+                    if heal.validate_ok {
+                        "postfix check and doveconf -n ok (reload gated)"
+                    } else {
+                        "postfix check / doveconf -n failed; reload aborted (CP preflight spirit)"
+                    },
+                    true,
+                );
+            }
+        } else {
+            push(
+                &mut report,
+                "mail.light_heal",
+                true,
+                "mail/webmail not present; light heal skipped",
+                false,
+            );
+        }
+    }
+
     // Docker: default leave stacks alone; verify previously running CPN-managed ones.
     let docker = panel_ops_docker::docker_status();
     if !docker.installed {

@@ -1,4 +1,8 @@
-//! Mailbox password reset (panel registry + local system hash via chpasswd).
+//! Mailbox password reset (panel registry + Dovecot auth backends).
+//!
+//! Virtual-mail SQL (`e_users`, BLF-CRYPT, full address) and PAM `chpasswd` (short local part)
+//! are selected by `mail_legacy_sql::virtual_sql_mail_active()`. The registry in
+//! `mail-accounts.json` is always updated; on classic stacks SQL and registry are dual-written.
 //! Webmail admin password sync for SnappyMail-family clients.
 
 use crate::install_snappymail_lineage::{WEBMAIL_ADMIN_CHOICE, webmail_admin_option_label};
@@ -51,18 +55,19 @@ pub fn mailbox_choices() -> Vec<(String, String)> {
         WEBMAIL_ADMIN_CHOICE.to_string(),
         webmail_admin_option_label(),
     )];
-    out.extend(list_accounts().into_iter().map(|a| (a.id, a.address)));
+    out.extend(
+        list_accounts()
+            .into_iter()
+            .filter(|a| !a.is_deleted())
+            .map(|a| (a.id, a.address)),
+    );
     out
 }
 
 /// Reset mailbox password, or SnappyMail-family admin when `address_or_id` is the Admin choice.
 pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result<String, String> {
-    if new_password.len() < 8 {
-        return Err("Password must be at least 8 characters".into());
-    }
-    if new_password.len() > 256 {
-        return Err("Password is too long".into());
-    }
+    let policy = crate::account::default_password_policy();
+    crate::account::password_meets_policy(new_password, &policy)?;
     let key = address_or_id.trim();
     if key.is_empty() {
         return Err("Select a mailbox".into());
@@ -72,13 +77,21 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     }
     let key_lc = key.to_ascii_lowercase();
     let mut file = load_accounts_file();
+    let found = file
+        .accounts
+        .iter()
+        .any(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc));
+    if !found {
+        let _ = crate::mail_accounts_import::ensure_legacy_registry_row(&key_lc);
+        file = load_accounts_file();
+    }
     let Some(account) = file
         .accounts
         .iter_mut()
         .find(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc))
     else {
         return Err(format!(
-            "Mailbox `{key_lc}` not found in the panel registry"
+            "Mailbox `{key_lc}` not found in the panel registry or classic mail inventory"
         ));
     };
     let address = account.address.clone();
@@ -90,16 +103,31 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mailbox password");
     // SOGo authenticates against the shadow hash mirrored in its SQL user source.
     crate::apps_sogo_config::sync_users_if_installed();
+    let virtual_sql = crate::mail_legacy_sql::virtual_sql_mail_active();
     match provisioned {
-        Ok(_provision) => Ok(format!(
-            "Password updated for `{address}`. Local mailbox ready."
-        )),
+        Ok(detail) => {
+            // Webmail seals its per-mailbox key with the login password; reset it so the
+            // user is not stuck on "login passphrase has changed" (mail itself is untouched).
+            let rekey = match crate::webmail_cryptkey::reset_client_cryptkey(&address) {
+                Ok(msg) if msg.starts_with("No sealed") => String::new(),
+                Ok(_) => " Webmail will create a new client key at next login.".to_string(),
+                Err(e) => format!(" Webmail client key reset skipped: {e}."),
+            };
+            Ok(format!("Password updated for `{address}`. {detail}{rekey}"))
+        }
         Err(err) => {
-            // Registry is authoritative for panel UI; local system provision may be
-            // unavailable in CI or when the panel lacks useradd privileges.
-            Ok(format!(
-                "Password updated for `{address}` in the panel registry. Local provision: {err}."
-            ))
+            if virtual_sql {
+                // Dovecot/IMAP on classic stacks reads SQL only; do not claim success.
+                Err(format!(
+                    "Password saved in the panel registry, but virtual-mail SQL auth was not updated: {err}"
+                ))
+            } else {
+                // Registry is authoritative for panel UI; local system provision may be
+                // unavailable in CI or when the panel lacks useradd privileges.
+                Ok(format!(
+                    "Password updated for `{address}` in the panel registry. Local provision: {err}."
+                ))
+            }
         }
     }
 }
@@ -129,10 +157,10 @@ mod tests {
     fn reset_updates_registry() {
         with_test_data_dir(|| {
             // Built from parts so CodeQL does not treat literals as hard-coded passwords.
-            let old_mailbox: String = ['o', 'l', 'd', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
+            let old_mailbox: String = ['O', 'l', 'd', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
                 .into_iter()
                 .collect();
-            let new_mailbox: String = ['n', 'e', 'w', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
+            let new_mailbox: String = ['N', 'e', 'w', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd', '1']
                 .into_iter()
                 .collect();
             let smtp_secret: String = ['s', 'e', 'c', 'r', 'e', 't'].into_iter().collect();

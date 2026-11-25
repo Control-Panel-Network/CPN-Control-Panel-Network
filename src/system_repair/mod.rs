@@ -11,11 +11,13 @@ use std::time::{Duration, Instant};
 mod email;
 mod host;
 mod host_apps;
+mod inventory;
 mod panel_core;
 mod site_preview;
 
 pub use email::EMAIL_HEAL_IDS;
 pub use host::HOST_HEAL_IDS;
+pub use inventory::INVENTORY_HEAL_IDS;
 pub use panel_core::CORE_HEAL_IDS;
 pub use site_preview::SITE_PREVIEW_HEAL_IDS;
 
@@ -237,6 +239,7 @@ pub fn run_checks_cached(filter_id: Option<&str>, force_refresh: bool) -> (Vec<R
     checks.extend(collect_group("host", host::collect));
     checks.extend(collect_group("apps", host_apps::collect));
     checks.extend(collect_group("preview", site_preview::collect));
+    checks.extend(collect_group("inventory", inventory::collect));
 
     if let Some(id) = filter {
         checks.retain(|c| c.id == id || c.heal_id.as_deref() == Some(id) || c.category == id);
@@ -255,6 +258,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
         .chain(EMAIL_HEAL_IDS.iter())
         .chain(HOST_HEAL_IDS.iter())
         .chain(SITE_PREVIEW_HEAL_IDS.iter())
+        .chain(INVENTORY_HEAL_IDS.iter())
     {
         if let Some(w) = want
             && w != *id
@@ -269,9 +273,11 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
             "email.firewall" => email::heal_email_firewall(),
             "firewall" => host::heal_firewall(),
             "openlitespeed" => host::heal_openlitespeed(),
+            "httpd" => host::heal_httpd(),
             "phpmyadmin" => host::heal_phpmyadmin(),
             "docker.engine" => host::heal_docker_engine(),
             "site.preview.chromium" => site_preview::heal_chromium(),
+            "sites.inventory" => inventory::heal_sites_inventory(),
             other => HealResult {
                 heal_id: other.into(),
                 ok: false,

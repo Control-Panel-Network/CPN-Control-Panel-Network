@@ -3,7 +3,11 @@
 use crate::backups::is_subdomain_site;
 use crate::mail_accounts;
 
+use crate::package_usage_scope::{owned_site_domains_for_usage, sites_for_package_usage};
+
 use crate::packages::{PackageUsage, QuotaResource, format_limit_display, package_for_account};
+
+use crate::panel_db_acl::list_managed_databases;
 
 use crate::panel_ops_db_disk::database_disk_bytes_for_owner;
 
@@ -15,9 +19,11 @@ use crate::panel_ops_mail_filters;
 
 use crate::panel_ops_mail_lists;
 
-use crate::resource_accounts::{list_databases, list_ftp_accounts};
+use crate::panel_website_resources::site_used_bytes;
 
-use crate::sites::{list_sites, parent_domain_candidates, site_home_from_record};
+use crate::resource_accounts::list_ftp_accounts;
+
+use crate::sites::{SiteRecord, parent_domain_candidates, site_home_from_record};
 
 use std::fs;
 
@@ -28,13 +34,7 @@ fn names_equal(a: &str, b: &str) -> bool {
 }
 
 fn owned_site_domains(username: &str) -> Result<Vec<String>, String> {
-    let sites = list_sites()?;
-
-    Ok(sites
-        .into_iter()
-        .filter(|s| names_equal(&s.owner, username))
-        .map(|s| s.domain)
-        .collect())
+    Ok(owned_site_domains_for_usage(username))
 }
 
 fn dir_size_mb(path: &Path, budget_bytes: &mut u64) -> u64 {
@@ -79,8 +79,15 @@ fn dir_size_mb(path: &Path, budget_bytes: &mut u64) -> u64 {
     total
 }
 
-fn disk_used_mb(username: &str) -> Result<u64, String> {
-    let sites = list_sites()?;
+fn disk_used_mb_for_sites(sites: &[SiteRecord]) -> u64 {
+    let mut key = String::from("fullmb:");
+    for site in sites {
+        key.push_str(site.domain.trim());
+        key.push('\n');
+    }
+    if let Some(hit) = crate::panel_perf_cache::caches().disk_mb.get(&key) {
+        return hit;
+    }
 
     let mut total = 0u64;
 
@@ -88,25 +95,78 @@ fn disk_used_mb(username: &str) -> Result<u64, String> {
 
     let mut budget = 50u64 * 1024 * 1024 * 1024;
 
-    for site in sites
-        .into_iter()
-        .filter(|s| names_equal(&s.owner, username))
-    {
-        let home = site_home_from_record(&site);
+    for site in sites {
+        let home = site_home_from_record(site);
 
         total = total.saturating_add(dir_size_mb(&home, &mut budget));
     }
 
-    Ok(total)
+    crate::panel_perf_cache::caches().disk_mb.insert(key, total);
+    total
+}
+
+/// Approximate site-home usage for dashboard (file-capped walks, not zero).
+fn approx_disk_mb_for_sites(sites: &[SiteRecord]) -> u64 {
+    let mut total_bytes = 0u64;
+    for site in sites {
+        total_bytes = total_bytes.saturating_add(site_used_bytes(site, 3_000).unwrap_or(0));
+    }
+    total_bytes.div_ceil(1024 * 1024)
+}
+
+/// Controls which usage probes run (dashboard avoids unbounded disk walks).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UsageCollectOpts {
+    /// When true, use file-capped approximate site disk instead of a deep walk.
+    pub approx_site_disk: bool,
+}
+
+impl UsageCollectOpts {
+    pub const fn full() -> Self {
+        Self {
+            approx_site_disk: false,
+        }
+    }
+
+    /// Keep counts live; approximate website storage; still meter MariaDB disk.
+    pub const fn dashboard() -> Self {
+        Self {
+            approx_site_disk: true,
+        }
+    }
 }
 
 pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
+    usage_for_account_opts(username, UsageCollectOpts::full())
+}
+
+pub fn usage_for_account_opts(
+    username: &str,
+    opts: UsageCollectOpts,
+) -> Result<PackageUsage, String> {
+    let cache_key = format!(
+        "{}:{}",
+        username.trim().to_ascii_lowercase(),
+        if opts.approx_site_disk {
+            "dash"
+        } else {
+            "full"
+        }
+    );
+    if let Some(cached) = crate::panel_perf_cache::caches()
+        .package_usage
+        .get(&cache_key)
+    {
+        return Ok(cached);
+    }
+
     let package = package_for_account(username)?;
 
     let owned = owned_site_domains(username)?;
 
-    let emails_used = mail_accounts::list_accounts()
+    let emails_used = mail_accounts::list_active_accounts()
         .into_iter()
+        .filter(|m| m.enabled)
         .filter(|m| {
             if owned.iter().any(|d| names_equal(d, &m.domain)) {
                 return true;
@@ -119,11 +179,7 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         })
         .count() as u64;
 
-    let sites = list_sites().unwrap_or_default();
-    let owned_sites: Vec<_> = sites
-        .into_iter()
-        .filter(|s| names_equal(&s.owner, username))
-        .collect();
+    let owned_sites = sites_for_package_usage(username);
     // Domains = apex/main websites only; Subdomains = nested FQDN sites; AliasDomains = aliases.
     // Nested sites must not consume the Websites (domains) quota.
     let domains_used = owned_sites
@@ -136,23 +192,27 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         .filter(|s| is_subdomain_site(&s.domain))
         .count() as u64;
 
-    let databases_used = list_databases()
-        .into_iter()
-        .filter(|d| names_equal(&d.owner, username))
-        .count() as u64;
+    // Align with Databases UI: admins see live MariaDB; others see registry rows they own.
+    let databases_used = list_managed_databases(username).len() as u64;
 
     let ftp_used = list_ftp_accounts()
         .into_iter()
         .filter(|f| names_equal(&f.owner, username))
         .count() as u64;
 
-    let disk_mb_used = disk_used_mb(username)?;
+    let disk_mb_used = if opts.approx_site_disk {
+        approx_disk_mb_for_sites(&owned_sites)
+    } else {
+        disk_used_mb_for_sites(&owned_sites)
+    };
 
     let bandwidth_mb_used = crate::package_bandwidth::bytes_to_mb_ceil(
         crate::package_bandwidth::account_month_bytes(username),
     );
 
-    Ok(PackageUsage {
+    let database_disk_bytes = database_disk_bytes_for_owner(username);
+
+    let usage = PackageUsage {
         package_id: package.id,
 
         package_name: package.name,
@@ -207,10 +267,14 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
 
         subdomains_limit: package.subdomains,
 
-        database_disk_bytes: database_disk_bytes_for_owner(username),
+        database_disk_bytes,
 
         fqdn_enabled: package.fqdn_enabled,
-    })
+    };
+    crate::panel_perf_cache::caches()
+        .package_usage
+        .insert(cache_key, usage.clone());
+    Ok(usage)
 }
 
 fn limit_reached(used: u64, limit: i64) -> bool {
@@ -509,6 +573,14 @@ mod tests {
                 "apex sites only count toward Websites"
             );
             assert_eq!(usage.subdomains_used, 1);
+
+            // Legacy CyberPanel-style owner on a second apex is attributed to bootstrap admin.
+            create_site("legacy.example", "legacy.example", None, None, None).unwrap();
+            let usage = usage_for_account("ops").unwrap();
+            assert_eq!(
+                usage.domains_used, 2,
+                "bootstrap admin must count legacy domain-owner apex sites"
+            );
 
             let err = require_alias_create_allowed("ops").unwrap_err();
             assert!(

@@ -23,8 +23,8 @@ use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
 use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
-    InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
-    MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
+    InstallPathRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
+    ListenPortRequest, MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_dashboard_layout_routes::{
@@ -36,98 +36,103 @@ use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
-    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get, acl_create_get,
-    acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
-    api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
-    backups_destinations_save, backups_gdrive_route, backups_gdrive_save, backups_gdrive_test,
-    backups_incremental_route, backups_incremental_run, backups_incremental_save,
-    backups_remote_route, backups_remote_save, backups_remote_test, backups_restore_plan_route,
-    backups_restore_route, backups_restore_run, backups_s3_route, backups_s3_save, backups_s3_test,
-    backups_schedule_route, backups_schedule_save, cloudflare_add_post, cloudflare_delete_post,
-    cloudflare_dns_get, cloudflare_oauth_callback_get, cloudflare_oauth_client_post,
-    cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post, cloudflare_proxy_post,
-    cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
-    dashboard_ssh_security_review_show, dashboard_ssh_security_review_snooze, databases_all_route,
-    databases_create_get, databases_create_post, databases_delete_get, databases_delete_post,
-    databases_manager_route, databases_password_get, databases_password_post,
-    databases_phpmyadmin_open, databases_phpmyadmin_route, docker_apps_action, docker_apps_deploy,
-    docker_apps_route, docker_container_action, docker_create_container, docker_create_route,
-    docker_export_route, docker_home, docker_image_delete, docker_image_prune, docker_image_pull,
-    docker_images_route, docker_list_route, docker_logs_route, docker_stack_create,
-    docker_stack_refresh, docker_stacks_route, docker_view_exec, docker_view_route,
-    email_accounts_route, email_autoresponders_delete, email_autoresponders_route,
-    email_autoresponders_save, email_bimi_push_cf, email_bimi_route, email_bimi_save,
-    email_catchall_route, email_catchall_save, email_create_route, email_debugger,
-    email_delivery_route, email_dkim_ensure, email_dkim_route, email_filters_delete,
-    email_filters_route, email_filters_save, email_forwarding_apply, email_forwarding_delete,
-    email_forwarding_route, email_forwarding_save, email_limits, email_limits_delete,
-    email_limits_save, email_lists_apply, email_lists_create, email_lists_delete,
-    email_lists_member_add, email_lists_member_delete, email_lists_route, email_mailscanner,
-    email_mailscanner_enable, email_marketing, email_marketing_list, email_marketing_recipient,
-    email_marketing_send, email_mta_sts_push_cf, email_mta_sts_route, email_mta_sts_save,
-    email_password, email_password_save, email_pattern_fwd, email_pattern_fwd_apply,
-    email_pattern_fwd_delete, email_pattern_fwd_save, email_plus, email_plus_save,
-    email_proton_route, email_proton_save, email_queue, email_queue_delete, email_queue_delete_all,
-    email_queue_flush, email_rspamd, email_rspamd_enable, email_spamassassin,
-    email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
-    email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
-    ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_overview_route, ftp_reset,
-    ftp_reset_password_post, ftp_reset_post, login_mfa_session, panel_migrate_apply,
-    panel_migrate_route, panel_migrate_wipe, passkey_delete_post, passkey_login_finish,
-    passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
-    passkey_register_start, passkey_rename_post, security_csf, security_csf_enable,
-    security_csf_install, security_fail2ban, security_fail2ban_bans, security_fail2ban_unban,
-    security_firewall, security_firewall_ban_add, security_firewall_ban_delete,
-    security_firewall_ban_unban, security_firewall_banned_import, security_firewall_enable,
-    security_firewall_export_banned, security_firewall_export_rules, security_firewall_reload,
-    security_firewall_rule_add, security_firewall_rule_delete, security_firewall_rules_import,
+    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get,
+    account_security_enroll_cli, acl_create_get, acl_create_post, acl_delete_post, acl_modify_get,
+    api_access_create_post, api_access_revoke_post, api_access_route, backups_create_route,
+    backups_destinations_route, backups_destinations_save, backups_gdrive_route,
+    backups_gdrive_save, backups_gdrive_test, backups_incremental_route, backups_incremental_run,
+    backups_incremental_save, backups_remote_route, backups_remote_save, backups_remote_test,
+    backups_restore_plan_route, backups_restore_route, backups_restore_run, backups_s3_route,
+    backups_s3_save, backups_s3_test, backups_schedule_route, backups_schedule_save,
+    cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get, cloudflare_oauth_callback_get,
+    cloudflare_oauth_client_post, cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post,
+    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
+    cloudflare_update_post, dashboard_ssh_security_review_show,
+    dashboard_ssh_security_review_snooze, databases_all_route, databases_create_get,
+    databases_create_post, databases_delete_get, databases_delete_post, databases_manager_route,
+    databases_password_get, databases_password_post, databases_phpmyadmin_open,
+    databases_phpmyadmin_route, docker_apps_action, docker_apps_deploy, docker_apps_route,
+    docker_container_action, docker_create_container, docker_create_route, docker_export_route,
+    docker_home, docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
+    docker_list_route, docker_logs_route, docker_stack_create, docker_stack_refresh,
+    docker_stacks_route, docker_view_exec, docker_view_route, email_accounts_route,
+    email_autoresponders_delete, email_autoresponders_route, email_autoresponders_save,
+    email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
+    email_catchall_save, email_create_route, email_debugger, email_delivery_route,
+    email_dkim_ensure, email_dkim_route, email_filters_delete, email_filters_route,
+    email_filters_save, email_forwarding_apply, email_forwarding_delete, email_forwarding_route,
+    email_forwarding_save, email_limits, email_limits_delete, email_limits_save, email_lists_apply,
+    email_lists_create, email_lists_delete, email_lists_member_add, email_lists_member_delete,
+    email_lists_route, email_mailscanner, email_mailscanner_enable, email_marketing,
+    email_marketing_list, email_marketing_recipient, email_marketing_send, email_mta_sts_push_cf,
+    email_mta_sts_route, email_mta_sts_save, email_password, email_password_save,
+    email_pattern_fwd, email_pattern_fwd_apply, email_pattern_fwd_delete, email_pattern_fwd_save,
+    email_plus, email_plus_save, email_proton_route, email_proton_save, email_queue,
+    email_queue_delete, email_queue_delete_all, email_queue_flush, email_rspamd,
+    email_rspamd_enable, email_spamassassin, email_spamassassin_enable, email_webmail_app_route,
+    email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
+    filemanager_alias, ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete,
+    ftp_delete_post, ftp_overview_route, ftp_reset, ftp_reset_password_post, ftp_reset_post,
+    login_mfa_session, panel_migrate_apply, panel_migrate_route, panel_migrate_wipe,
+    passkey_delete_post, passkey_login_finish, passkey_login_start, passkey_mfa_finish,
+    passkey_mfa_start, passkey_register_finish, passkey_register_start, passkey_rename_post,
+    security_csf, security_csf_enable, security_csf_install, security_fail2ban,
+    security_fail2ban_bans, security_fail2ban_unban, security_firewall, security_firewall_ban_add,
+    security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_ban_update,
+    security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
+    security_firewall_export_rules, security_firewall_reload, security_firewall_rule_add,
+    security_firewall_rule_delete, security_firewall_rule_update, security_firewall_rules_import,
     security_firewall_start, security_firewall_stop, security_firewall_trusted_add,
-    security_firewall_trusted_delete, security_malware, security_malware_run, security_modsec,
-    security_modsec_rules, security_page, security_rule_packs, security_ssh,
-    security_ssh_show_review, security_ssh_toggle, security_ssl, security_ssl_defaults,
-    security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
-    security_ssl_issue_all, security_ssl_mail, security_ssl_manage, security_ssl_mark_custom,
-    security_ssl_origin_backup, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
-    security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
-    server_dns_nameservers, server_dns_nameservers_add, server_dns_nameservers_delete,
-    server_dns_nameservers_save, server_dns_record_add, server_dns_record_delete, server_dns_zones,
-    server_dns_zones_create_get, server_dns_zones_create_post, server_dns_zones_delete,
-    server_dns_zones_manage, server_dns_zones_save, server_docker_apps, server_docker_containers,
-    server_docker_images, server_filemanager_alias, server_files_asset_css, server_files_asset_js,
-    server_files_list, server_files_op, server_files_page, server_files_post, server_files_upload,
-    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
-    server_litespeed_plans_page, server_litespeed_serial, server_litespeed_tier,
+    security_firewall_trusted_delete, security_firewall_trusted_update, security_malware,
+    security_malware_run, security_modsec, security_modsec_rules, security_page,
+    security_rule_packs, security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
+    security_ssl_defaults, security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
+    security_ssl_issue_all, security_ssl_mail, security_ssl_mail_issue, security_ssl_manage,
+    security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
+    security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
+    server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
+    server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
+    server_dns_record_add, server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
+    server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
+    server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
+    server_filemanager_alias, server_files_asset_css, server_files_asset_js, server_files_list,
+    server_files_op, server_files_page, server_files_post, server_files_upload,
+    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_license_key,
+    server_litespeed_license_refresh, server_litespeed_page, server_litespeed_plans_page,
+    server_litespeed_serial, server_litespeed_tier, server_litespeed_trial,
     server_litespeed_upgrade, server_litespeed_webadmin_url, server_log_view_route,
     server_logs_route, server_openlitespeed_guest, server_openlitespeed_guest_remove,
-    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
-    server_packages_page, server_page, server_php_configs, server_php_configs_post,
-    server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
-    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
-    server_php_extensions_install, server_php_extensions_set_default,
-    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_overview,
-    server_php_tuning, server_processes_page, server_services_control, server_services_page,
-    settings_connect_page, settings_design_page, settings_error_messages_page,
-    settings_error_messages_preview, settings_error_messages_restore_all,
-    settings_error_messages_restore_forbidden, settings_error_messages_restore_internal,
-    settings_error_messages_restore_not_found, settings_error_messages_save, settings_logs_page,
-    settings_logs_save, settings_markdown_preview, settings_page, settings_port_ip_backup,
-    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
+    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_password_get,
+    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
+    server_php_configs_post, server_php_configs_restart, server_php_configs_save_advanced,
+    server_php_configs_save_basic, server_php_configs_set_default,
+    server_php_configs_set_default_get, server_php_extensions, server_php_extensions_install,
+    server_php_extensions_set_default, server_php_extensions_set_default_get,
+    server_php_extensions_uninstall, server_php_overview, server_php_tuning, server_processes_page,
+    server_services_control, server_services_page, settings_audit_export, settings_audit_page,
+    settings_audit_save, settings_connect_page, settings_cpn_settings_save, settings_design_page,
+    settings_error_messages_page, settings_error_messages_preview,
+    settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
+    settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
+    settings_error_messages_save, settings_logs_page, settings_logs_save,
+    settings_markdown_preview, settings_page, settings_port_ip_backup, settings_port_page,
+    settings_setup_page, settings_setup_save, settings_site_messages_page,
     settings_site_messages_preview_site_ready, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
-    settings_site_messages_save, settings_system_repair_redirect, settings_version_page,
-    sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
-    site_files_list, site_files_op, site_files_page_route, site_files_upload,
-    system_repair_api_route, system_repair_heal_route, system_repair_report_route,
-    system_repair_route, users_admin_details_post, users_assign_package_post, users_create_get,
-    users_create_post, users_delete_post, users_list_route, users_manage_fragment_route,
-    users_modify_get, users_password_post, users_plans_page, users_profile_details_post,
-    users_profile_password_post, users_profile_route, users_profile_totp_begin,
-    users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
-    users_reseller_assign_post, users_reseller_branding_post, users_reseller_create_user_post,
-    users_reseller_demote_post, users_reseller_promote_post, users_reseller_quotas_post,
-    users_reseller_route, users_reseller_unassign_post, users_status_post,
-    users_subusers_capabilities_post, users_subusers_create_post, users_subusers_delete_post,
-    users_subusers_get,
+    settings_site_messages_save, settings_system_repair_redirect, settings_ui_prefs_save,
+    settings_version_page, sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post,
+    site_filemanager_alias, site_files_list, site_files_op, site_files_page_route,
+    site_files_upload, system_repair_api_route, system_repair_heal_route,
+    system_repair_report_route, system_repair_route, users_admin_details_post,
+    users_assign_package_post, users_create_get, users_create_post, users_delete_post,
+    users_list_route, users_manage_fragment_route, users_modify_get, users_password_post,
+    users_plans_page, users_profile_details_post, users_profile_password_post, users_profile_route,
+    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
+    users_rename_post, users_reseller_assign_post, users_reseller_branding_post,
+    users_reseller_create_user_post, users_reseller_demote_post, users_reseller_promote_post,
+    users_reseller_quotas_post, users_reseller_route, users_reseller_unassign_post,
+    users_status_post, users_subusers_capabilities_post, users_subusers_create_post,
+    users_subusers_delete_post, users_subusers_get,
 };
 use cpn_installer::panel_mr_agent::{
     plugins_mr_agent_host_policy, plugins_mr_agent_page, plugins_mr_agent_prune,
@@ -152,17 +157,18 @@ use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_
 use cpn_installer::panel_routes::{
     apps_activate, apps_deactivate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop,
     apps_uninstall, backups_page, backups_run, databases_create, databases_ftp_create,
-    databases_install_mariadb, databases_page, email_account_create, email_account_disable,
-    email_account_enable, email_page, plugins_activate_host, plugins_dashboard_page,
-    plugins_deactivate_host, plugins_disable, plugins_disable_cpn, plugins_enable,
-    plugins_enable_cpn, plugins_install, plugins_install_cpn, plugins_install_host, plugins_page,
-    plugins_settings_page, plugins_settings_save, plugins_uninstall, plugins_uninstall_cpn,
-    plugins_uninstall_host, preview_content, preview_mode_page, site_preview_image,
-    site_preview_refresh, subdomains_create, subdomains_create_page, subdomains_page,
-    websites_create, websites_create_page, websites_delete, websites_list_page, websites_manage,
-    websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
-    websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
-    websites_suspend_message, websites_suspend_message_restore,
+    databases_install_mariadb, databases_page, email_account_create, email_account_delete,
+    email_account_disable, email_account_enable, email_account_modify, email_account_restore,
+    email_page, plugins_activate_host, plugins_dashboard_page, plugins_deactivate_host,
+    plugins_disable, plugins_disable_cpn, plugins_enable, plugins_enable_cpn, plugins_install,
+    plugins_install_cpn, plugins_install_host, plugins_page, plugins_settings_page,
+    plugins_settings_save, plugins_uninstall, plugins_uninstall_cpn, plugins_uninstall_host,
+    preview_content, preview_mode_page, site_preview_image, site_preview_refresh,
+    subdomains_create, subdomains_create_page, subdomains_page, websites_create,
+    websites_create_page, websites_delete, websites_list_page, websites_manage, websites_page,
+    websites_prefs, websites_pretty_manage, websites_preview_prefs, websites_preview_redirect,
+    websites_reset_placeholder, websites_resume, websites_suspend, websites_suspend_message,
+    websites_suspend_message_restore,
 };
 use cpn_installer::panel_site_apps_routes::{websites_apps_get, websites_apps_post};
 use cpn_installer::panel_site_tools_routes::{
@@ -515,7 +521,9 @@ async fn set_listen_port(
         let result = if trimmed.is_empty() {
             clear_panel_public_url()
         } else {
-            save_panel_public_url(trimmed)
+            let normalized =
+                cpn_installer::panel_public_url::coerce_panel_public_url_input(trimmed);
+            save_panel_public_url(&normalized)
         };
         if let Err(error) = result {
             return listen_port_json_err(400, &error);
@@ -570,6 +578,68 @@ async fn set_listen_port(
         "redirect_url": redirect_url,
         "network": network,
         "port_migration": migration,
+    }))
+}
+
+#[post("/api/install/path")]
+async fn set_install_path(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<InstallPathRequest>,
+) -> HttpResponse {
+    if !authorized_request(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    let panels = cpn_installer::foreign_panel::install_intent::foreign_panels_public();
+    if panels.is_empty() {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "No foreign panel is detected on this host"}));
+    }
+    let target =
+        if request.mode == cpn_installer::foreign_panel::install_intent::InstallPathMode::Migrate {
+            let trimmed = request
+                .target_panel_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            if let Some(id) = trimmed {
+                if !panels.iter().any(|row| row.id == id) {
+                    return HttpResponse::BadRequest().json(serde_json::json!({
+                        "error": format!("Unknown panel id `{id}`. Choose from the detected list."),
+                    }));
+                }
+                Some(id.to_string())
+            } else {
+                cpn_installer::foreign_panel::install_intent::default_migrate_target(
+                    &cpn_installer::foreign_panel::install_intent::detected_panels(),
+                )
+            }
+        } else {
+            None
+        };
+    let record = cpn_installer::foreign_panel::install_intent::InstallPathRecord {
+        mode: request.mode,
+        target_panel_id: target.clone(),
+        chosen_at_unix: cpn_installer::http_helpers::now_unix(),
+    };
+    if let Err(error) = cpn_installer::foreign_panel::install_intent::save_install_path(&record) {
+        return HttpResponse::InternalServerError().json(serde_json::json!({"error": error}));
+    }
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+    current.install_path = Some(record.mode);
+    current.install_path_target_id = record.target_panel_id.clone();
+    current.foreign_panels = panels;
+    let payload = enrich_status(current.clone(), &state.token);
+    drop(current);
+    HttpResponse::Ok().json(serde_json::json!({
+        "ok": true,
+        "status": payload,
+        "install_path": record.mode,
+        "target_panel_id": record.target_panel_id,
     }))
 }
 
@@ -778,6 +848,20 @@ async fn phpmyadmin_mount_proxy(
     cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await
 }
 
+async fn ols_webadmin_mount_proxy(
+    req: HttpRequest,
+    payload: web::Payload,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if !cpn_installer::panel_ols_webadmin_proxy::allowed_proxy_method(req.method()) {
+        return HttpResponse::MethodNotAllowed().finish();
+    }
+    if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
+        return cpn_installer::panel_hub_http::login_redirect(&req);
+    }
+    cpn_installer::panel_ols_webadmin_proxy::ols_webadmin_panel_proxy(req, payload).await
+}
+
 /// SOGo mount entry without a method guard and without the `{path}` extractor, so WebDAV
 /// verbs (PROPFIND, REPORT, OPTIONS, MKCALENDAR, MOVE) on `/SOGo`, `/SOGo/...`, `/SOGo.woa/...`,
 /// and `/.well-known/caldav|carddav` reach the proxy. Delegates to `panel_catch_all`, which
@@ -809,6 +893,9 @@ async fn panel_catch_all(
     }
     if cpn_installer::panel_phpmyadmin_proxy::path_should_proxy_phpmyadmin(req.path()) {
         return phpmyadmin_mount_proxy(req, payload, state).await;
+    }
+    if cpn_installer::panel_ols_webadmin_proxy::path_should_proxy_ols_webadmin(req.path()) {
+        return ols_webadmin_mount_proxy(req, payload, state).await;
     }
     if matches!(*req.method(), Method::GET | Method::HEAD) {
         let name = path.into_inner();
@@ -947,6 +1034,9 @@ async fn main() -> std::io::Result<()> {
         }
     };
     apply_startup_network_flags(&args, listen_port);
+    if let Err(error) = cpn_installer::foreign_panel::install_intent::apply_cli_flags(&args) {
+        eprintln!("cpn-installer: install path flags: {error}");
+    }
     purge_expired_migration();
     match cpn_installer::panel_migrate::run_pending_migrations() {
         Ok(applied) if !applied.is_empty() => {
@@ -968,7 +1058,8 @@ async fn main() -> std::io::Result<()> {
         );
     }
 
-    println!("\nCPN Server Panel Â· Installer {VERSION}");
+    println!("\nCPN Server Panel · Installer {VERSION}");
+    cpn_installer::foreign_panel::install_notice::print_install_migration_notice();
     println!("Starting the web installer (language detected from browser/system)...\n");
     cpn_installer::motd::ensure_motd_installed();
     // Clear restarting / expired upgrade maintenance flags after a healthy boot.
@@ -981,20 +1072,25 @@ async fn main() -> std::io::Result<()> {
             cpn_installer::upgrade_tip_log::log_tagged_main_only("upgrade", "info", &line);
         }
     });
-    // Heal hosted-domain mail routing on upgrade (no-op without Postfix or local mailboxes).
+    // CyberPanel-style light email heal after upgrade/restart (maps sync included).
+    // No-op when mail/webmail are absent. Never runs heavy Reset Email.
     std::thread::spawn(|| {
-        cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");
+        cpn_installer::mail_light_heal::run_light_email_heal_logged("panel start");
     });
+    // Move panel state into MariaDB (`cpn_panel` / `cpn_mail`). A full, backed-up,
+    // idempotent migration runs once per installed version (package upgrade, tip
+    // upgrade, fresh install); otherwise only a cheap incremental sync. Never blocks boot.
+    std::thread::spawn(|| {
+        cpn_installer::panel_db::state::ensure_logged("panel start");
+    });
+    // Keep the webmail admin owner bridge (login + session reuse) alive across webmail-only
+    // updates that replace the hooked files without running any CPN heal.
+    cpn_installer::tachyon_admin_bridge_install::spawn_bridge_watch();
     // Minimal installs ship firewalld stopped; bring it up with a safe baseline
     // unless the operator stopped it on purpose.
     std::thread::spawn(|| {
         let _ = cpn_installer::panel_ops_firewall_heal::heal_firewalld("panel start");
     });
-    let token: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(28)
-        .map(char::from)
-        .collect();
     let session_id: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(28)
@@ -1024,11 +1120,19 @@ async fn main() -> std::io::Result<()> {
         "ready"
     };
     let has_bootstrap_account = bootstrap_account.is_some();
+    let token =
+        cpn_installer::paths::resume_or_new_installer_bootstrap_token(has_bootstrap_account, phase);
     let message = if maintenance.existing_install {
         format!(
             "CPN {} is already installed. Choose upgrade, repair, or continue config.",
             existing.package_version
         )
+    } else if let Some(banner) =
+        cpn_installer::foreign_panel::install_notice::format_detection_banner(
+            &cpn_installer::foreign_panel::install_notice::detect_foreign_panels(),
+        )
+    {
+        format!("The system is ready to continue.\n\n{banner}")
     } else {
         "The system is ready to continue".into()
     };
@@ -1060,6 +1164,9 @@ async fn main() -> std::io::Result<()> {
         smtp: Some(smtp_status_public()),
         maintenance: Some(maintenance),
         restart_scheduled: false,
+        foreign_panels: Vec::new(),
+        install_path: None,
+        install_path_target_id: None,
     };
     initial = enrich_status(initial, &token);
     cpn_installer::installer::persist_status_snapshot(&initial);
@@ -1182,7 +1289,11 @@ async fn main() -> std::io::Result<()> {
             .service(status_page)
             .service(login_page)
             .service(login_services_status)
+            .service(cpn_installer::tachyon_admin_bridge::tachyon_admin_verify)
+            .service(cpn_installer::tachyon_admin_session::tachyon_admin_session)
             .service(cpn_logo)
+            .service(cpn_installer::panel_static_assets::panel_stylesheet)
+            .service(cpn_installer::panel_static_assets::panel_script)
             .service(favicon_ico)
             .service(favicon_svg)
             .service(apple_touch_icon)
@@ -1291,6 +1402,9 @@ async fn main() -> std::io::Result<()> {
             .service(email_account_create)
             .service(email_account_enable)
             .service(email_account_disable)
+            .service(email_account_delete)
+            .service(email_account_restore)
+            .service(email_account_modify)
             .service(databases_page)
             .service(databases_install_mariadb)
             .service(databases_create)
@@ -1351,6 +1465,7 @@ async fn main() -> std::io::Result<()> {
             .service(system_repair_heal_route)
             .service(settings_system_repair_redirect)
             .service(server_openlitespeed_page)
+            .service(server_openlitespeed_password_get)
             .service(server_openlitespeed_password)
             .service(server_openlitespeed_reset_cpn)
             .service(server_openlitespeed_guest)
@@ -1360,6 +1475,9 @@ async fn main() -> std::io::Result<()> {
             .service(server_litespeed_plans_page)
             .service(server_litespeed_tier)
             .service(server_litespeed_serial)
+            .service(server_litespeed_license_key)
+            .service(server_litespeed_license_refresh)
+            .service(server_litespeed_trial)
             .service(server_litespeed_webadmin_url)
             .service(server_litespeed_upgrade)
             .service(server_litespeed_downgrade)
@@ -1449,6 +1567,8 @@ async fn main() -> std::io::Result<()> {
             .service(cloudflare_delete_post)
             .service(cloudflare_proxy_post)
             .service(settings_page)
+            .service(settings_ui_prefs_save)
+            .service(settings_cpn_settings_save)
             .service(settings_version_page)
             .service(settings_design_page)
             .service(settings_setup_page)
@@ -1470,6 +1590,9 @@ async fn main() -> std::io::Result<()> {
             .service(settings_error_messages_restore_all)
             .service(settings_logs_page)
             .service(settings_logs_save)
+            .service(settings_audit_page)
+            .service(settings_audit_save)
+            .service(settings_audit_export)
             .service(settings_port_page)
             .service(settings_port_ip_backup)
             .service(security_page)
@@ -1489,6 +1612,9 @@ async fn main() -> std::io::Result<()> {
             .service(security_firewall_export_banned)
             .service(security_firewall_trusted_add)
             .service(security_firewall_trusted_delete)
+            .service(security_firewall_rule_update)
+            .service(security_firewall_ban_update)
+            .service(security_firewall_trusted_update)
             .service(security_ssh)
             .service(security_ssh_toggle)
             .service(security_ssh_show_review)
@@ -1508,6 +1634,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl_hostname)
             .service(security_ssl_hostname_enable)
             .service(security_ssl_mail)
+            .service(security_ssl_mail_issue)
             .service(security_ssl_issue)
             .service(security_ssl_origin_backup)
             .service(security_ssl_issue_all)
@@ -1527,6 +1654,7 @@ async fn main() -> std::io::Result<()> {
             .service(account_security_change_password_get)
             .service(account_security_change_password_post)
             .service(account_security_enroll_2fa_get)
+            .service(account_security_enroll_cli)
             .service(account_security_enroll_2fa_begin_get)
             .service(account_security_enroll_2fa_begin)
             .service(account_security_enroll_2fa_confirm)
@@ -1681,6 +1809,7 @@ async fn main() -> std::io::Result<()> {
             .service(reset_password_submit)
             .service(set_language)
             .service(set_listen_port)
+            .service(set_install_path)
             .service(bootstrap_session)
             .service(account_setup)
             .service(start_install)
@@ -1734,6 +1863,32 @@ async fn main() -> std::io::Result<()> {
                             .or(guard::Delete()),
                     )
                     .to(phpmyadmin_mount_proxy),
+            )
+            .route(
+                "/ols",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(ols_webadmin_mount_proxy),
+            )
+            .route(
+                "/ols/{path:.*}",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(ols_webadmin_mount_proxy),
             )
             // Use Any/or for methods. Chained .method() guards are AND'd and never match.
             .route(

@@ -12,6 +12,15 @@ const nb: LocaleMessages = {
   statusFetchError: "Kunne ikke spørre installasjonsprogrammet",
   startServerError: "Kunne ikke starte installasjonen",
   startMailError: "Kunne ikke starte e-postinstallasjonen",
+  installPathEyebrow: "PANEL OPPDAGET",
+  installPathTitle: "Ny installasjon eller migrering?",
+  installPathIntro:
+    "En annen panel er allerede på serveren. Velg migrering for å gjenbruke LiteSpeed, Postfix og Dovecot der det er trygt, deretter panel-migrate. CyberPanel har id classic.",
+  installPathFresh: "Ny installasjon",
+  installPathMigrate: "Migrer fra oppdaget panel",
+  installPathMigrateHint:
+    "Etter oppsett: Server → Panel migrate eller cpn panel-migrate apply.",
+  installPathTargetLabel: "Panel å migrere fra",
   selectServerTitle: "Velg webserver",
   selectServerIntro:
     "Velg motoren som passer prosjektet ditt. Stottede Linux-gjester inkluderer AlmaLinux, Rocky, Ubuntu og relaterte EL-mal. Windows Server og hypervisorer er verter for disse gjestene, ikke native panelinstallasjon. Du kan endre motoren senere fra panelet.",
@@ -53,7 +62,7 @@ const nb: LocaleMessages = {
   databasePhpmyadmin: "Installer ogsa phpMyAdmin (pa som standard)",
   phpVersionTitle: "PHP-versjon",
   phpVersionHint:
-    "Standard er PHP 8.5 pa AlmaLinux/RHEL 9+. Andre stottede versjoner kan velges. Hvis 8.5-pakker mangler, faller CPN tilbake og logger valget.",
+    "Standard er PHP 8.6 pa AlmaLinux/RHEL 9+. Andre stottede versjoner kan velges. Hvis 8.6-pakker mangler, faller CPN tilbake (8.5 forst) og logger valget.",
   serverOpenlitespeedDesc:
     "Høy ytelse med lavt ressursbruk. Bra for WordPress og travle nettsteder med innebygd LSCache.",
   serverNginxDesc:

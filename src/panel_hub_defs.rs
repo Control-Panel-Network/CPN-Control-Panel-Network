@@ -468,6 +468,12 @@ pub fn settings_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     href: "/settings/logs",
                     live: true,
                 },
+                HubTile {
+                    title: "Audit trail",
+                    subtitle: "90-day security activity, export, opt-out",
+                    href: "/settings/audit",
+                    live: true,
+                },
             ],
         ),
         (

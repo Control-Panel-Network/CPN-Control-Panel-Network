@@ -18,7 +18,8 @@ pub fn panel_migrate_page(csrf: &str, notice: Option<&str>, error: Option<&str>)
     let mut body = String::from(
         r#"<h2>Migrate another panel</h2>
 <p>CPN can copy websites, databases, mail, and DNS from a panel already installed on this server, then remove that panel's programs and the duplicate files. Shared services CPN still needs (MariaDB, the web server, mail) stay installed. A site that already lives in the CPN docroot is kept in place.</p>
-<p class="muted">Mail, DNS, and panel users are best-effort. Users are listed in the verify report and are not created as CPN accounts. Database import needs the MariaDB client. Large copies belong on <code>cpn panel-migrate</code> if this page times out.</p>"#,
+<p class="muted">Mail, DNS, and panel users are best-effort. Users are listed in the verify report and are not created as CPN accounts. Database import needs the MariaDB client. Large copies belong on <code>cpn panel-migrate</code> if this page times out.</p>
+<p class="muted">CyberPanel appears as <code>classic</code>. Operator sequence: <code>cpn panel-migrate checklist</code>, then detect / plan / apply / wipe. LiteSpeed Enterprise serial and <code>license.key</code> live under Server → LiteSpeed plans (<code>/usr/local/lsws/conf</code>). AlmaLinux 9 → 10 only after CPN owns the box (el10 RPM, Remi PHP 8.6, SOGo EL9-compat notes).</p>"#,
     );
     if let Some(notice) = notice {
         body.push_str(&format!("<p class=\"notice\">{}</p>", esc(notice)));

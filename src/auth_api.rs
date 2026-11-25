@@ -25,7 +25,7 @@ use crate::login_service_gate::{
 };
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
-use crate::panel_dashboard::panel_dashboard_html;
+use crate::panel_dashboard::{panel_dashboard_html, panel_dashboard_html_degraded};
 use crate::panel_session::{
     clear_mfa_pending_cookie_headers, clear_session_cookie_headers, create_mfa_pending_token,
     create_session_token, issue_mfa_pending_cookie_headers, issue_session_cookie_headers,
@@ -38,7 +38,7 @@ use crate::smtp_settings::validate_smtp_input;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
-#[get("/cpn-logo.png")]
+#[actix_web::route("/cpn-logo.png", method = "GET", method = "HEAD")]
 pub async fn cpn_logo() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("image/png")
@@ -94,6 +94,18 @@ fn append_set_cookies(builder: &mut actix_web::HttpResponseBuilder, cookies: Vec
     for cookie in cookies {
         builder.append_header(("Set-Cookie", cookie));
     }
+}
+
+/// Session cookie absolute expiry (unix seconds) when the request carries a valid panel session.
+pub fn panel_session_expiry_from_request(state: &AppState, http: &HttpRequest) -> Option<u64> {
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let port = request_auth_cookie_port(http);
+    let token = read_session_cookie(cookie, port)?;
+    let secret = session_secret(Some(&state.token));
+    crate::panel_session::session_expiry_from_token(&token, &secret)
 }
 
 pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
@@ -158,6 +170,16 @@ pub(crate) fn login_success_response(
     username: &str,
     next: Option<&str>,
 ) -> HttpResponse {
+    crate::panel_audit_http::audit_from_request(
+        http,
+        username,
+        "auth.login",
+        "",
+        true,
+        "login ok",
+        crate::panel_audit_types::AuditCategory::Auth,
+        crate::panel_audit_types::AuditSeverity::Notice,
+    );
     let peer = http.peer_addr().map(|a| a.ip().to_string());
     crate::panel_firewall_store::record_admin_login_ip(username, peer.as_deref());
     let _ = crate::panel_firewall_store::ensure_protected_seeds(
@@ -312,7 +334,7 @@ fn login_fail_fast_html(message: &str, next: Option<&str>) -> String {
 #[get("/api/login/services")]
 pub async fn login_services_status() -> HttpResponse {
     // Off the Actix worker so a slow gate cannot starve other /login requests.
-    // Outer timeout: reuse last-good when present; otherwise fail closed (no invite to sign in).
+    // Outer timeout: reuse last-good when present; otherwise fail open with a banner.
     match tokio::time::timeout(
         std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(evaluate_login_services),
@@ -442,6 +464,21 @@ pub async fn login_submit(
     };
 
     let Some(session_user) = authed else {
+        let actor = if username.is_empty() {
+            "anonymous"
+        } else {
+            username
+        };
+        crate::panel_audit_http::audit_from_request(
+            &http,
+            actor,
+            "auth.login.fail",
+            "",
+            false,
+            "login failed",
+            crate::panel_audit_types::AuditCategory::Auth,
+            crate::panel_audit_types::AuditSeverity::Warning,
+        );
         let err_msg = login_error_message(locale);
         if wants_login_json(&http) {
             return HttpResponse::Unauthorized()
@@ -640,17 +677,39 @@ pub async fn login_mfa_submit(
 
     match crate::account_mfa::verify_mfa_challenge(&username, &form.code) {
         Ok(true) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &username,
+                "auth.mfa.verify",
+                "",
+                true,
+                "mfa ok",
+                crate::panel_audit_types::AuditCategory::Auth,
+                crate::panel_audit_types::AuditSeverity::Notice,
+            );
             let token = create_session_token(&username, &secret);
             login_success_response(&http, &token, &username, next.as_deref())
         }
-        Ok(false) => HttpResponse::Unauthorized()
-            .content_type("text/html; charset=utf-8")
-            .body(panel_mfa_html(
-                &payload,
-                Some("Invalid authenticator or backup code."),
-                next.as_deref(),
-                options,
-            )),
+        Ok(false) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &username,
+                "auth.mfa.fail",
+                "",
+                false,
+                "mfa failed",
+                crate::panel_audit_types::AuditCategory::Auth,
+                crate::panel_audit_types::AuditSeverity::Warning,
+            );
+            HttpResponse::Unauthorized()
+                .content_type("text/html; charset=utf-8")
+                .body(panel_mfa_html(
+                    &payload,
+                    Some("Invalid authenticator or backup code."),
+                    next.as_deref(),
+                    options,
+                ))
+        }
         Err(error) => {
             let rate_limited = crate::account_mfa::is_mfa_rate_limit_error(&error);
             let mut builder = if rate_limited {
@@ -670,6 +729,7 @@ pub async fn login_mfa_submit(
     }
 }
 
+#[allow(dead_code)]
 fn panel_html_response(
     http: &HttpRequest,
     state: &AppState,
@@ -696,7 +756,22 @@ pub async fn dashboard_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let preview = query.get("preview").map(String::as_str) == Some("1");
-    panel_html_response(&http, &state, preview, panel_dashboard_html)
+    if let Some(user) = panel_user_from_request(state.get_ref(), &http) {
+        let fallback_user = user.clone();
+        let session_exp = crate::panel_hub_http::captured_session_exp(&http);
+        return crate::panel_hub_http::html_blocking_budget_or_fallback(
+            crate::panel_hub_http::HUB_RENDER_BUDGET,
+            move || panel_dashboard_html(&user, session_exp),
+            move || panel_dashboard_html_degraded(&fallback_user, session_exp),
+        )
+        .await;
+    }
+    if preview {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_dashboard_html("preview", None));
+    }
+    crate::login_next::login_redirect(&http)
 }
 
 #[get("/panel")]
@@ -706,7 +781,30 @@ pub async fn panel_alias() -> HttpResponse {
         .finish()
 }
 
+fn logout_actor(http: &HttpRequest) -> String {
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let port = request_auth_cookie_port(http);
+    let secret = session_secret(None);
+    read_session_cookie(cookie, port)
+        .and_then(|token| verify_session_token(&token, &secret))
+        .unwrap_or_else(|| "anonymous".into())
+}
+
 fn logout_response(http: &HttpRequest) -> HttpResponse {
+    let actor = logout_actor(http);
+    crate::panel_audit_http::audit_from_request(
+        http,
+        &actor,
+        "auth.logout",
+        "",
+        true,
+        "logout",
+        crate::panel_audit_types::AuditCategory::Auth,
+        crate::panel_audit_types::AuditSeverity::Notice,
+    );
     let secure = request_secure(http);
     let port = request_auth_cookie_port(http);
     let query_map = web::Query::<std::collections::HashMap<String, String>>::from_query(

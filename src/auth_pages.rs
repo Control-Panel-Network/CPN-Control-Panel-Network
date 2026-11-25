@@ -172,7 +172,7 @@ pub fn panel_login_html_with_gate(
     }
   }
   var pollFails=0;
-  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. Sign-in is disabled until panel services are confirmed running. Wait a few seconds and try again.';
+  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. Sign-in stays available; confirm panel services when you can.';
   function resetSignInButton(){
     if(!submit || !form) return;
     form.removeAttribute('data-cpn-submitting');
@@ -505,9 +505,9 @@ pub fn panel_mfa_html(
         _ => r#"<p class="error" id="i18n-login-error" role="alert" hidden></p>"#.into(),
     };
     let intro = if options.totp_available && options.passkey_available {
-        "Enter the 6-digit code from your authenticator app, a one-time backup code, or sign in with a passkey."
+        "Enter a 6-digit authenticator or backup code, or use a passkey (Windows Hello, a security key, or another WebAuthn authenticator)."
     } else if options.passkey_available {
-        "Confirm sign-in with a registered passkey for this account."
+        "Confirm sign-in with a passkey (Windows Hello, a security key, or another WebAuthn authenticator registered for this account)."
     } else {
         "Enter the 6-digit code from your authenticator app, or a one-time backup code."
     };
@@ -544,6 +544,11 @@ pub fn panel_mfa_html(
     } else {
         String::new()
     };
+    let passkey_auto_script = if options.passkey_available {
+        MFA_PASSKEY_AUTO_START_JS
+    } else {
+        ""
+    };
     let passkey_script = if options.passkey_available {
         crate::panel_webauthn::passkey_client_script()
     } else {
@@ -574,6 +579,7 @@ pub fn panel_mfa_html(
     </section>
   </main>
   <script>{passkey_script}</script>
+  <script>{passkey_auto}</script>
   <script>{watch_script}</script>
   {script}
 </body>
@@ -593,9 +599,28 @@ pub fn panel_mfa_html(
             None => String::new(),
         },
         passkey_script = passkey_script,
+        passkey_auto = passkey_auto_script,
         script = PANEL_I18N_SCRIPT,
     )
 }
+
+/// Auto-start WebAuthn on MFA page load; button remains a manual fallback.
+const MFA_PASSKEY_AUTO_START_JS: &str = r#"
+(function(){
+  if(!document.getElementById('i18n-passkey')) return;
+  var started=false;
+  function go(){
+    if(started||window.__cpnMfaLeaving) return;
+    started=true;
+    if(typeof cpnMfaPasskey==='function') cpnMfaPasskey();
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){ setTimeout(go,280); });
+  } else {
+    setTimeout(go,280);
+  }
+})();
+"#;
 
 pub fn forgot_password_html() -> String {
     let boot = load_bootstrap();
@@ -739,6 +764,83 @@ pub fn reset_password_html(token: &str, error: Option<&str>) -> String {
     )
 }
 
+pub fn mfa_enroll_cli_confirm_html(token: &str, username: &str) -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Continue MFA enroll · CPN Panel</title>
+  {favicons}
+  <style>{styles}</style>
+</head>
+<body data-page="mfa-enroll-confirm">
+  <main>
+    <section class="card">
+      <p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1>Continue MFA enrollment</h1>
+      <p class="hint">Operator link for account <strong>{user}</strong>. Click continue in a desktop browser to open the Security page (passkeys / Windows Hello). Chat or email link previews do not use this step.</p>
+      <form method="post" action="/account/security/enroll-cli" autocomplete="off">
+        <input type="hidden" name="token" value="{token}">
+        <button type="submit">Continue to Security</button>
+      </form>
+      <p class="hint">This confirmation is single-use and expires with the enroll link (15 minutes).</p>
+      <p><a href="/login">Back to login</a></p>
+    </section>
+  </main>
+</body>
+</html>"#,
+        locale = initial_locale,
+        favicons = brand_favicon_links(),
+        styles = shared_auth_styles(),
+        user = html_escape(username),
+        token = html_escape(token),
+    )
+}
+
+pub fn mfa_enroll_cli_invalid_html(message: &str) -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>MFA enroll link · CPN Panel</title>
+  {favicons}
+  <style>{styles}</style>
+</head>
+<body data-page="mfa-enroll-invalid">
+  <main>
+    <section class="card">
+      <p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1>MFA enroll link unavailable</h1>
+      <p class="error" role="alert">{msg}</p>
+      <p class="hint">Ask a server operator to run <code>sudo cpn mfa enroll-url --username YOURUSER</code> and open the new HTTPS link in a desktop browser.</p>
+      <p><a href="/login">Back to login</a></p>
+    </section>
+  </main>
+</body>
+</html>"#,
+        locale = initial_locale,
+        favicons = brand_favicon_links(),
+        styles = shared_auth_styles(),
+        msg = html_escape(message),
+    )
+}
+
 pub fn reset_password_invalid_html(message: &str) -> String {
     let boot = load_bootstrap();
     let initial_locale = boot
@@ -794,6 +896,12 @@ pub fn installer_token_required_html() -> String {
       <div id="cpn-lang-host" class="lang-host"></div>
       <h1 id="i18n-auth-title">Open the installer URL with its token</h1>
       <p id="i18n-auth-body">Installation is not finished yet. Use the full URL printed in the installer console, including the ?token=... query parameter.</p>
+      <p id="i18n-auth-recovery-title" class="muted" style="margin-top:1.25rem;font-weight:650;">Recovery on the server</p>
+      <ul class="muted" style="margin:0.35rem 0 0;padding-left:1.2rem;line-height:1.45;">
+        <li id="i18n-auth-recovery-file"><code>sudo cat /var/lib/cpn/installer-bootstrap.token</code></li>
+        <li id="i18n-auth-recovery-cli"><code>sudo cpn-installer --show-bootstrap-token</code></li>
+        <li id="i18n-auth-recovery-resume"><code>sudo cpn-installer --cli</code></li>
+      </ul>
       <p><a id="i18n-auth-login" href="/login">If installation already finished, open panel login.</a></p>
     </section>
   </main>
@@ -839,7 +947,9 @@ mod tests {
         );
         assert!(html.contains("cpnMfaPasskey"));
         assert!(html.contains("Sign in with passkey"));
+        assert!(html.contains("Windows Hello"));
         assert!(html.contains("Authenticator code"));
+        assert!(html.contains("setTimeout(go,280)"));
         assert!(html.contains("id=\"i18n-login-error\""));
         assert!(!html.contains("sudo cpn mfa clear"));
     }

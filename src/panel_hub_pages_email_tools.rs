@@ -143,8 +143,9 @@ pub fn email_limits_page(user: &str, notice: Option<&str>, error: Option<&str>) 
 }
 
 pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>) -> String {
-    // Live-heal lineage prefs and refresh admin_login from application.ini for the dropdown.
-    let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
+    // Heal lineage prefs (admin_login in application.ini) off the request path; the page reads
+    // whatever is on disk now and the next view sees the refreshed value.
+    crate::panel_webmail_heal_bg::schedule_webmail_prefs_heal();
     let csrf = html_escape(&email_csrf_token(user));
     let choices = mailbox_choices();
     let mut opts = String::from(r#"<option value="">Select mailbox</option>"#);
@@ -157,7 +158,7 @@ pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>
     }
     let admin_paths = crate::install_snappymail_lineage::webmail_admin_paths_summary();
     let body = format!(
-        r#"<p class="muted">Resets the mailbox login password in the panel registry and hashes it into the local system mailbox store when Postfix/Dovecot provisioning is available. Choose <strong>Webmail admin</strong> to set the admin password for every installed SnappyMail-family client ({admin_paths}). Mailbox rows only change that mailbox. Roundcube is not included.</p>
+        r#"<p class="muted">Resets the mailbox login password in the panel registry. On classic virtual-mail stacks (Dovecot SQL / <code>e_users</code>), the same password is written with BLF-CRYPT for full-address IMAP and webmail login. On PAM/system-mailbox hosts, the hash is applied via <code>chpasswd</code> when provisioning is available. Webmail admin sign-in ({admin_paths}) uses the panel owner account (same username, panel password, and 2FA code) and is owner-only: normal users, resellers, and ACL accounts are denied. <strong>Webmail admin</strong> below only updates the legacy local admin password used when that panel-owner link is turned off. Mailbox rows only change that mailbox. Roundcube is not included.</p>
         <form method="post" action="/email/password/save" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="csrf" value="{csrf}">
           <label for="mailbox">Mailbox</label>

@@ -3,4 +3,7 @@
 ignore = [
   # actix-http 3.x pins h2 0.3; fix requires actix-http migrating to h2 0.4+.
   "RUSTSEC-2026-0258",
+  # actix-web 4.x pulls cookie 0.16 (private-cookie nonce on fork). CPN does not use
+  # the cookie PrivateJar; no fixed actix-web release yet.
+  "RUSTSEC-2026-0594",
 ]

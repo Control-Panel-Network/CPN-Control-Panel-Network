@@ -58,20 +58,29 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
         }
 
         let onboarding = load_mail_onboarding();
-        if onboarding.mail_mode == MailMode::Local && !onboarding.skip_rdns {
+        let without_mail = onboarding.without_mail_domain || onboarding.skip_rdns;
+        if onboarding.mail_mode == MailMode::Local && !without_mail {
             match provision_mail_dns(&domain) {
                 Ok(msg) => report.steps.push(msg),
                 Err(e) => report.warnings.push(format!("Mail DNS: {e}")),
+            }
+            match crate::panel_ops_opendkim::ensure_opendkim_for_domain(&domain) {
+                Ok(msg) => report.steps.push(msg),
+                Err(e) => report.warnings.push(format!("OpenDKIM: {e}")),
+            }
+            match crate::panel_ops_mail_default_mailbox::ensure_default_info_mailbox(&domain) {
+                Ok(r) => report.steps.push(r.summary()),
+                Err(e) => report.warnings.push(format!("Default info@ mailbox: {e}")),
             }
         } else if onboarding.mail_mode == MailMode::External {
             report.steps.push(
             "External mail mode: skipped local SPF/DKIM/DMARC auto-DNS (configure at your provider)."
                 .into(),
         );
-        } else if onboarding.skip_rdns {
-            report
-                .steps
-                .push("Skip email/rDNS onboarding: skipped mail DNS auto-provision.".into());
+        } else if without_mail {
+            report.steps.push(
+                "Install without a mail domain: skipped mail DNS and default info@ mailbox.".into(),
+            );
         }
 
         let site = match load_site(&domain) {

@@ -12,6 +12,15 @@ const es: LocaleMessages = {
   statusFetchError: "No se pudo consultar el instalador",
   startServerError: "No se pudo iniciar la instalación",
   startMailError: "No se pudo iniciar la instalación del correo",
+  installPathEyebrow: "PANEL DETECTADO",
+  installPathTitle: "¿Instalación nueva o migración?",
+  installPathIntro:
+    "Ya hay otro panel en este servidor. Elige migrar para reutilizar LiteSpeed, Postfix y Dovecot cuando sea seguro; luego ejecuta panel-migrate. CyberPanel usa el id classic.",
+  installPathFresh: "Instalación nueva",
+  installPathMigrate: "Migrar desde el panel detectado",
+  installPathMigrateHint:
+    "Después del setup, usa Servidor → Panel migrate o cpn panel-migrate apply.",
+  installPathTargetLabel: "Panel de origen",
   selectServerTitle: "Selecciona tu servidor web",
   selectServerIntro:
     "Elige el motor web que mejor se adapte a tu proyecto. Los invitados Linux admitidos incluyen AlmaLinux, Rocky, Ubuntu y EL relacionados. Windows Server e hipervisores alojan esos invitados; no son una instalacion nativa del panel. Podras cambiar el motor mas adelante desde el panel.",
@@ -56,7 +65,7 @@ const es: LocaleMessages = {
   databasePhpmyadmin: "Instalar tambien phpMyAdmin (activado por defecto)",
   phpVersionTitle: "Version de PHP",
   phpVersionHint:
-    "El valor predeterminado es PHP 8.5 en AlmaLinux/RHEL 9+. Otras versiones compatibles siguen disponibles. Si faltan paquetes de 8.5, CPN usa la siguiente y registra el cambio.",
+    "El valor predeterminado es PHP 8.6 en AlmaLinux/RHEL 9+. Otras versiones compatibles siguen disponibles. Si faltan paquetes de 8.6, CPN usa la siguiente (8.5 primero) y registra el cambio.",
   serverOpenlitespeedDesc:
     "Alto rendimiento y bajo consumo de recursos. Ideal para WordPress y sitios con alto tráfico gracias a su caché integrado (LSCache).",
   serverNginxDesc:

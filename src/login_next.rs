@@ -212,14 +212,14 @@ pub fn login_return_cookie_name(port: Option<u16>) -> String {
 pub fn login_redirect(http: &HttpRequest) -> HttpResponse {
     let next = request_return_path(http);
     let port = crate::panel_session::request_auth_cookie_port(http);
+    let secure = crate::panel_session::request_https_from_headers(http);
     let mut builder = HttpResponse::SeeOther();
     if let Some(ref path) = next
-        && let Some(cookie) = login_return_cookie_header(
-            path,
-            crate::panel_session::request_https_from_headers(http),
-            port,
-        )
+        && let Some(cookie) = login_return_cookie_header(path, secure, port)
     {
+        builder.append_header(("Set-Cookie", cookie));
+    }
+    for cookie in crate::panel_session::purge_legacy_port_colliding_cookie_headers(secure, port) {
         builder.append_header(("Set-Cookie", cookie));
     }
     builder
@@ -263,9 +263,9 @@ pub fn read_login_return_cookie(cookie_header: Option<&str>, port: Option<u16>) 
         return Some(path);
     }
     if port.is_some() {
-        return decode_login_return_value(cookie_header, LOGIN_RETURN_COOKIE);
+        return None;
     }
-    None
+    decode_login_return_value(cookie_header, LOGIN_RETURN_COOKIE)
 }
 
 fn decode_login_return_value(cookie_header: &str, name: &str) -> Option<String> {

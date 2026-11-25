@@ -99,7 +99,7 @@ pub(crate) async fn run_tip_maintenance(
     let tip = match crate::upgrade_tip::apply_tip_ref(&state, &repo, tip_ref).await {
         Ok(tip) => tip,
         Err(error) => {
-            crate::upgrade_tip_log::log_failure(&error, None);
+            let _ = crate::panel_maintenance_mode::clear_with_reason("failed");
             state.log(error.clone(), "error");
             crate::panel_notifications::notify_panel_admins(
                 "Panel upgrade failed",
@@ -169,11 +169,14 @@ pub(crate) async fn run_tip_maintenance(
     apply_migrations(&state).await;
 
     let message = format!("Updated to {} ({})", tip.branch_label, tip.package_version);
-    crate::panel_notifications::notify_panel_admins(
-        "Panel upgrade completed",
-        &message,
-        crate::panel_notifications::CATEGORY_PANEL,
+    // Link to the commit (and previous..new compare) on the configured update
+    // source; admins who turned update notifications off get nothing.
+    let links = crate::panel_update_links::commit_links(
+        &repo,
+        Some(existing.release_tag.as_str()),
+        &tip.sha,
     );
+    crate::panel_notifications::notify_update_admins("Panel upgrade completed", &message, links);
     state.progress("completed", 100, message.clone()).await;
     let restart_scheduled;
     {

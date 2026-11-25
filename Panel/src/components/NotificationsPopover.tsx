@@ -20,7 +20,10 @@ export type PanelNotice = {
   category?: string;
   severity?: string;
   level?: string;
+  links?: { label: string; url: string }[];
 };
+
+const SAFE_LINK = /^https:\/\/github\.com\/[A-Za-z0-9._/@#%+~:=?&-]+$/;
 
 type NotifyPos = {
   bottom: number;
@@ -229,6 +232,20 @@ export function NotificationsPopover({
                         <div className="notify-toast-text">
                           <strong>{item.title}</strong>
                           {item.body ? <span>{item.body}</span> : null}
+                          {(item.links || [])
+                            .filter((link) => SAFE_LINK.test(link.url))
+                            .slice(0, 4)
+                            .map((link) => (
+                              <a
+                                key={link.url}
+                                className="notify-toast-link"
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {link.label || "View on GitHub"}
+                              </a>
+                            ))}
                         </div>
                         <button
                           type="button"

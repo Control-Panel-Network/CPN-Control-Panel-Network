@@ -1,6 +1,6 @@
 //! Postfix as the default local MTA when outbound SMTP is skipped.
 
-use crate::apps_pkg::{enable_now, install_packages_dnf_or_apt, rpm_or_dpkg_installed};
+use crate::apps_pkg::{enable_now, install_packages_dnf_or_apt};
 use crate::install_mail_listeners::{append_cpn_panel_outbound, master_cf_has_panel_outbound};
 use crate::os_support::{PackageFamily, detect_guest_os};
 use crate::service_detect::{port_open, systemd_unit_active};
@@ -8,17 +8,59 @@ use crate::smtp_settings::{SmtpSettings, SmtpTlsMode};
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-/// True when local Postfix is running (unit active or SMTP ports listening).
-pub fn postfix_is_ready() -> bool {
+/// How long a "Postfix is up" answer is reused (every mailbox row asks, and each miss spawns
+/// `systemctl`, which costs hundreds of milliseconds on a loaded host).
+const POSTFIX_READY_TTL_UP: Duration = Duration::from_secs(10);
+/// A "down" answer is re-checked sooner so Start/heal shows up quickly.
+const POSTFIX_READY_TTL_DOWN: Duration = Duration::from_secs(3);
+
+static POSTFIX_READY_CACHE: Mutex<Option<(Instant, bool)>> = Mutex::new(None);
+
+/// Drop the cached Postfix probe (call after start/stop/install).
+pub fn invalidate_postfix_ready_cache() {
+    if let Ok(mut guard) = POSTFIX_READY_CACHE.lock() {
+        *guard = None;
+    }
+}
+
+fn postfix_ready_cached(at: Instant, value: bool) -> bool {
+    let ttl = if value {
+        POSTFIX_READY_TTL_UP
+    } else {
+        POSTFIX_READY_TTL_DOWN
+    };
+    at.elapsed() < ttl
+}
+
+fn postfix_is_ready_uncached() -> bool {
     if systemd_unit_active("postfix") {
         return true;
     }
     port_open("127.0.0.1:25", 250)
         || port_open("127.0.0.1:2525", 250)
         || port_open("127.0.0.1:587", 250)
+}
+
+/// True when local Postfix is running (unit active or SMTP ports listening).
+///
+/// Short-TTL cached: mailbox lists call this once per row, and panel pages must not spawn
+/// `systemctl` dozens of times per render.
+pub fn postfix_is_ready() -> bool {
+    if let Ok(guard) = POSTFIX_READY_CACHE.lock()
+        && let Some((at, value)) = *guard
+        && postfix_ready_cached(at, value)
+    {
+        return value;
+    }
+    let value = postfix_is_ready_uncached();
+    if let Ok(mut guard) = POSTFIX_READY_CACHE.lock() {
+        *guard = Some((Instant::now(), value));
+    }
+    value
 }
 
 /// Envelope From for unauthenticated local injection.
@@ -144,12 +186,13 @@ pub fn ensure_postfix_default(from_address: &str) -> Result<SmtpSettings, String
         Ok(_) => {}
     }
 
-    if !rpm_or_dpkg_installed(&["postfix"]) && !postfix_is_ready() {
+    if !crate::mail_postfix_detect::postfix_mta_present() {
         install_packages_dnf_or_apt(&["postfix"], &["postfix"])?;
     }
     if !systemd_unit_active("postfix") {
         enable_now(&["postfix"])?;
     }
+    invalidate_postfix_ready_cache();
     if !postfix_is_ready() {
         return Err(
             "Postfix was installed but is not accepting mail yet. Check the postfix service."
@@ -174,6 +217,18 @@ pub fn require_postfix_smtp_ready() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn postfix_ready_cache_ttl_is_shorter_for_down() {
+        let fresh = Instant::now();
+        assert!(postfix_ready_cached(fresh, true));
+        assert!(postfix_ready_cached(fresh, false));
+        assert!(POSTFIX_READY_TTL_DOWN < POSTFIX_READY_TTL_UP);
+        if let Some(old) = Instant::now().checked_sub(Duration::from_secs(5)) {
+            assert!(postfix_ready_cached(old, true));
+            assert!(!postfix_ready_cached(old, false));
+        }
+    }
 
     #[test]
     fn postfix_from_rejects_external_recipients() {

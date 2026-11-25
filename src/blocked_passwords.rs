@@ -15,6 +15,8 @@ use std::{collections::HashSet, fs, io::Write, path::PathBuf, sync::Mutex, time:
 
 const BUNDLED_LIST: &str = include_str!("../docs/blocked-passwords.txt");
 const DEFAULT_RAW_URL: &str = "https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/docs/blocked-passwords.txt";
+/// Human-readable GitHub blob page (raw text/plain can look blank in some embedded browsers).
+const DEFAULT_BROWSE_URL: &str = "https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/blocked-passwords.txt";
 const CACHE_TTL_SECS: u64 = 24 * 60 * 60;
 const FETCH_TIMEOUT_SECS: u64 = 8;
 
@@ -208,6 +210,11 @@ pub fn reject_if_blocked(password: &str) -> Result<(), String> {
 /// Live GitHub raw URL used when not overridden by `CPN_BLOCKED_PASSWORDS_URL`.
 pub fn default_list_url() -> &'static str {
     DEFAULT_RAW_URL
+}
+
+/// GitHub blob page for panel help links (renders reliably in browsers; fetcher still uses raw).
+pub fn default_browse_url() -> &'static str {
+    DEFAULT_BROWSE_URL
 }
 
 /// Cache TTL used for freshness checks.

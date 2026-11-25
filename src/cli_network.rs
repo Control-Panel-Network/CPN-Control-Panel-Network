@@ -197,6 +197,11 @@ pub fn run_network(
                 for note in report.notes {
                     println!("note: {note}");
                 }
+                if report.le_issue_failed {
+                    return Err(
+                        "Let's Encrypt did not complete (HTTP proxy is configured). Retry: cpn network enable-https".into(),
+                    );
+                }
             }
             Ok(())
         }
@@ -217,6 +222,11 @@ pub fn run_network(
             println!("{}", report.summary_line());
             for note in report.notes {
                 println!("note: {note}");
+            }
+            if !skip_cert && report.le_issue_failed {
+                return Err(
+                    "Let's Encrypt did not complete (HTTP proxy is configured). Retry: cpn network enable-https".into(),
+                );
             }
             Ok(())
         }

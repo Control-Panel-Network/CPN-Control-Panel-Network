@@ -1,6 +1,6 @@
 //! Email > Webmail HTML (open client, internal embed, path regen).
 
-use crate::mail_accounts::list_accounts_public;
+use crate::mail_accounts::list_active_accounts;
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_webmail::{
     WebmailPanelConfig, load_webmail_config, regenerate_webmail_path, save_webmail_config,
@@ -16,8 +16,11 @@ fn html_escape(value: &str) -> String {
 }
 
 fn mailbox_addresses_json(selected: &str) -> String {
-    let accounts = list_accounts_public();
-    let mut addrs: Vec<String> = accounts.into_iter().map(|a| a.address).collect();
+    // Addresses only: `list_accounts_public` also probes SMTP/Postfix per mailbox.
+    let mut addrs: Vec<String> = list_active_accounts()
+        .into_iter()
+        .map(|a| a.address)
+        .collect();
     let selected = selected.trim();
     if !selected.is_empty() && !addrs.iter().any(|a| a.eq_ignore_ascii_case(selected)) {
         addrs.insert(0, selected.to_string());
@@ -116,7 +119,8 @@ fn mailbox_picker_script() -> &'static str {
 }
 
 pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
+    // Never heal inline (SELinux, chown, php-fpm restarts): schedule it off the request path.
+    crate::panel_webmail_heal_bg::schedule_webmail_heal(false);
     let notice_html = flash("ok", notice);
     let error_html = flash("error", error);
     let body = if webmail_ready() {
@@ -143,11 +147,13 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
         } else {
             String::new()
         };
-        let proton_link = if crate::panel_feature_gate::proton_mail_unlocked() {
-            r#"<a class="btn-secondary" href="/email/proton">Proton Mail</a>"#.to_string()
-        } else {
-            String::new()
-        };
+        // Cached feature snapshot (the sidebar uses it too); the raw gate scans every site's plugins.
+        let proton_link =
+            if crate::panel_feature_gate::InstalledOptionalFeatures::detect().proton_mail {
+                r#"<a class="btn-secondary" href="/email/proton">Proton Mail</a>"#.to_string()
+            } else {
+                String::new()
+            };
         format!(
             r#"{notice}{error}
         <p><strong>{label}</strong> is installed. Open the real webmail UI (not only the plugin dashboard).</p>
@@ -158,6 +164,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
           {proton_link}
         </p>
         <p class="muted">Public path: <code>{path}</code> (proxied through this panel to PHP-FPM on {health}). Mailbox data under <code>/var/lib/cpn-webmail</code> is preserved when you regenerate the path.</p>
+        <p class="muted"><strong>{label} Admin</strong> is for the panel owner only. Sign in with the panel owner username, the same panel password, and the authenticator (or backup) code when 2FA is on. Normal panel users, resellers, and ACL accounts cannot use it. Mailbox users keep signing in to webmail with their full email address and mailbox password.</p>
         <p class="muted"><strong>OpenPGP / encrypted mail</strong> (EN): Tachyon, SnappyMail, and NextSnapMail can store a contact's public key and encrypt outbound mail (Settings &gt; OpenPGP / Security), similar to Thunderbird. Roundcube uses Enigma (Settings &gt; PGP Keys). Prefer OpenPGP.js or Mailvelope in the browser for private keys; server GnuPG/Enigma keys stay under <code>/var/lib/cpn-webmail</code> (not web-readable). This is classic OpenPGP, not Proton end-to-end.</p>
         <p class="muted"><strong>OpenPGP / kryptert e-post</strong> (NO): Tachyon, SnappyMail og NextSnapMail kan lagre mottakerens offentlige nøkkel og sende kryptert e-post (Innstillinger &gt; OpenPGP / Sikkerhet), slik som Thunderbird. Roundcube bruker Enigma (Innstillinger &gt; PGP-nøkler). Bruk OpenPGP.js eller Mailvelope i nettleseren for private nøkler; nøkler på server ligger under <code>/var/lib/cpn-webmail</code>. Dette er klassisk OpenPGP, ikke Proton E2E.</p>
         <form method="post" action="/email/webmail/settings" class="stack-form" style="max-width:520px;margin-top:16px;">
@@ -177,8 +184,9 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
           <input id="public_path" name="public_path" type="text" value="{path}" autocomplete="off">
           <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
             <input type="checkbox" class="cpn-switch" role="switch" name="internal_embed" value="1"{embed}>
-            Enable internal webmail embed on this page
+            Also show webmail inline on this settings page
           </label>
+          <p class="muted">The Internal view button above always works while webmail is installed. This switch only adds a frame below this form.</p>
           <button type="submit" class="btn-primary">Save webmail settings</button>
         </form>
         {script}
@@ -193,7 +201,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
             admin = html_escape(&admin),
             proton_link = proton_link,
             path = html_escape(&cfg.public_path),
-            health = html_escape(webmail_health_hint()),
+            health = html_escape(&webmail_health_hint()),
             auto = html_escape(&cfg.auto_login_account),
             embed = embed_checked,
             mbox_json = mailbox_json,
@@ -226,6 +234,19 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
     )
 }
 
+/// Internal view body: open-in-tab link plus the same-origin webmail frame.
+fn internal_view_body(open: &str, label: &str) -> String {
+    format!(
+        r#"<p style="display:flex;flex-wrap:wrap;gap:10px;">
+        <a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+        <a class="btn-secondary" href="/email/webmail">Webmail settings</a>
+      </p>
+      <iframe title="{label}" src="{open}" style="width:100%;min-height:75vh;border:1px solid var(--border, #334);border-radius:8px;background:#111;"></iframe>"#,
+        open = html_escape(open),
+        label = html_escape(label),
+    )
+}
+
 pub fn email_webmail_app_page() -> String {
     if !webmail_ready() {
         return email_webmail_page(
@@ -233,24 +254,12 @@ pub fn email_webmail_app_page() -> String {
             Some("Install SnappyMail or Roundcube before using internal webmail."),
         );
     }
+    // Internal view is an explicit action, so it works whenever webmail is installed and
+    // proxied. The `internal_embed` setting only controls the inline frame on the settings page.
     let cfg = load_webmail_config();
-    if !cfg.internal_embed {
-        return email_webmail_page(
-            None,
-            Some("Enable internal webmail embed under Email > Webmail settings first."),
-        );
-    }
     let open = webmail_open_path().unwrap_or_else(|| format!("{}/", cfg.public_path));
     let label = webmail_label();
-    let body = format!(
-        r#"<p style="display:flex;flex-wrap:wrap;gap:10px;">
-        <a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open in new tab</a>
-        <a class="btn-secondary" href="/email/webmail">Webmail settings</a>
-      </p>
-      <iframe title="{label}" src="{open}" style="width:100%;min-height:75vh;border:1px solid var(--border, #334);border-radius:8px;background:#111;"></iframe>"#,
-        open = html_escape(&open),
-        label = html_escape(label),
-    );
+    let body = internal_view_body(&open, label);
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -274,7 +283,7 @@ pub fn apply_webmail_settings_form(
     let mut cfg = load_webmail_config();
     let selected = auto_login_account.trim().to_ascii_lowercase();
     if !selected.is_empty() {
-        let known = list_accounts_public();
+        let known = list_active_accounts();
         let ok = known
             .iter()
             .any(|a| a.address.eq_ignore_ascii_case(&selected));
@@ -289,7 +298,7 @@ pub fn apply_webmail_settings_form(
     cfg.public_path = public_path.trim().to_string();
     cfg.internal_embed = internal_embed;
     save_webmail_config(&cfg)?;
-    let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
+    crate::panel_webmail_heal_bg::schedule_webmail_heal(true);
     Ok("Webmail settings saved".into())
 }
 
@@ -319,4 +328,38 @@ fn flash(kind: &str, message: Option<&str>) -> String {
 #[allow(dead_code)]
 pub fn default_config_for_tests() -> WebmailPanelConfig {
     WebmailPanelConfig::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_view_always_frames_webmail_without_embed_gate() {
+        let html = internal_view_body("/tachyon/", "Tachyon");
+        assert!(html.contains(r#"<iframe title="Tachyon" src="/tachyon/""#));
+        assert!(html.contains("Open in new tab"));
+        assert!(!html.contains("Enable internal webmail embed"));
+    }
+
+    #[test]
+    fn internal_view_escapes_open_path_and_label() {
+        let html = internal_view_body("/x\"><script>", "A<B");
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("A&lt;B"));
+    }
+
+    #[test]
+    fn mailbox_json_escapes_script_close_and_dedupes_selected() {
+        let json = mailbox_addresses_json("Zed@example.test");
+        assert!(!json.contains("</"));
+        assert!(json.contains("Zed@example.test"));
+    }
+
+    #[test]
+    fn flash_escapes_and_skips_empty() {
+        assert_eq!(flash("ok", None), "");
+        assert_eq!(flash("ok", Some("")), "");
+        assert!(flash("error", Some("<b>")).contains("&lt;b&gt;"));
+    }
 }

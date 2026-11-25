@@ -15,7 +15,14 @@ pub fn mail_auth_dns_plans(
     server_ip: Option<&str>,
 ) -> Vec<DnsRecordPlan> {
     let domain = domain.trim().trim_end_matches('.').to_ascii_lowercase();
-    let spf = "v=spf1 a mx ~all".to_string();
+    // Prefer a + mx, and add this host's public IPv4 when known (no invented includes).
+    let spf = match server_ip
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && *v != "Unavailable")
+    {
+        Some(ip) => format!("v=spf1 a mx ip4:{ip} ~all"),
+        None => "v=spf1 a mx ~all".to_string(),
+    };
     let dmarc = format!("v=DMARC1; p=none; rua=mailto:dmarc@{domain}");
     let mut plans = vec![
         DnsRecordPlan {
@@ -23,7 +30,7 @@ pub fn mail_auth_dns_plans(
             name: domain.clone(),
             content: spf,
             ttl: 3600,
-            note: "SPF: allow this host A/MX to send mail.".into(),
+            note: "SPF: allow this host A/MX (and ip4 when known) to send mail.".into(),
         },
         DnsRecordPlan {
             record_type: "TXT".into(),
@@ -162,10 +169,15 @@ pub fn upsert_mail_dns_local(domain: &str) -> Result<String, String> {
     ))
 }
 
+/// Soft-skip message when Cloudflare credentials are missing (mail install must not hard-fail).
+pub fn cloudflare_mail_dns_skip_message() -> &'static str {
+    "Cloudflare not configured; skipped remote SPF/DKIM/DMARC push. Connect a token under Cloudflare DNS > API Settings (or paste records manually)."
+}
+
 pub fn upsert_mail_dns_cloudflare(domain: &str) -> Result<String, String> {
     let domain = normalize_domain(domain)?;
     if !cloudflare_configured() {
-        return Ok("Cloudflare not configured; skipped remote SPF/DKIM/DMARC push.".into());
+        return Ok(cloudflare_mail_dns_skip_message().into());
     }
     let _ = ensure_dkim_for_domain(&domain)?;
     let dkim_txt = read_dkim_txt_value(&domain)?;
@@ -209,10 +221,39 @@ pub fn upsert_mail_dns_cloudflare(domain: &str) -> Result<String, String> {
     ))
 }
 
+/// Local zone + Cloudflare TXT/MX upsert. Cloudflare failures are soft (returned as text).
 pub fn provision_mail_dns(domain: &str) -> Result<String, String> {
     let local = upsert_mail_dns_local(domain)?;
     let cf = upsert_mail_dns_cloudflare(domain).unwrap_or_else(|e| format!("Cloudflare: {e}"));
     Ok(format!("{local} {cf}"))
+}
+
+/// Best-effort SPF/DKIM/DMARC for every known local-mail apex (Email Start / DKIM ensure).
+/// Never hard-fails the caller: each domain error becomes a warning line.
+pub fn provision_mail_dns_for_known_domains() -> String {
+    use crate::panel_ops_mail_onboarding::{
+        MailMode, load_mail_onboarding, mail_client_fallback_domains,
+    };
+
+    let onboarding = load_mail_onboarding();
+    if onboarding.without_mail_domain || onboarding.skip_rdns {
+        return "Install without a mail domain: skipped SPF/DKIM/DMARC DNS publish.".into();
+    }
+    if onboarding.mail_mode != MailMode::Local {
+        return "External mail mode: skipped local SPF/DKIM/DMARC DNS publish.".into();
+    }
+    let domains = mail_client_fallback_domains();
+    if domains.is_empty() {
+        return "No mail apex domains yet; skipped SPF/DKIM/DMARC DNS publish.".into();
+    }
+    let mut parts = Vec::new();
+    for domain in domains {
+        match provision_mail_dns(&domain) {
+            Ok(msg) => parts.push(msg),
+            Err(e) => parts.push(format!("warn `{domain}`: {e}")),
+        }
+    }
+    parts.join(" | ")
 }
 
 #[cfg(test)]
@@ -224,9 +265,30 @@ mod tests {
     fn plans_include_spf_dkim_dmarc() {
         let plans =
             mail_auth_dns_plans("example.com", "v=DKIM1; k=rsa; p=ABC", Some("203.0.113.10"));
-        assert!(plans.iter().any(|p| p.content.starts_with("v=spf1")));
+        let spf = plans
+            .iter()
+            .find(|p| p.content.starts_with("v=spf1"))
+            .expect("SPF");
+        assert!(spf.content.contains("ip4:203.0.113.10"));
+        assert!(spf.content.contains("a mx"));
         assert!(plans.iter().any(|p| p.name.contains("_domainkey")));
-        assert!(plans.iter().any(|p| p.name.starts_with("_dmarc")));
+        assert!(plans.iter().any(|p| {
+            p.name.starts_with("_dmarc")
+                && p.content.contains("p=none")
+                && p.content.contains("rua=")
+        }));
+        assert!(plans.iter().any(|p| p.record_type == "MX"));
+    }
+
+    #[test]
+    fn plans_spf_without_ip_omits_ip4() {
+        let plans = mail_auth_dns_plans("example.com", "v=DKIM1; k=rsa; p=ABC", None);
+        let spf = plans
+            .iter()
+            .find(|p| p.content.starts_with("v=spf1"))
+            .expect("SPF");
+        assert_eq!(spf.content, "v=spf1 a mx ~all");
+        assert!(!spf.content.contains("ip4:"));
     }
 
     #[test]
@@ -238,6 +300,42 @@ mod tests {
             );
             assert!(merged.contains("IN A"));
             assert!(merged.contains("v=spf1"));
+        });
+    }
+
+    #[test]
+    fn zone_line_escapes_txt() {
+        let plan = DnsRecordPlan {
+            record_type: "TXT".into(),
+            name: "example.com".into(),
+            content: r#"v=spf1 "quoted" ~all"#.into(),
+            ttl: 3600,
+            note: String::new(),
+        };
+        let line = zone_line_for_plan(&plan);
+        assert!(line.contains(r#"\""#));
+        assert!(line.contains("IN TXT"));
+    }
+
+    #[test]
+    fn cloudflare_skip_message_mentions_settings() {
+        let msg = cloudflare_mail_dns_skip_message();
+        assert!(msg.contains("Cloudflare not configured"));
+        assert!(msg.contains("API Settings"));
+    }
+
+    #[test]
+    fn known_domains_respects_external_mail_mode() {
+        with_test_data_dir(|| {
+            use crate::panel_ops_mail_onboarding::{
+                MailMode, MailOnboarding, save_mail_onboarding,
+            };
+            let mut cfg = MailOnboarding::default();
+            cfg.mail_mode = MailMode::External;
+            cfg.hostname = "mail.example.com".into();
+            save_mail_onboarding(cfg).unwrap();
+            let msg = provision_mail_dns_for_known_domains();
+            assert!(msg.contains("External mail mode"));
         });
     }
 }

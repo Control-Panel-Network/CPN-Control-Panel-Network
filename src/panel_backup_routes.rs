@@ -4,8 +4,8 @@ use crate::auth_api::panel_user_from_request;
 use crate::backups::{BackupRequest, create_selective_backup};
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
+use crate::panel_hub_http::authenticated_panel_shell;
 use crate::panel_hub_pages_backups::backups_hub_main;
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -43,7 +43,8 @@ pub async fn backups_page(
         return login_redirect(&http);
     };
     let _ = query;
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Backups",

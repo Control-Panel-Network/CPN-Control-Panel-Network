@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "description": "Allowed critical/high advisory ids for scripts/cra-release-audit-gate.sh. Each waiver needs id, reason, and risk_assessment_ref. No secrets.",
+  "waivers": []
+}

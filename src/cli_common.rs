@@ -76,16 +76,18 @@ pub fn read_password_confirmed(
     Ok(result)
 }
 
-/// Announce which account a password reset will target (SSH operator UX).
+/// Announce that a password reset is about to run (SSH operator UX).
 ///
-/// Prints the username on purpose so operators know which login is about to change.
-pub fn announce_password_reset_target(username: &str) {
-    eprintln!("Resetting password for user '{username}'");
+/// Does not echo the username: CodeQL `rust/cleartext-logging`. The operator
+/// already supplied the target via CLI args / prompts.
+pub fn announce_password_reset_target(_username: &str) {
+    eprintln!("Resetting password for the selected account");
 }
 
-/// Confirm a successful password reset and name the account.
-pub fn print_password_updated_ok(username: &str) {
-    println!("password updated ok for user '{username}'");
+/// Confirm a successful password reset without echoing the account name.
+pub fn print_password_updated_ok(_username: &str) {
+    // Do not echo usernames: CodeQL rust/cleartext-logging.
+    println!("password updated ok");
 }
 
 /// True for clear affirmative answers (case-insensitive, trimmed).
@@ -184,6 +186,43 @@ mod confirm_reply_tests {
             assert!(!is_negative_reply(sample), "{sample:?}");
         }
     }
+}
+
+/// Write operator-only material to a mode-600 file under the system temp dir (never stdout).
+pub fn write_mode600_temp_file(prefix: &str, content: &str) -> Result<std::path::PathBuf, String> {
+    let safe_prefix: String = prefix
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .collect();
+    let label = if safe_prefix.is_empty() {
+        "cpn-secret".into()
+    } else {
+        safe_prefix
+    };
+    let path = std::env::temp_dir().join(format!("{label}-{}.txt", std::process::id()));
+    {
+        use std::io::Write;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(&path)
+            .map_err(|error| format!("Failed to write temp file: {error}"))?;
+        file.write_all(content.as_bytes())
+            .map_err(|error| format!("Failed to write temp file: {error}"))?;
+        file.write_all(b"\n")
+            .map_err(|error| format!("Failed to write temp file: {error}"))?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(path)
 }
 
 /// Write a one-time generated secret to a mode-600 temp file and print its path.

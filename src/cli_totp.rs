@@ -1,7 +1,10 @@
 //! `cpn totp` subcommands: status / disable / clear (no secrets printed).
 
-use crate::account_mfa::{clear_totp_force, totp_status_for};
+use crate::account_mfa::{
+    begin_totp_enroll, clear_totp_force, confirm_totp_enroll, totp_status_for,
+};
 use crate::account_mgmt::find_account;
+use crate::cli_common::write_mode600_temp_file;
 use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
@@ -10,6 +13,18 @@ pub enum TotpCommands {
     Status {
         #[arg(long)]
         username: String,
+    },
+    /// Start TOTP enrollment; write secret material to a mode-600 temp file (never stdout)
+    Begin {
+        #[arg(long)]
+        username: String,
+    },
+    /// Confirm pending TOTP enrollment with a 6-digit code
+    Confirm {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        code: String,
     },
     /// Disable TOTP for an account without an authenticator code (prompt, or --yes to skip)
     Disable {
@@ -60,6 +75,44 @@ pub fn run(
             let username = resolve_username(&username)?;
             let (enabled, pending) = totp_status_for(&username);
             println!("totp_enabled={enabled}\tpending_enroll={pending}");
+            Ok(())
+        }
+        TotpCommands::Begin { username } => {
+            require_root()?;
+            let username = resolve_username(&username)?;
+            let (secret_b32, otpauth_uri, _svg) = begin_totp_enroll(&username)?;
+            let body = format!(
+                "# TOTP enrollment for {username}\n# base32_secret (manual entry)\n{secret_b32}\n# otpauth_uri\n{otpauth_uri}\n"
+            );
+            let path = write_mode600_temp_file("cpn-totp-enroll", &body)?;
+            crate::panel_audit_cli::record_cli("cli.totp.begin", &username, true, "pending=1");
+            println!("totp_enroll_pending=true");
+            println!("totp_enroll_file={}", path.display());
+            // Do not echo username on stdout (CodeQL rust/cleartext-logging #178).
+            println!(
+                "note=Add the secret to an authenticator app, then run: sudo cpn totp confirm --username <account> --code CODE"
+            );
+            Ok(())
+        }
+        TotpCommands::Confirm { username, code } => {
+            require_root()?;
+            let username = resolve_username(&username)?;
+            let code = code.trim();
+            if code.is_empty() {
+                return Err("Authenticator code is required (pass --code)".into());
+            }
+            let backup_codes = confirm_totp_enroll(&username, code)?;
+            let joined = backup_codes.join("\n");
+            let path = write_mode600_temp_file("cpn-totp-backup-codes", &joined)?;
+            crate::panel_audit_cli::record_cli(
+                "cli.totp.confirm",
+                &username,
+                true,
+                &format!("backup_codes_count={}", backup_codes.len()),
+            );
+            println!("totp_enabled=true");
+            println!("backup_codes_file={}", path.display());
+            println!("backup_codes_count={}", backup_codes.len());
             Ok(())
         }
         TotpCommands::Disable { username, yes } => {

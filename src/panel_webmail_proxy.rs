@@ -1,12 +1,12 @@
-//! Reverse-proxy webmail from the panel mount path to loopback PHP-FPM HTTP (:8080).
+//! Reverse-proxy webmail from the panel mount path to loopback PHP-FPM HTTP.
 
 use crate::panel_feature_gate::webmail_installed;
+use crate::panel_session::request_https_from_headers;
 use crate::panel_webmail::{backend_path_for_webmail_proxy, load_webmail_config, webmail_ready};
+use crate::webmail_loopback::{self, host_header_value};
 use actix_web::{HttpRequest, HttpResponse, http::Method, http::StatusCode, web};
 use futures_util::StreamExt;
 use std::process::{Command, Stdio};
-
-const BACKEND: &str = "http://127.0.0.1:8080";
 
 /// Catch-all proxy for the configured webmail public path (and nested assets).
 pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> HttpResponse {
@@ -25,6 +25,7 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
             let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
         });
     });
+    let backend = webmail_loopback::loopback_origin();
     let path = req.path();
     let Some(backend_path) = backend_path_for_webmail_proxy(path) else {
         return HttpResponse::NotFound().finish();
@@ -37,9 +38,9 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
     };
     let query = req.query_string();
     let target = if query.is_empty() {
-        format!("{BACKEND}{backend_path}")
+        format!("{backend}{backend_path}")
     } else {
-        format!("{BACKEND}{backend_path}?{query}")
+        format!("{backend}{backend_path}?{query}")
     };
 
     let method = req.method().as_str();
@@ -54,11 +55,14 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
 
     match forward_http(method, &target, &req, &body_bytes) {
         Ok(resp) => resp,
-        Err(err) => HttpResponse::BadGateway()
-            .content_type("text/plain; charset=utf-8")
-            .body(format!(
-                "Webmail proxy could not reach {BACKEND} ({err}). Is PHP-FPM webmail listening on 127.0.0.1:8080?"
-            )),
+        Err(err) => {
+            let port = webmail_loopback::loopback_port();
+            HttpResponse::BadGateway()
+                .content_type("text/plain; charset=utf-8")
+                .body(format!(
+                    "Webmail proxy could not reach {backend} ({err}). Is the CPN webmail listener on 127.0.0.1:{port}?"
+                ))
+        }
     }
 }
 
@@ -72,6 +76,28 @@ async fn collect_body(mut payload: web::Payload) -> Result<Vec<u8>, String> {
         bytes.extend_from_slice(&chunk);
     }
     Ok(bytes)
+}
+
+fn client_scheme(req: &HttpRequest) -> &'static str {
+    if request_https_from_headers(req) || req.app_config().secure() {
+        "https"
+    } else {
+        "http"
+    }
+}
+
+fn short_header<'a>(req: &'a HttpRequest, name: &str) -> Option<&'a str> {
+    let value = req.headers().get(name)?.to_str().ok()?;
+    if value.is_empty() || value.len() > 253 {
+        return None;
+    }
+    if value.bytes().any(|b| {
+        !(b.is_ascii_alphanumeric()
+            || matches!(b, b'.' | b'-' | b':' | b'[' | b']' | b'_' | b',' | b' '))
+    }) {
+        return None;
+    }
+    Some(value)
 }
 
 fn forward_http(
@@ -116,6 +142,10 @@ fn forward_http(
                 | "trailers"
                 | "upgrade"
                 | "accept-encoding"
+                | "x-forwarded-proto"
+                | "x-forwarded-host"
+                | "x-forwarded-for"
+                | "x-forwarded-prefix"
         ) {
             continue;
         }
@@ -123,8 +153,27 @@ fn forward_http(
             cmd.args(["-H", &format!("{}: {}", name.as_str(), v)]);
         }
     }
-    cmd.args(["-H", "Host: 127.0.0.1:8080"]);
+    let scheme = client_scheme(req);
+    let host = short_header(req, "X-Forwarded-Host")
+        .or_else(|| short_header(req, "Host"))
+        .unwrap_or("127.0.0.1");
+    let mount = load_webmail_config()
+        .public_path
+        .trim_end_matches('/')
+        .to_string();
+    // Always tell Tachyon/SnappyMail the browser scheme. Sending https on plain
+    // http://IP:2087 marks smtoken Secure and browsers drop it → HTTP Token mismatch.
+    let host_loopback = host_header_value(webmail_loopback::loopback_port());
+    cmd.args(["-H", &format!("Host: {host_loopback}")]);
     cmd.args(["-H", "Accept-Encoding: identity"]);
+    cmd.args(["-H", &format!("X-Forwarded-Proto: {scheme}")]);
+    cmd.args(["-H", &format!("X-Forwarded-Host: {host}")]);
+    if !mount.is_empty() {
+        cmd.args(["-H", &format!("X-Forwarded-Prefix: {mount}")]);
+    }
+    if let Some(peer) = req.peer_addr() {
+        cmd.args(["-H", &format!("X-Forwarded-For: {}", peer.ip())]);
+    }
     if !body.is_empty()
         && matches!(
             method.to_ascii_uppercase().as_str(),
@@ -160,10 +209,10 @@ fn forward_http(
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(err.trim().chars().take(240).collect());
     }
-    parse_curl_include(&output.stdout)
+    parse_curl_include(&output.stdout, &mount, scheme == "https")
 }
 
-fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
+fn parse_curl_include(raw: &[u8], mount: &str, client_https: bool) -> Result<HttpResponse, String> {
     // Binary-safe: never decode the body as UTF-8 (WOFF/JS would corrupt).
     let (header_block, body) = split_headers_body_bytes(raw)
         .ok_or_else(|| "Malformed proxy response from webmail backend".to_string())?;
@@ -179,10 +228,7 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
         .unwrap_or(502);
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut builder = HttpResponse::build(status);
-    let mount = load_webmail_config()
-        .public_path
-        .trim_end_matches('/')
-        .to_string();
+    let mut content_type = String::new();
     for line in lines {
         if let Some((name, value)) = line.split_once(':') {
             let name = name.trim();
@@ -194,19 +240,112 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
             ) {
                 continue;
             }
+            if lower == "content-type" {
+                content_type = value.to_ascii_lowercase();
+            }
             if lower == "location" {
-                builder.insert_header((name, rewrite_location(value, &mount)));
+                builder.insert_header((name, rewrite_location(value, mount)));
                 continue;
             }
             // Multiple Set-Cookie headers must not collapse via insert_header.
             if lower == "set-cookie" {
-                builder.append_header((name, value));
+                builder.append_header((name, rewrite_set_cookie(value, mount, client_https)));
                 continue;
             }
             builder.insert_header((name, value));
         }
     }
-    Ok(builder.body(body.to_vec()))
+    // Expire legacy Path=/ smtoken cookies from CyberPanel SnappyMail so they cannot
+    // collide with mount-scoped tokens (HTTP Token mismatch on login).
+    if !mount.is_empty() {
+        for clear in clear_legacy_root_webmail_cookies(client_https) {
+            builder.append_header(("Set-Cookie", clear));
+        }
+    }
+    let body = rewrite_json_web_path(body, &content_type, mount);
+    Ok(builder.body(body))
+}
+
+fn rewrite_set_cookie(value: &str, mount: &str, client_https: bool) -> String {
+    let mount = if mount.is_empty() { "/" } else { mount };
+    let mut parts = Vec::new();
+    let mut saw_path = false;
+    let mut saw_samesite = false;
+    for part in value.split(';') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("path=") {
+            parts.push(format!("Path={mount}"));
+            saw_path = true;
+        } else if lower == "secure" {
+            // Drop backend Secure; re-add only when the browser used HTTPS.
+            continue;
+        } else if lower.starts_with("samesite=") {
+            parts.push("SameSite=Lax".into());
+            saw_samesite = true;
+        } else {
+            parts.push(trimmed.to_string());
+        }
+    }
+    if !saw_path {
+        parts.push(format!("Path={mount}"));
+    }
+    if !saw_samesite {
+        parts.push("SameSite=Lax".into());
+    }
+    if client_https {
+        parts.push("Secure".into());
+    }
+    parts.join("; ")
+}
+
+fn clear_legacy_root_webmail_cookies(client_https: bool) -> Vec<String> {
+    let secure = if client_https { "; Secure" } else { "" };
+    ["smtoken", "smsession"]
+        .iter()
+        .map(|name| format!("{name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure}"))
+        .collect()
+}
+
+/// Tachyon AppData reports webPath `/` because the loopback docroot is at `/`.
+/// Rewrite to the panel mount so the SPA posts Json to `/tachyon/?/Json/` not `/?/Json/`.
+fn rewrite_json_web_path(body: &[u8], content_type: &str, mount: &str) -> Vec<u8> {
+    if mount.is_empty() || mount == "/" {
+        return body.to_vec();
+    }
+    if !content_type.contains("json") {
+        return body.to_vec();
+    }
+    let Ok(text) = std::str::from_utf8(body) else {
+        return body.to_vec();
+    };
+    if !text.contains("\"webPath\"") {
+        return body.to_vec();
+    }
+    let mount_slash = format!("{}/", mount.trim_end_matches('/'));
+    // PHP json_encode often escapes slashes as \/
+    let mount_escaped = mount_slash.replace('/', "\\/");
+    let updated = text
+        .replace(
+            "\"webPath\":\"/\"",
+            &format!("\"webPath\":\"{mount_slash}\""),
+        )
+        .replace(
+            "\"webPath\": \"/\"",
+            &format!("\"webPath\": \"{mount_slash}\""),
+        )
+        .replace(
+            "\"webPath\":\"\\/\"",
+            &format!("\"webPath\":\"{mount_escaped}\""),
+        )
+        .replace(
+            "\"webPath\": \"\\/\"",
+            &format!("\"webPath\": \"{mount_escaped}\""),
+        );
+    updated.into_bytes()
 }
 
 fn split_headers_body_bytes(raw: &[u8]) -> Option<(&[u8], &[u8])> {
@@ -240,6 +379,11 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 fn rewrite_location(value: &str, mount: &str) -> String {
+    let origin = webmail_loopback::loopback_origin();
+    if value.starts_with(&origin) {
+        return value.replacen(&origin, mount, 1);
+    }
+    // Legacy default port (pre webmail-loopback.json) still appears in some Location headers.
     if value.starts_with("http://127.0.0.1:8080") {
         return value.replacen("http://127.0.0.1:8080", mount, 1);
     }
@@ -282,5 +426,41 @@ mod tests {
         let (headers, body) = split_headers_body_bytes(&raw).expect("split");
         assert!(String::from_utf8_lossy(headers).contains("200"));
         assert_eq!(body, &[0xff, 0x00, 0xfe, 0x01]);
+    }
+
+    #[test]
+    fn cookie_rewrite_scopes_path_and_strips_secure_on_http() {
+        let rewritten = rewrite_set_cookie(
+            "smtoken=abc; path=/; secure; HttpOnly; SameSite=Strict",
+            "/tachyon",
+            false,
+        );
+        assert!(rewritten.contains("Path=/tachyon"));
+        assert!(rewritten.contains("SameSite=Lax"));
+        assert!(!rewritten.to_ascii_lowercase().contains("secure"));
+        let https = rewrite_set_cookie("smtoken=abc; path=/", "/tachyon", true);
+        assert!(https.to_ascii_lowercase().contains("secure"));
+        assert!(https.contains("Path=/tachyon"));
+    }
+
+    #[test]
+    fn json_webpath_rewritten_for_mount() {
+        let body = br#"{"System":{"webPath":"/","webVersionPath":"/tachyon/v/4.2.3/"}}"#;
+        let out = rewrite_json_web_path(body, "application/json", "/tachyon");
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("\"webPath\":\"/tachyon/\""));
+        assert!(text.contains("\"webVersionPath\":\"/tachyon/v/4.2.3/\""));
+    }
+
+    #[test]
+    fn json_webpath_rewritten_when_php_escapes_slashes() {
+        let body = br#"{"System":{"webPath":"\/","webVersionPath":"\/tachyon\/v\/4.2.3\/"}}"#;
+        let out = rewrite_json_web_path(body, "application/json; charset=utf-8", "/tachyon");
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.contains("\"webPath\":\"\\/tachyon\\/\"")
+                || text.contains("\"webPath\":\"/tachyon/\"")
+        );
+        assert!(text.contains("webVersionPath"));
     }
 }

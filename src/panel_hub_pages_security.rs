@@ -414,10 +414,19 @@ pub fn hostname_ssl_page(notice: Option<&str>, error: Option<&str>) -> String {
 
 pub fn mail_ssl_page() -> String {
     let st = mail_ssl_status();
-    let kv = status_kv(&[(
-        "Certificate",
-        if st.has_cert { "Present" } else { "Missing" },
-    )]);
+    let mail_cfg = crate::panel_ops_mail_ssl::load_mail_ssl_config();
+    let mail_host = crate::panel_ops_mail_ssl::resolve_mail_ssl_hostname()
+        .unwrap_or_else(|| "mail.<your-domain>".into());
+    let le_present = crate::panel_ops_mail_ssl::mail_le_material_present(&mail_host);
+    let kv = status_kv(&[
+        (
+            "Certificate",
+            if st.has_cert { "Present" } else { "Missing" },
+        ),
+        ("Mail hostname", &mail_host),
+        ("Provider", mail_cfg.provider.label()),
+        ("Let's Encrypt live", if le_present { "Yes" } else { "No" }),
+    ]);
     let checked = {
         let mut ul = String::from("<ul>");
         for p in &st.paths_checked {
@@ -426,6 +435,21 @@ pub fn mail_ssl_page() -> String {
         ul.push_str("</ul>");
         ul
     };
+    let issue_form = if matches!(
+        mail_cfg.provider,
+        crate::panel_ops_ssl_provider::SslProvider::Custom
+            | crate::panel_ops_ssl_provider::SslProvider::None
+    ) {
+        format!(
+            r#"<p class="muted">Provider is <strong>{}</strong>. Switch to Let's Encrypt in mail SSL settings to auto-issue.</p>"#,
+            html_escape(mail_cfg.provider.label())
+        )
+    } else {
+        r#"<form method="post" action="/security/ssl/mail/issue" class="inline-form" style="margin:12px 0;">
+  <button type="submit" class="btn-primary">Issue / renew Let's Encrypt for mail hostname</button>
+</form>
+<p class="muted">Default for new Host email installs is Let's Encrypt for <code>mail.&lt;apex&gt;</code>. Choose Custom or None only when you intentionally opt out.</p>"#.into()
+    };
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -433,10 +457,11 @@ pub fn mail_ssl_page() -> String {
             ("Mail Server SSL", None),
         ],
         "Mail Server SSL",
-        "Mail stack certificate detection.",
+        "Mail stack certificate for IMAP/SMTP (defaults to Let's Encrypt).",
         &format!(
-            "{kv}{}<h3>Paths checked</h3>{checked}",
-            pre_block(&st.detail)
+            "{kv}{issue}{}<h3>Paths checked</h3>{checked}",
+            pre_block(&st.detail),
+            issue = issue_form,
         ),
         None,
         None,

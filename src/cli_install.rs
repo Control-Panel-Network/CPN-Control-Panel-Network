@@ -8,7 +8,7 @@ use crate::model::{
     DatabaseEngine, InstallerEvent, InstallerStatus, MailSystem, PasswordPolicy, ServerEngine,
 };
 use crate::panel_network::save_panel_hostname;
-use crate::panel_public_url::save_panel_public_url;
+use crate::panel_public_url::{coerce_panel_public_url_input, save_panel_public_url};
 use std::io::{self, IsTerminal, Write};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -158,18 +158,22 @@ fn prompt_database() -> Result<DatabaseEngine, String> {
 
 fn prompt_php_version() -> Result<String, String> {
     println!("\nPHP version (system php-fpm / CLI used by phpMyAdmin and webmail):");
-    println!("  1) 8.5  (default on AlmaLinux/RHEL 9+)");
-    println!("  2) 8.4");
-    println!("  3) 8.3");
-    println!("  4) 8.2");
-    println!("If 8.5 packages are missing, CPN falls back to the next available branch.");
-    prompt_menu("Enter 1-4 for PHP version", "1", |raw| match raw {
-        "1" | "8.5" | "85" => Ok("8.5".into()),
-        "2" | "8.4" | "84" => Ok("8.4".into()),
-        "3" | "8.3" | "83" => Ok("8.3".into()),
-        "4" | "8.2" | "82" => Ok("8.2".into()),
+    println!("  1) 8.6  (default on AlmaLinux/RHEL 9+)");
+    println!("  2) 8.5");
+    println!("  3) 8.4");
+    println!("  4) 8.3");
+    println!("  5) 8.2");
+    println!(
+        "If 8.6 packages are missing, CPN falls back to the next available branch (8.5 first)."
+    );
+    prompt_menu("Enter 1-5 for PHP version", "1", |raw| match raw {
+        "1" | "8.6" | "86" => Ok("8.6".into()),
+        "2" | "8.5" | "85" => Ok("8.5".into()),
+        "3" | "8.4" | "84" => Ok("8.4".into()),
+        "4" | "8.3" | "83" => Ok("8.3".into()),
+        "5" | "8.2" | "82" => Ok("8.2".into()),
         other => Err(format!(
-            "Unknown PHP version `{other}`. Enter 1 (8.5), 2 (8.4), 3 (8.3), or 4 (8.2)."
+            "Unknown PHP version `{other}`. Enter 1 (8.6), 2 (8.5), 3 (8.4), 4 (8.3), or 5 (8.2)."
         )),
     })
 }
@@ -361,6 +365,51 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     }
 
     println!("\nCPN Server Panel · SSH/CLI Installer {VERSION}");
+    crate::foreign_panel::install_notice::print_install_migration_notice();
+    let panels = crate::foreign_panel::install_intent::detected_panels();
+    let install_path = if let Some(mode) =
+        crate::foreign_panel::install_intent::parse_install_path_flag(_args)
+    {
+        let target = if mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
+            crate::foreign_panel::install_intent::default_migrate_target(&panels)
+        } else {
+            None
+        };
+        let record = crate::foreign_panel::install_intent::InstallPathRecord {
+            mode,
+            target_panel_id: target,
+            chosen_at_unix: crate::http_helpers::now_unix(),
+        };
+        if let Err(error) = crate::foreign_panel::install_intent::save_install_path(&record) {
+            return fail(format!("Could not save install path: {error}"));
+        }
+        record
+    } else if panels.is_empty() {
+        crate::foreign_panel::install_intent::InstallPathRecord {
+            mode: crate::foreign_panel::install_intent::InstallPathMode::Fresh,
+            target_panel_id: None,
+            chosen_at_unix: crate::http_helpers::now_unix(),
+        }
+    } else {
+        match crate::foreign_panel::install_intent::prompt_cli_install_path(&panels) {
+            Ok(record) => {
+                if let Err(error) = crate::foreign_panel::install_intent::save_install_path(&record)
+                {
+                    eprintln!("warning: could not save install path: {error}");
+                }
+                record
+            }
+            Err(error) => return fail(error),
+        }
+    };
+    if install_path.mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
+        println!(
+            "Install path: migrate from {} (panel-migrate runs after CPN is ready).",
+            install_path.target_panel_id.as_deref().unwrap_or("classic")
+        );
+    } else if !panels.is_empty() {
+        println!("Install path: fresh (you chose to proceed without panel-migrate first).");
+    }
     let detected_language = crate::http_helpers::detect_system_language();
     println!("Detected language: {detected_language}. You can change it later in the panel.\n");
 
@@ -416,7 +465,9 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
             eprintln!("warning: could not save panel hostname: {error}");
         } else {
             println!("Saved panel hostname: {hostname}");
-            println!("HTTPS reverse proxy + Let's Encrypt will run after the web stack installs.");
+            println!(
+                "After install: reverse proxy on :80/:443 and Let's Encrypt when DNS points here."
+            );
         }
     } else {
         println!("No hostname: panel stays HTTP on the listen port until you set one later.");
@@ -433,10 +484,15 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         Err(e) => return fail(e),
     };
     if !public_url.is_empty() {
-        if let Err(error) = save_panel_public_url(&public_url) {
+        let normalized = coerce_panel_public_url_input(&public_url);
+        if let Err(error) = save_panel_public_url(&normalized) {
             eprintln!("warning: could not save panel public URL: {error}");
         } else {
-            println!("Saved panel public URL: {public_url}");
+            if normalized != public_url.trim() {
+                println!("Normalized panel public URL to: {normalized}");
+            } else {
+                println!("Saved panel public URL: {normalized}");
+            }
         }
     }
 
@@ -579,6 +635,11 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         for note in &report.notes {
             println!("  {note}");
         }
+        if report.le_issue_failed {
+            eprintln!(
+                "warning: Let's Encrypt did not finish; HTTP proxy is active. Retry: cpn network enable-https"
+            );
+        }
     } else {
         println!(
             "\nPanel is HTTP on port {port}. HTTPS needs a hostname + reverse proxy (cpn network set-hostname)."
@@ -593,6 +654,12 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     crate::motd::print_panel_ready_banner(VERSION, port, host);
     println!("SSH logins will show the CPN MOTD (English) via /etc/profile.d/cpn-motd.sh.");
     println!("The panel uses the detected language unless you change it in the language menu.");
+    if let Some(hint) = crate::foreign_panel::install_intent::post_install_hint(
+        install_path.mode,
+        install_path.target_panel_id.as_deref(),
+    ) {
+        println!("\n{hint}");
+    }
     0
 }
 

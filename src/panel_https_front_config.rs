@@ -6,9 +6,13 @@ pub const HTTPD_CONF: &str = "/usr/local/lsws/conf/httpd_config.conf";
 pub const NGINX_CONF: &str = "/etc/nginx/conf.d/cpn-panel-https.conf";
 pub const CADDY_SNIPPET: &str = "/etc/caddy/Caddyfile.d/cpn-panel-https.caddy";
 
-/// Pure OLS vhconf body for panel reverse proxy (+ ACME webroot).
-pub fn ols_panel_proxy_vhconf(listen_port: u16, acme_webroot: &str) -> String {
-    format!(
+/// Pure OLS vhconf body for panel reverse proxy (+ ACME webroot, optional vhssl).
+pub fn ols_panel_proxy_vhconf(
+    listen_port: u16,
+    acme_webroot: &str,
+    tls: Option<(&str, &str)>,
+) -> String {
+    let mut body = format!(
         "docRoot                   {acme_webroot}/\n\
          enableGzip                1\n\
          extprocessor cpnpanel {{\n\
@@ -20,17 +24,38 @@ pub fn ols_panel_proxy_vhconf(listen_port: u16, acme_webroot: &str) -> String {
            retryTimeout            0\n\
            respBuffer              0\n\
          }}\n\
+         context /.well-known/acme-challenge/ {{\n\
+           location                {acme_webroot}/.well-known/acme-challenge/\n\
+           allowBrowse             1\n\
+           addDefaultCharset       off\n\
+           accessControl  {{\n\
+             allow                 *\n\
+           }}\n\
+         }}\n\
          context /.well-known/ {{\n\
            location                {acme_webroot}/.well-known/\n\
            allowBrowse             1\n\
            addDefaultCharset       off\n\
+           accessControl  {{\n\
+             allow                 *\n\
+           }}\n\
          }}\n\
          context / {{\n\
            type                    proxy\n\
            handler                 cpnpanel\n\
            addDefaultCharset       off\n\
          }}\n"
-    )
+    );
+    if let Some((fullchain, privkey)) = tls {
+        body.push_str(&format!(
+            "vhssl  {{\n\
+               keyFile                 {privkey}\n\
+               certFile                {fullchain}\n\
+               certChain               1\n\
+             }}\n"
+        ));
+    }
+    body
 }
 
 /// Pure nginx server blocks for panel hostname (HTTP ACME + optional HTTPS proxy).
@@ -52,12 +77,19 @@ pub fn nginx_panel_proxy_conf(
            }}\n"
     ));
     if let Some((fullchain, privkey)) = cert {
-        out.push_str(
-            "  location / {\n\
-               return 301 https://$host$request_uri;\n\
-             }\n\
-           }\n",
-        );
+        out.push_str(&format!(
+            "  location / {{\n\
+               proxy_http_version 1.1;\n\
+               proxy_set_header Host $host;\n\
+               proxy_set_header X-Real-IP $remote_addr;\n\
+               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
+               proxy_set_header X-Forwarded-Proto $scheme;\n\
+               proxy_set_header Upgrade $http_upgrade;\n\
+               proxy_set_header Connection \"upgrade\";\n\
+               proxy_pass http://127.0.0.1:{listen_port};\n\
+             }}\n\
+           }}\n"
+        ));
         out.push_str(&format!(
             "server {{\n\
                listen 443 ssl http2;\n\
@@ -105,6 +137,46 @@ pub fn caddy_panel_proxy_snippet(hostname: &str, listen_port: u16) -> String {
     )
 }
 
+/// Canonical `virtualHost CPNPanel` block (docRoot on ACME webroot, unrestrained for HTTP-01).
+pub fn ols_panel_virtual_host_block(vh_name: &str, acme_webroot: &str) -> String {
+    format!(
+        "\nvirtualHost {vh_name} {{\n\
+           vhRoot                  {acme_webroot}/\n\
+           configFile              $SERVER_ROOT/conf/vhosts/{vh_name}/vhconf.conf\n\
+           allowSymbolLink         1\n\
+           enableScript            1\n\
+           restrained              0\n\
+         }}\n"
+    )
+}
+
+/// Insert or repair the panel virtual host stanza in `httpd_config.conf`.
+pub fn ensure_ols_panel_virtual_host(conf: &str, vh_name: &str, acme_webroot: &str) -> String {
+    let marker = format!("virtualHost {vh_name}");
+    let block = ols_panel_virtual_host_block(vh_name, acme_webroot);
+    let Some(start) = conf.find(&marker) else {
+        let mut out = conf.to_string();
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&block);
+        return out;
+    };
+    let rest = &conf[start..];
+    let Some(end_rel) = rest.find("\n}") else {
+        return conf.to_string();
+    };
+    let block_end = start + end_rel + 2;
+    let mut out = String::with_capacity(conf.len() + block.len());
+    out.push_str(&conf[..start]);
+    out.push_str(block.trim_start());
+    if !block.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&conf[block_end..]);
+    out
+}
+
 pub fn insert_map_before_catchall(conf: &str, listener: &str, map_line: &str) -> Option<String> {
     if conf.contains(map_line.trim()) {
         return None;
@@ -139,6 +211,12 @@ pub fn insert_map_before_catchall(conf: &str, listener: &str, map_line: &str) ->
     Some(out)
 }
 
+/// Ensure the panel hostname is reachable over HTTPS without stealing site SNI.
+///
+/// Prefer mapping `CPNPanel` onto an existing public `SSL` / `Default` listener.
+/// Only create a dedicated `CPNHttps` listener when no `*:443` SSL listener exists.
+/// Never bind a second competing `*:443` listener beside an existing site SSL listener
+/// (that caused post-migration subdomain HTTPS 404s: panel cert won SNI).
 pub fn ensure_ols_https_listener(
     conf: &str,
     hostname: &str,
@@ -146,18 +224,50 @@ pub fn ensure_ols_https_listener(
     privkey: &str,
 ) -> String {
     let map_line = format!("  map                      {OLS_VH_NAME} {hostname}\n");
-    if conf.contains("listener CPNHttps") {
-        let mut updated = conf.to_string();
+    let mut updated = conf.to_string();
+
+    // Always wire panel onto the primary public listeners when present.
+    for listener in ["SSL", "Default"] {
+        if updated.contains(&format!("listener {listener}"))
+            && let Some(next) = insert_map_before_catchall(&updated, listener, &map_line)
+        {
+            updated = next;
+        }
+    }
+
+    let has_public_ssl = listener_binds_public_443(&updated, "SSL")
+        || listener_binds_public_443(&updated, "Default");
+
+    if updated.contains("listener CPNHttps") {
+        // If a public SSL listener already owns *:443, keep CPNHttps off that port.
+        if has_public_ssl {
+            updated = relocate_cpn_https_off_public_443(&updated, fullchain, privkey, hostname);
+        } else if !updated.contains(fullchain) || !updated.contains(privkey) {
+            updated = rewrite_ols_listener_certs(&updated, fullchain, privkey);
+        }
         if let Some(next) = insert_map_before_catchall(&updated, "CPNHttps", &map_line) {
             updated = next;
         }
-        if !updated.contains(fullchain) || !updated.contains(privkey) {
-            updated = rewrite_ols_listener_certs(&updated, fullchain, privkey);
-        }
         return updated;
     }
-    let mut out = conf.to_string();
-    out.push_str(&format!(
+
+    if has_public_ssl {
+        // Panel is already mapped onto SSL/Default above; optional loopback listener
+        // remains available for local tooling without competing for public SNI.
+        updated.push_str(&format!(
+            "\nlistener CPNHttps {{\n\
+               address                 127.0.0.1:20443\n\
+               secure                  1\n\
+               keyFile                 {privkey}\n\
+               certFile                {fullchain}\n\
+               map                     {OLS_VH_NAME} {hostname}\n\
+             }}\n"
+        ));
+        return updated;
+    }
+
+    // Fresh OLS install with no site SSL listener yet: CPN may own *:443.
+    updated.push_str(&format!(
         "\nlistener CPNHttps {{\n\
            address                 *:443\n\
            secure                  1\n\
@@ -166,6 +276,62 @@ pub fn ensure_ols_https_listener(
            map                     {OLS_VH_NAME} {hostname}\n\
          }}\n"
     ));
+    updated
+}
+
+fn listener_binds_public_443(conf: &str, listener: &str) -> bool {
+    let marker = format!("listener {listener}");
+    let Some(start) = conf.find(&marker) else {
+        return false;
+    };
+    let rest = &conf[start..];
+    let Some(end_rel) = rest.find("\n}") else {
+        return false;
+    };
+    let block = &rest[..end_rel];
+    let secure = block.lines().any(|l| {
+        let t = l.trim_start();
+        t.starts_with("secure") && t.contains('1')
+    });
+    let addr_443 = block.lines().any(|l| {
+        let t = l.trim_start();
+        t.starts_with("address") && (t.contains("*:443") || t.contains("0.0.0.0:443"))
+    });
+    secure && addr_443
+}
+
+fn relocate_cpn_https_off_public_443(
+    conf: &str,
+    fullchain: &str,
+    privkey: &str,
+    hostname: &str,
+) -> String {
+    let marker = "listener CPNHttps";
+    let Some(start) = conf.find(marker) else {
+        return conf.to_string();
+    };
+    let rest = &conf[start..];
+    let Some(end_rel) = rest.find("\n}") else {
+        return conf.to_string();
+    };
+    let block_end = start + end_rel + 2;
+    let block = &conf[start..block_end];
+    if !block.contains("*:443") && !block.contains("0.0.0.0:443") {
+        return conf.to_string();
+    }
+    let replacement = format!(
+        "listener CPNHttps {{\n\
+           address                 127.0.0.1:20443\n\
+           secure                  1\n\
+           keyFile                 {privkey}\n\
+           certFile                {fullchain}\n\
+           map                     {OLS_VH_NAME} {hostname}\n\
+         }}\n"
+    );
+    let mut out = String::new();
+    out.push_str(&conf[..start]);
+    out.push_str(&replacement);
+    out.push_str(&conf[block_end..]);
     out
 }
 
@@ -205,12 +371,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ensure_panel_vhost_repairs_restrained_and_vhroot() {
+        let base = "virtualHost CPNPanel {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPNPanel/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n";
+        let out = ensure_ols_panel_virtual_host(base, "CPNPanel", "/var/lib/cpn/acme-webroot");
+        assert!(out.contains("restrained              0"));
+        assert!(out.contains("vhRoot                  /var/lib/cpn/acme-webroot/"));
+        assert!(!out.contains("restrained              1"));
+    }
+
+    #[test]
+    fn ensure_panel_vhost_appends_when_missing() {
+        let base = "listener Default {\n  address *:80\n}\n";
+        let out = ensure_ols_panel_virtual_host(base, "CPNPanel", "/var/lib/cpn/acme-webroot");
+        assert!(out.contains("virtualHost CPNPanel"));
+        assert!(out.contains("restrained              0"));
+    }
+
+    #[test]
     fn ols_vhconf_proxies_listen_port_and_acme() {
-        let body = ols_panel_proxy_vhconf(2087, "/var/lib/cpn/acme-webroot");
+        let body = ols_panel_proxy_vhconf(2087, "/var/lib/cpn/acme-webroot", None);
         assert!(body.contains("http://127.0.0.1:2087"));
         assert!(body.contains("type                    proxy"));
+        assert!(body.contains("context /.well-known/acme-challenge/"));
         assert!(body.contains("context /.well-known/"));
         assert!(!body.contains("https://127.0.0.1:2087"));
+    }
+
+    #[test]
+    fn ols_vhconf_includes_vhssl_when_tls_paths_given() {
+        let body = ols_panel_proxy_vhconf(
+            2087,
+            "/var/lib/cpn/acme-webroot",
+            Some((
+                "/etc/letsencrypt/live/panel.example.com/fullchain.pem",
+                "/etc/letsencrypt/live/panel.example.com/privkey.pem",
+            )),
+        );
+        assert!(body.contains("vhssl  {"));
+        assert!(body.contains("fullchain.pem"));
+        assert!(body.contains("privkey.pem"));
     }
 
     #[test]
@@ -236,7 +435,9 @@ mod tests {
         );
         assert!(body.contains("listen 443 ssl"));
         assert!(body.contains("ssl_certificate "));
-        assert!(body.contains("return 301 https://$host$request_uri"));
+        assert!(body.contains("listen 80;"));
+        assert!(body.contains("proxy_pass http://127.0.0.1:2087"));
+        assert!(!body.contains("return 301"));
     }
 
     #[test]
@@ -249,7 +450,7 @@ mod tests {
 
     #[test]
     fn never_builds_https_on_listen_port_in_snippets() {
-        let ols = ols_panel_proxy_vhconf(2087, "/tmp/acme");
+        let ols = ols_panel_proxy_vhconf(2087, "/tmp/acme", None);
         let nginx = nginx_panel_proxy_conf("a.example.com", 2087, "/tmp/acme", None);
         let caddy = caddy_panel_proxy_snippet("a.example.com", 2087);
         for body in [ols, nginx, caddy] {
@@ -259,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn ols_https_listener_appends_once() {
+    fn ols_https_listener_appends_once_when_no_public_ssl() {
         let base = "listener CPNHttp {\n  address *:80\n  secure 0\n  map CPN *\n}\n";
         let once = ensure_ols_https_listener(
             base,
@@ -268,6 +469,7 @@ mod tests {
             "/c/privkey.pem",
         );
         assert!(once.contains("listener CPNHttps"));
+        assert!(once.contains("address                 *:443"));
         assert!(once.contains("map                     CPNPanel panel.example.com"));
         let twice = ensure_ols_https_listener(
             &once,
@@ -276,5 +478,45 @@ mod tests {
             "/c/privkey.pem",
         );
         assert_eq!(twice.matches("listener CPNHttps").count(), 1);
+    }
+
+    #[test]
+    fn ols_https_does_not_steal_existing_site_ssl_443() {
+        let base = "listener SSL {\n  address *:443\n  secure 1\n  keyFile /k\n  certFile /c\n  map site.example.com site.example.com\n}\n";
+        let out = ensure_ols_https_listener(
+            base,
+            "panel.example.com",
+            "/c/fullchain.pem",
+            "/c/privkey.pem",
+        );
+        assert!(out.contains("map                      CPNPanel panel.example.com"));
+        assert!(out.contains("listener SSL"));
+        // Dedicated CPNHttps must not compete on public *:443 beside site SSL.
+        let cpn = out
+            .split("listener CPNHttps")
+            .nth(1)
+            .expect("CPNHttps present");
+        let cpn_block = cpn.split("\n}").next().unwrap_or("");
+        assert!(cpn_block.contains("127.0.0.1:20443"));
+        assert!(!cpn_block.contains("*:443"));
+    }
+
+    #[test]
+    fn relocates_existing_cpn_https_off_public_443() {
+        let base = "listener SSL {\n  address *:443\n  secure 1\n  map site.example.com site.example.com\n}\n\
+listener CPNHttps {\n  address *:443\n  secure 1\n  keyFile /old.key\n  certFile /old.crt\n  map CPNPanel panel.example.com\n}\n";
+        let out = ensure_ols_https_listener(
+            base,
+            "panel.example.com",
+            "/c/fullchain.pem",
+            "/c/privkey.pem",
+        );
+        let cpn = out
+            .split("listener CPNHttps")
+            .nth(1)
+            .expect("CPNHttps present");
+        let cpn_block = cpn.split("\n}").next().unwrap_or("");
+        assert!(cpn_block.contains("127.0.0.1:20443"));
+        assert!(!cpn_block.contains("*:443"));
     }
 }

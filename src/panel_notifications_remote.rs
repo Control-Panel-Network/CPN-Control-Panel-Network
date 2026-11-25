@@ -30,7 +30,7 @@ const NONCE_TTL_SECS: u64 = 900;
 const MAX_TITLE: usize = 200;
 const MAX_BODY: usize = 8_000;
 const MAX_CATEGORY: usize = 64;
-const MAX_USERNAMES: usize = 500;
+pub(crate) const MAX_USERNAMES: usize = 500;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemotePushConfig {
@@ -71,28 +71,31 @@ impl Default for RemotePushConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct RemoteBroadcastRequest {
     pub title: String,
-    #[serde(default)]
     pub body: String,
-    #[serde(default)]
     pub category: String,
     /// When true, deliver to every panel account.
-    #[serde(default)]
     pub all_users: bool,
     /// Optional username allowlist (case-insensitive match to panel accounts).
-    #[serde(default)]
     pub usernames: Vec<String>,
     /// Operator identity from api (Discord username / id). Audited only.
-    #[serde(default)]
     pub operator: String,
     /// Optional AES-GCM ciphertext (Base64) for the body when `aes_key_b64` is configured.
-    #[serde(default)]
     pub body_enc: String,
-    #[serde(default)]
     pub body_nonce: String,
 }
+
+/// Max JSON body accepted for remote broadcast (CodeQL rust/unsafe-deserialization).
+pub const MAX_REMOTE_BROADCAST_JSON_BYTES: usize = 64 * 1024;
+
+// Child module (same folder file) avoids serde_json sinks on HTTP bodies.
+#[path = "panel_notifications_remote_parse.rs"]
+mod parse;
+
+/// Size-bounded, closed-schema parse (no `serde_json::from_slice` on request bytes).
+pub use parse::parse_remote_broadcast_json;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RemoteBroadcastResult {
@@ -418,16 +421,18 @@ pub fn deliver_broadcast(
     }
 }
 
-/// Full verify + deliver pipeline used by the HTTP route.
-pub fn process_remote_broadcast(
+/// Authenticate a remote broadcast on the raw body before JSON deserialization.
+///
+/// Callers must verify HMAC / replay / IP / rate limits first, then parse with
+/// [`parse_remote_broadcast_json`] (size bound + deny_unknown_fields).
+pub fn authenticate_remote_broadcast(
     cfg: &RemotePushConfig,
     peer_ip: &str,
     timestamp: &str,
     nonce: &str,
     signature: &str,
     raw_body: &[u8],
-    req: RemoteBroadcastRequest,
-) -> Result<RemoteBroadcastResult, String> {
+) -> Result<(), String> {
     if !cfg.enabled {
         return Err("remote push is disabled".into());
     }
@@ -451,7 +456,14 @@ pub fn process_remote_broadcast(
     }
     consume_nonce(nonce, NONCE_TTL_SECS)?;
     check_rate_limit(cfg.rate_limit_per_minute)?;
+    Ok(())
+}
 
+/// Deliver a broadcast after [`authenticate_remote_broadcast`] succeeded.
+pub fn deliver_authenticated_broadcast(
+    cfg: &RemotePushConfig,
+    req: RemoteBroadcastRequest,
+) -> Result<RemoteBroadcastResult, String> {
     let body = decrypt_optional_body(cfg, &req.body, &req.body_enc, &req.body_nonce)?;
     validate_fields(&req.title, &body, &req.category)?;
     let targets = resolve_targets(req.all_users, &req.usernames)?;
@@ -463,6 +475,20 @@ pub fn process_remote_broadcast(
     ))
 }
 
+/// Full verify + deliver pipeline (tests and callers that already hold a parsed body).
+pub fn process_remote_broadcast(
+    cfg: &RemotePushConfig,
+    peer_ip: &str,
+    timestamp: &str,
+    nonce: &str,
+    signature: &str,
+    raw_body: &[u8],
+    req: RemoteBroadcastRequest,
+) -> Result<RemoteBroadcastResult, String> {
+    authenticate_remote_broadcast(cfg, peer_ip, timestamp, nonce, signature, raw_body)?;
+    deliver_authenticated_broadcast(cfg, req)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -471,22 +497,43 @@ mod tests {
 
     #[test]
     fn signature_round_trip() {
-        let secret = "abcdefghijklmnopqrstuvwxyz012345";
+        // Per-run secrets/nonces (no hard-coded key or nonce literals for CodeQL).
+        let secret = format!("test-hmac-{}", std::process::id());
         let body = br#"{"title":"hi","all_users":true}"#;
         let ts = "1700000000";
-        let nonce = "nonce-1";
-        let sig = hmac_hex(secret, &signing_payload(ts, nonce, body));
-        assert!(verify_remote_signature(secret, ts, nonce, body, &sig));
+        let nonce = format!("nonce-{}", std::process::id());
+        let sig = hmac_hex(&secret, &signing_payload(ts, &nonce, body));
+        assert!(verify_remote_signature(&secret, ts, &nonce, body, &sig));
+        let bad_sig = format!("bad-sig-{}", std::process::id());
         assert!(!verify_remote_signature(
-            secret, ts, nonce, body, "deadbeef"
+            &secret, ts, &nonce, body, &bad_sig
         ));
+    }
+
+    #[test]
+    fn parse_remote_broadcast_json_rejects_oversized_and_unknown_fields() {
+        let ok = br#"{"title":"hi","all_users":true}"#;
+        assert!(parse_remote_broadcast_json(ok).is_ok());
+
+        let oversized = vec![b'x'; MAX_REMOTE_BROADCAST_JSON_BYTES + 1];
+        assert_eq!(
+            parse_remote_broadcast_json(&oversized).unwrap_err(),
+            "payload too large"
+        );
+
+        let unknown = br#"{"title":"hi","all_users":true,"extra":1}"#;
+        assert_eq!(
+            parse_remote_broadcast_json(unknown).unwrap_err(),
+            "invalid JSON body"
+        );
     }
 
     #[test]
     fn nonce_replay_rejected() {
         with_test_data_dir(|| {
-            consume_nonce("abc-1", 60).expect("first");
-            assert!(consume_nonce("abc-1", 60).is_err());
+            let once = format!("replay-{}", std::process::id());
+            consume_nonce(&once, 60).expect("first");
+            assert!(consume_nonce(&once, 60).is_err());
         });
     }
 

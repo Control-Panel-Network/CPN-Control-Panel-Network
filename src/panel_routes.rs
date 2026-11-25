@@ -5,6 +5,7 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
 use crate::panel_admin::is_panel_admin;
+use crate::panel_hub_http::{captured_session_exp, html_blocking, panel_shell_blocking};
 use crate::panel_hub_pages_category_overviews::websites_hub_main;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_ops_ssl_origin_retry::spawn_origin_backup_pass;
@@ -52,7 +53,8 @@ pub use crate::panel_app_routes::{
 };
 pub use crate::panel_backup_routes::{backups_page, backups_run};
 pub use crate::panel_mail_routes::{
-    email_account_create, email_account_disable, email_account_enable,
+    email_account_create, email_account_delete, email_account_disable, email_account_enable,
+    email_account_modify, email_account_restore,
 };
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
@@ -124,19 +126,30 @@ pub async fn websites_list_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    let q = query.get("q").map(String::as_str);
-    let page = query.get("page").map(String::as_str);
-    let per_page = query.get("per_page").map(String::as_str);
-    let mode = query.get("mode").map(String::as_str);
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let q = query.get("q").cloned();
+    let page = query.get("page").cloned();
+    let per_page = query.get("per_page").cloned();
+    let mode = query.get("mode").cloned();
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
     spawn_origin_backup_pass();
-    html_ok(panel_shell(
-        &user,
-        "websites",
-        "List Websites",
-        &websites_main(&user, notice, error, q, page, per_page, mode),
-    ))
+    html_blocking(move || {
+        let body = websites_main(
+            &user,
+            notice.as_deref(),
+            error.as_deref(),
+            q.as_deref(),
+            page.as_deref(),
+            per_page.as_deref(),
+            mode.as_deref(),
+        );
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "websites", "List Websites", &body, session_exp)
+        })
+    })
+    .await
 }
 
 #[get("/websites/create")]
@@ -176,19 +189,30 @@ pub async fn subdomains_page(
             .append_header(("Location", "/subdomains/create"))
             .finish();
     }
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    let q = query.get("q").map(String::as_str);
-    let page = query.get("page").map(String::as_str);
-    let per_page = query.get("per_page").map(String::as_str);
-    let mode = query.get("mode").map(String::as_str);
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let q = query.get("q").cloned();
+    let page = query.get("page").cloned();
+    let per_page = query.get("per_page").cloned();
+    let mode = query.get("mode").cloned();
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
     spawn_origin_backup_pass();
-    html_ok(panel_shell(
-        &user,
-        "websites",
-        "Sub-domains",
-        &subdomains_main(&user, notice, error, q, page, per_page, mode),
-    ))
+    html_blocking(move || {
+        let body = subdomains_main(
+            &user,
+            notice.as_deref(),
+            error.as_deref(),
+            q.as_deref(),
+            page.as_deref(),
+            per_page.as_deref(),
+            mode.as_deref(),
+        );
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "websites", "Sub-domains", &body, session_exp)
+        })
+    })
+    .await
 }
 
 #[get("/subdomains/create")]

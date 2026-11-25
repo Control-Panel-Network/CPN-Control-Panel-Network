@@ -96,6 +96,26 @@ pub enum AppCommands {
         #[command(subcommand)]
         command: AppBackupCommands,
     },
+    /// Import SnappyMail contacts/settings into Tachyon (IMAP mail is unchanged)
+    #[command(name = "migrate-snappymail")]
+    MigrateSnappymail {
+        /// Destination client (only tachyon is supported)
+        #[arg(long, default_value = "tachyon")]
+        to: String,
+        /// Re-run even when the migration marker exists
+        #[arg(long)]
+        force: bool,
+    },
+    /// Import prior webmail data into Tachyon, back up, then remove leftover prior webmail files
+    #[command(name = "retire-snappymail")]
+    RetireSnappymail {
+        /// Show what would be removed without changing anything
+        #[arg(long)]
+        dry_run: bool,
+        /// Keep the prior webmail MariaDB database (still dumped under /home/backup)
+        #[arg(long)]
+        keep_db: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -221,7 +241,43 @@ pub fn run(
         AppCommands::Backups { command } => match command {
             AppBackupCommands::List { name, domain } => lifecycle_backups(&name, &domain),
         },
+        AppCommands::MigrateSnappymail { to, force } => {
+            require_root()?;
+            migrate_snappymail(&to, force)
+        }
+        AppCommands::RetireSnappymail { dry_run, keep_db } => {
+            if !dry_run {
+                require_root()?;
+            }
+            let report = crate::install_snappymail_retire::retire_snappymail(
+                crate::install_snappymail_retire::RetireOptions {
+                    dry_run,
+                    keep_db,
+                    allow_switch: true,
+                },
+            )?;
+            println!("{}", report.summary());
+            Ok(())
+        }
     }
+}
+
+fn migrate_snappymail(to: &str, force: bool) -> Result<(), String> {
+    let to = to.trim().to_ascii_lowercase();
+    if to != "tachyon" {
+        return Err("Only --to tachyon is supported for SnappyMail data import".into());
+    }
+    if force {
+        let marker = std::path::Path::new(
+            "/var/lib/cpn-webmail/tachyon/_data_/_default_/.cpn-snappy-migrate-v1",
+        );
+        if marker.is_file() {
+            let _ = std::fs::remove_file(marker);
+        }
+    }
+    let msg = crate::install_snappymail_migrate::migrate_snappymail_into_tachyon()?;
+    println!("{msg}");
+    Ok(())
 }
 
 pub fn list(domain: Option<&str>) -> Result<(), String> {

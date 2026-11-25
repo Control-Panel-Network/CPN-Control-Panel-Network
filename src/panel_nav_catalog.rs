@@ -419,6 +419,10 @@ const SETTINGS_CHILDREN: &[NavChild] = &[
         href: "/settings/logs",
     },
     NavChild {
+        label: "Audit trail",
+        href: "/settings/audit",
+    },
+    NavChild {
         label: "Change Port",
         href: "/settings/port",
     },

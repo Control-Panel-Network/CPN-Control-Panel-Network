@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 type HmacSha256 = Hmac<Sha256>;
 
 /// Supported major.minor branches for the extensions manager.
-pub const MANAGED_BRANCHES: &[&str] = &["8.5", "8.4", "8.3", "8.2"];
+pub const MANAGED_BRANCHES: &[&str] = &["8.6", "8.5", "8.4", "8.3", "8.2"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhpPackageFamily {
@@ -103,6 +103,7 @@ fn verify_hmac_hex_compat(a: &str, b: &str) -> bool {
 fn branch_to_lsphp_prefix(branch: &str) -> Option<String> {
     let cleaned = branch.trim();
     match cleaned {
+        "8.6" => Some("lsphp86".into()),
         "8.5" => Some("lsphp85".into()),
         "8.4" => Some("lsphp84".into()),
         "8.3" => Some("lsphp83".into()),
@@ -177,7 +178,7 @@ fn dnf_list_names(pattern: &str, installed: bool) -> BTreeSet<String> {
     }
 }
 
-/// Default branch for the dropdown (php-default.json, else preferred 8.5 / EL8 8.2).
+/// Default branch for the dropdown (php-default.json, else preferred 8.6 / EL8 8.2).
 pub fn selected_default_branch() -> String {
     if let Some(rec) = load_php_default()
         && MANAGED_BRANCHES.contains(&rec.branch.as_str())
@@ -426,6 +427,7 @@ mod tests {
 
     #[test]
     fn lsphp_prefix_maps() {
+        assert_eq!(branch_to_lsphp_prefix("8.6").as_deref(), Some("lsphp86"));
         assert_eq!(branch_to_lsphp_prefix("8.5").as_deref(), Some("lsphp85"));
         assert_eq!(branch_to_lsphp_prefix("8.2").as_deref(), Some("lsphp82"));
         assert!(branch_to_lsphp_prefix("7.4").is_none());

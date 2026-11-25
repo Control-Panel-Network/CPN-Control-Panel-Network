@@ -1,8 +1,11 @@
 //! Automatic upgrade check / apply / background worker.
 
 use crate::auto_upgrade::{
-    AutoUpgradeMode, STARTUP_DELAY_SECS, ensure_default_auto_upgrade_config, interval_secs,
-    load_auto_upgrade_config, looks_like_security_release, now_unix, save_auto_upgrade_config,
+    AutoUpgradeMode, STARTUP_DELAY_SECS, ensure_default_auto_upgrade_config,
+    load_auto_upgrade_config, now_unix, resolve_security_release, save_auto_upgrade_config,
+};
+use crate::auto_upgrade_schedule::{
+    ensure_next_check_scheduled, schedule_next_check, seconds_until_next_check,
 };
 use crate::installer::AppState;
 use crate::login_service_gate::login_services_ready;
@@ -46,6 +49,9 @@ fn remember(cfg: &mut crate::auto_upgrade::AutoUpgradeConfig, ok: bool, msg: &st
     cfg.last_check_at = now_unix();
     cfg.last_check_ok = ok;
     cfg.last_result = msg.to_string();
+    if cfg.enabled {
+        schedule_next_check(cfg, now_unix());
+    }
     let _ = save_auto_upgrade_config(cfg);
 }
 
@@ -122,13 +128,22 @@ pub async fn run_auto_upgrade_check(
 
     let existing = detect_existing_install(VERSION);
     let guest = detect_guest_os().map_err(|e| format!("Could not detect guest OS: {e}"))?;
+    // Dry-run (manual Check now) may use cached releases when GitHub rate-limits;
+    // scheduled apply keeps a forced refresh.
     let check =
-        releases::version_check_with_options(VERSION, &existing.package_version, true).await;
+        releases::version_check_with_options(VERSION, &existing.package_version, apply).await;
     if let Some(err) = check.error.as_ref() {
-        let msg = format!("Automatic update check failed: {err}");
-        remember(&mut cfg, false, &msg);
-        upgrade_tip_log::log_tagged_main_only("auto_upgrade", "error", &msg);
-        return Err(msg);
+        if check.releases.is_empty() {
+            let msg = format!("Automatic update check failed: {err}");
+            remember(&mut cfg, false, &msg);
+            upgrade_tip_log::log_tagged_main_only("auto_upgrade", "error", &msg);
+            return Err(msg);
+        }
+        upgrade_tip_log::log_tagged_main_only(
+            "auto_upgrade",
+            "info",
+            &format!("Release list note (using cache): {err}"),
+        );
     }
 
     let latest = check
@@ -163,10 +178,10 @@ pub async fn run_auto_upgrade_check(
         });
     };
 
-    let security_match = looks_like_security_release(&target);
+    let security_match = resolve_security_release(&target).await;
     if cfg.mode == AutoUpgradeMode::Security && !security_match {
         let msg = format!(
-            "Newer release {} available, but security-only mode found no security keywords in tag/title; skipped.",
+            "Newer release {} available, but security-only mode found no security release metadata (and no tag/title security keywords); skipped.",
             target.tag_name
         );
         remember(&mut cfg, true, &msg);
@@ -293,30 +308,57 @@ pub async fn spawn_auto_upgrade_worker(state: Arc<AppState>) {
     // Fresh installs / first start: seed enabled ON + All newer releases when
     // the config file is absent. Never clobber Owner-saved OFF.
     ensure_default_auto_upgrade_config();
+    {
+        let mut cfg = load_auto_upgrade_config();
+        if cfg.enabled {
+            ensure_next_check_scheduled(&mut cfg);
+            let _ = save_auto_upgrade_config(&cfg);
+        }
+    }
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(STARTUP_DELAY_SECS)).await;
         loop {
-            let cfg = load_auto_upgrade_config();
-            let wait = interval_secs(&cfg);
-            if cfg.enabled {
-                match run_auto_upgrade_check(state.clone(), true).await {
-                    Ok(report) => {
-                        upgrade_tip_log::log_tagged_main_only(
-                            "auto_upgrade",
-                            "info",
-                            &format!("periodic: {}", report.message),
-                        );
-                    }
-                    Err(err) => {
-                        upgrade_tip_log::log_tagged_main_only(
-                            "auto_upgrade",
-                            "error",
-                            &format!("periodic check error: {err}"),
-                        );
+            let mut cfg = load_auto_upgrade_config();
+            if !cfg.enabled {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                continue;
+            }
+            let prev_next = cfg.next_check_at_unix;
+            ensure_next_check_scheduled(&mut cfg);
+            if cfg.next_check_at_unix != prev_next {
+                let _ = save_auto_upgrade_config(&cfg);
+            }
+            let wait = seconds_until_next_check(&cfg).max(1);
+            upgrade_tip_log::log_tagged_main_only(
+                "auto_upgrade",
+                "info",
+                &format!(
+                    "next scheduled check in {wait}s (jitter {}s on base interval)",
+                    cfg.schedule_jitter_secs
+                ),
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+            match run_auto_upgrade_check(state.clone(), true).await {
+                Ok(report) => {
+                    upgrade_tip_log::log_tagged_main_only(
+                        "auto_upgrade",
+                        "info",
+                        &format!("periodic: {}", report.message),
+                    );
+                }
+                Err(err) => {
+                    upgrade_tip_log::log_tagged_main_only(
+                        "auto_upgrade",
+                        "error",
+                        &format!("periodic check error: {err}"),
+                    );
+                    let mut after = load_auto_upgrade_config();
+                    if after.enabled {
+                        schedule_next_check(&mut after, now_unix());
+                        let _ = save_auto_upgrade_config(&after);
                     }
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
         }
     });
 }

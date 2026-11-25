@@ -8,7 +8,7 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn panel_styles() -> &'static str {
+pub(crate) fn panel_styles() -> &'static str {
     r#"
 :root {
   --canvas:#fff; --surface:#f5f5f7; --surface-soft:#fafafc; --ink:#1d1d1f;
@@ -179,6 +179,24 @@ button { font:inherit; cursor:pointer; }
   padding:10px 12px; border:1px solid var(--hairline); border-radius:10px;
   background:var(--canvas); color:var(--ink);
 }
+/* Native <dialog> defaults to a light UA surface; theme tokens so dark-mode
+   light ink/labels stay readable (no white-on-white). */
+.cpn-modal {
+  border:1px solid var(--hairline,#d0d5dd); border-radius:12px; padding:0;
+  max-width:min(440px, calc(100% - 24px)); width:calc(100% - 24px);
+  background:var(--canvas,#fff); color:var(--ink,#1d1d1f);
+  box-shadow:0 18px 48px rgba(15,23,42,.22); color-scheme:light dark;
+}
+.cpn-modal::backdrop { background:rgba(15,23,42,.55); }
+.cpn-modal h2 { margin:0 0 8px; font-size:1.15rem; color:var(--ink,#1d1d1f); }
+.cpn-modal .muted { color:var(--muted,#6e6e73); }
+.cpn-modal .stack-form label { color:var(--ink,#1d1d1f); }
+.cpn-modal .stack-form input,
+.cpn-modal .stack-form select,
+.cpn-modal .stack-form textarea {
+  background:var(--surface-soft,#fafafc); color:var(--ink,#1d1d1f);
+  border-color:var(--hairline,#e0e0e0);
+}
 .cpn-check-fieldset { border:1px solid var(--hairline,#d0d5dd); border-radius:8px; padding:12px 14px 14px; margin:0; min-width:0; }
 .cpn-check-fieldset legend { padding:0 6px; font-weight:600; }
 .cpn-check-grid {
@@ -245,6 +263,13 @@ button { font:inherit; cursor:pointer; }
 }
 .docker-list-wrap.table-wrap {
   overflow-x:hidden; overflow-y:visible; overscroll-behavior-x:none;
+}
+.docker-owner-assign .docker-owner-select {
+  min-height:36px; padding:0 10px; border:1px solid var(--hairline); border-radius:10px;
+  background:var(--canvas); color:var(--ink); font:inherit; box-sizing:border-box;
+}
+[data-color-mode=dark] .docker-owner-assign .docker-owner-select {
+  background:#12151c; border-color:#3b4558; color:#f3f6fb;
 }
 .docker-list-toolbar {
   display:flex; flex-wrap:wrap; gap:10px 12px; align-items:end; margin:0 0 14px;
@@ -417,6 +442,16 @@ code { font-size:.9em; word-break:break-word; }
 }
 
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
+    panel_shell_exp(username, active, title, main, None)
+}
+
+pub fn panel_shell_exp(
+    username: &str,
+    active: &str,
+    title: &str,
+    main: &str,
+    session_exp_unix: Option<u64>,
+) -> String {
     let (active, title, main_owned) = if let Some((gate_active, gate_title, gate_main)) =
         crate::account_security::security_gate_override(username, active)
     {
@@ -425,55 +460,45 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         (active, title, main.to_string())
     };
     let main = main_owned.as_str();
+    if crate::panel_spa_nav::spa_fragment_active() {
+        let nav = crate::panel_nav_tree::nav_links_html(active, username);
+        return format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>{title} · CPN Panel</title></head><body><div class="panel-layout" data-page="{active}"><aside class="sidebar"><nav aria-label="Primary navigation">{nav}</nav></aside><section class="panel-main">{main}</section></div></body></html>"#,
+            title = html_escape(title),
+            active = html_escape(active),
+            nav = nav,
+            main = main,
+        );
+    }
     let nav = crate::panel_nav_tree::nav_links_html(active, username);
-    let header = crate::panel_sidebar::sidebar_header_html(username);
+    let header = crate::panel_sidebar::sidebar_header_html(username, session_exp_unix);
+    let session_exp_attr = session_exp_unix
+        .map(|exp| format!(" data-cpn-session-exp=\"{exp}\""))
+        .unwrap_or_default();
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
-    let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
-        panel_styles(),
-        crate::panel_controls::control_styles(),
-        crate::panel_nav_tree::nav_tree_styles(),
-        crate::panel_sidebar::sidebar_extra_styles(),
-        crate::panel_nav_chrome::sidebar_collapse_styles(),
-        crate::panel_footer_chrome::sidebar_footer_styles(),
-        crate::panel_feedback::feedback_styles(),
-        crate::panel_hubs::hub_styles_with_icons(),
-        crate::panel_dashboard_tools::dashboard_tools_styles(),
-        crate::panel_dashboard_layout::dashboard_layout_styles(),
-        crate::panel_dashboard_stats::dashboard_stats_styles(),
-        crate::panel_dashboard_activity::activity_board_styles(),
-        crate::panel_theme::color_mode_styles(),
-        crate::panel_theme::design_css_vars(&design),
-        // After Theme Store CSS so light/dark nav tile bg+text stay paired on toggle.
-        crate::panel_nav_tree::sidebar_nav_contrast_styles(),
-        crate::panel_spa_nav::spa_nav_styles(),
+    let theme_css = crate::panel_theme::design_css_vars(&design);
+    let asset_ver = crate::panel_static_assets::asset_version();
+    let boot = format!(
+        "{}{}",
+        crate::panel_theme_chrome::color_mode_boot_script(color_mode),
+        crate::panel_chrome_scheme::chrome_scheme_boot_script(),
     );
-    let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
-    let script = format!(
-        "{}{}{}{}{}{}{}",
-        crate::panel_nav_chrome::panel_nav_script(),
-        crate::panel_nav_tree::nav_tree_script(),
-        crate::panel_sidebar::sidebar_search_and_ip_script(),
-        crate::panel_theme_chrome::color_mode_toggle_script(),
-        crate::panel_footer_chrome::notifications_popover_script(),
-        crate::panel_feedback::feedback_script(),
-        crate::panel_spa_nav::spa_nav_script(),
-    );
     let plugin_float = crate::panel_plugin_float::panel_float_inject_html(username);
     format!(
         r#"<!DOCTYPE html>
-<html lang="en" data-color-mode="{mode}" data-design-preset="{preset}">
+<html lang="en" data-color-mode="{mode}" data-design-preset="{preset}" data-chrome-scheme="evergreen">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title} · CPN Panel</title>
   {favicons}
-  <style>{styles}</style>
+  <link rel="stylesheet" href="/cpn-panel.css?v={asset_ver}">
+  <style>{theme_css}</style>
   {boot}
 </head>
-<body data-color-mode="{mode}">
+<body data-color-mode="{mode}"{session_exp_attr}>
   <div class="panel-layout" data-page="{active}">
     <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
     <aside id="panel-sidebar" class="sidebar" aria-label="Panel navigation">
@@ -496,13 +521,14 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
       {main}
     </section>
   </div>
-  {script}
+  <script src="/cpn-panel.js?v={asset_ver}"></script>
   {plugin_float}
 </body>
 </html>"#,
         title = html_escape(title),
         favicons = crate::panel_brand::brand_favicon_links(),
-        styles = styles,
+        asset_ver = asset_ver,
+        theme_css = theme_css,
         boot = boot,
         mode = color_mode.as_str(),
         preset = design.preset.as_str(),
@@ -511,14 +537,29 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         nav = nav,
         footer = footer,
         main = main,
-        script = script,
         plugin_float = plugin_float,
+        session_exp_attr = session_exp_attr,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::panel_styles;
+
+    #[test]
+    fn panel_styles_theme_native_modals_with_canvas_ink() {
+        let css = panel_styles();
+        assert!(
+            css.contains(".cpn-modal")
+                && css.contains("background:var(--canvas")
+                && css.contains("color:var(--ink"),
+            "native dialogs must use canvas/ink tokens so dark-mode labels stay readable"
+        );
+        assert!(
+            css.contains(".cpn-modal .stack-form label") && css.contains(".cpn-modal::backdrop"),
+            "modal form labels and backdrop must be styled with the shared modal class"
+        );
+    }
 
     #[test]
     fn panel_styles_keep_sidebar_while_main_scrolls() {
@@ -573,11 +614,16 @@ mod tests {
     #[test]
     fn panel_shell_includes_control_styles() {
         let html = super::panel_shell("tester", "dashboard", "Dashboard", "<p>ok</p>");
+        let css = crate::panel_static_assets::shared_panel_stylesheet();
         assert!(
-            html.contains("input[type=checkbox]:not(.cpn-switch)")
-                && html.contains("input[type=checkbox].cpn-switch")
-                && html.contains("--cpn-control-on"),
-            "panel shell must ship Option C checkbox and Option D switch styles"
+            html.contains("/cpn-panel.css?v=") && html.contains("/cpn-panel.js?v="),
+            "panel shell must link cacheable chrome assets"
+        );
+        assert!(
+            css.contains("input[type=checkbox]:not(.cpn-switch)")
+                && css.contains("input[type=checkbox].cpn-switch")
+                && css.contains("--cpn-control-on"),
+            "shared stylesheet must ship Option C checkbox and Option D switch styles"
         );
     }
 

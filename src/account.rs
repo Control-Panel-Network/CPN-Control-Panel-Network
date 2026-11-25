@@ -81,11 +81,12 @@ pub fn password_policy_hint(policy: &PasswordPolicy) -> String {
 
 /// HTML form of [`password_policy_hint`] with a link to the live blocked-password list.
 ///
-/// Uses [`crate::blocked_passwords::default_list_url`] (same GitHub raw URL the fetcher
-/// defaults to). Safe to insert into panel HTML without further escaping.
+/// Uses [`crate::blocked_passwords::default_browse_url`] (GitHub blob page) so the list
+/// renders in browsers; the fetcher still uses the raw URL. Safe to insert into panel
+/// HTML without further escaping.
 pub fn password_policy_hint_html(policy: &PasswordPolicy) -> String {
     let plain = password_policy_hint(policy);
-    let url = crate::blocked_passwords::default_list_url();
+    let url = crate::blocked_passwords::default_browse_url();
     let link = format!(
         r#"must not match the <a class="password-policy-link" href="{href}" target="_blank" rel="noopener noreferrer">blocked-password list</a>"#,
         href = html_escape_attr(url)
@@ -526,7 +527,7 @@ pub fn setup_account(
     let _ = crate::litespeed_webadmin_users::maybe_align_webadmin_after_account_setup(
         &username, &password,
     );
-    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
+    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&username, &password);
     Ok(AccountSetupResult {
         public: to_account_public(&boot),
         generated_password,
@@ -592,7 +593,8 @@ mod tests {
         assert!(hint.contains("blocked-password list"));
         let hint_html = password_policy_hint_html(&policy);
         assert!(hint_html.contains("blocked-password list</a>"));
-        assert!(hint_html.contains(crate::blocked_passwords::default_list_url()));
+        assert!(hint_html.contains(crate::blocked_passwords::default_browse_url()));
+        assert!(!hint_html.contains(crate::blocked_passwords::default_list_url()));
         assert!(hint_html.contains("rel=\"noopener noreferrer\""));
         assert!(hint_html.contains("target=\"_blank\""));
         assert!(password_meets_policy(&ascii_min8_no_special_sample(), &policy).is_ok());

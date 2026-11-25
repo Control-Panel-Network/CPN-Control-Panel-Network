@@ -1,5 +1,6 @@
 import type {
   AccountSetupResponse,
+  InstallPathMode,
   InstallerEvent,
   InstallerStatus,
   MailSystem,
@@ -146,6 +147,26 @@ export async function setListenPort(
   return response.json();
 }
 
+export async function setInstallPath(
+  mode: InstallPathMode,
+  targetPanelId?: string,
+): Promise<InstallerStatus> {
+  const body: Record<string, unknown> = { mode };
+  if (targetPanelId) {
+    body.target_panel_id = targetPanelId;
+  }
+  const response = await apiFetch("/api/install/path", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response, "install_path_failed"));
+  }
+  const payload = await response.json();
+  return payload.status as InstallerStatus;
+}
+
 /** @deprecated alias kept for older call sites */
 export const setInstallerLanguage = setLanguage;
 
@@ -206,7 +227,7 @@ export async function startServerInstall(
       database: options?.database ?? "mariadb",
       install_phpmyadmin: options?.install_phpmyadmin ?? true,
       enable_proxy_front: options?.enable_proxy_front ?? false,
-      php_version: options?.php_version ?? "8.5",
+      php_version: options?.php_version ?? "8.6",
       install_log_detail: options?.install_log_detail ?? "full",
     }),
   });

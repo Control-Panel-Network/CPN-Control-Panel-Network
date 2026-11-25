@@ -16,7 +16,20 @@ pub fn run(heal: bool, json: bool, id: Option<&str>) -> Result<(), String> {
         maybe_print_maintenance_heal(json);
     }
     let filter = id.map(str::trim).filter(|s| !s.is_empty());
+    let target = filter.unwrap_or("all").to_string();
     let report = system_repair::run_suite(heal, filter, filter);
+    if heal {
+        crate::panel_audit_cli::record_cli(
+            "cli.doctor.heal",
+            &target,
+            report.exit_code() == 0,
+            if report.exit_code() == 0 {
+                "heal completed"
+            } else {
+                "heal reported failures"
+            },
+        );
+    }
     emit(&report, json)
 }
 
@@ -31,7 +44,18 @@ pub fn run_check(json: bool, id: Option<&str>) -> Result<(), String> {
 pub fn run_heal(json: bool, id: Option<&str>) -> Result<(), String> {
     maybe_print_maintenance_heal(json);
     let filter = id.map(str::trim).filter(|s| !s.is_empty());
+    let target = filter.unwrap_or("all").to_string();
     let report = system_repair::run_suite(true, filter, None);
+    crate::panel_audit_cli::record_cli(
+        "cli.doctor.heal",
+        &target,
+        report.exit_code() == 0,
+        if report.exit_code() == 0 {
+            "heal completed"
+        } else {
+            "heal reported failures"
+        },
+    );
     emit(&report, json)
 }
 

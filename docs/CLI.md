@@ -26,6 +26,10 @@ Top-level groups:
 | `panel` | Live login URL, panel status, MOTD install helper |
 | `info` | Alias for `cpn panel status` |
 | `account` | Panel/operator account management |
+| `password` | Short panel password reset (alias of `account passwd` with default target) |
+| `passkey` | WebAuthn passkeys: list / rename / remove / clear ([MFA-CLI.md](MFA-CLI.md)) |
+| `totp` | TOTP authenticator: status / begin / confirm / disable / clear ([MFA-CLI.md](MFA-CLI.md)) |
+| `mfa` | Combined MFA status, enroll-url, and full clear ([MFA-CLI.md](MFA-CLI.md)) |
 | `site` | Website records |
 | `network` | Listen port, hostname, public URL, and port migration |
 | `plugin` | Per-site plugin management |
@@ -67,6 +71,8 @@ sudo cpn-installer --uninstall --yes --dry-run   # print steps only
 ```
 
 ### Product uninstall (leave CPN)
+
+CRA-oriented operator instructions for permanent data deletion (Annex II style) live in [USER-SECURITY.md](USER-SECURITY.md) section 7. System Repair diagnoses and heals; it does not replace uninstall for secure deletion.
 
 Default uninstall is **destructive for CPN** but **keeps customer website files** and **keeps host MariaDB / OpenLiteSpeed** packages:
 
@@ -146,6 +152,20 @@ cpn panel status
 
 Read-only check anytime: `cpn doctor`. Heal local-bin shadows: `sudo cpn doctor --heal` then `hash -r`.
 
+## Panel migrate (CyberPanel and others)
+
+Detect another hosting panel on this host, print a copy plan, copy into CPN, then wipe the foreign panel after a verified apply. CyberPanel is catalog id `classic`.
+
+```bash
+cpn panel-migrate checklist   # CyberPanel → CPN → AlmaLinux 10 operator steps + LiteSpeed license status
+cpn panel-migrate detect
+cpn panel-migrate plan --id classic
+sudo cpn panel-migrate apply --id classic --yes
+sudo cpn panel-migrate wipe --id classic --yes   # only after verified apply
+```
+
+LiteSpeed Enterprise license files (`serial.no`, `license.key`, `trial.key`) are managed in the panel under Server → LiteSpeed plans, or inspected via the checklist output. See `to-do/CYBERPANEL-308-TO-CPN-MIGRATION.md`.
+
 ## Panel URL and status
 
 Login URLs are resolved **live** from the same preference files the panel UI writes (`$CPN_DATA_DIR/listen_port`, `panel_public_url`, `panel_hostname`), with a world-readable mirror under `/etc/cpn/` so non-root SSH sessions can read them. Changing the listen port in Settings updates the next SSH MOTD and `cpn panel url` without reinstalling.
@@ -161,11 +181,11 @@ sudo cpn panel install-motd
 Example (`cpn panel url`):
 
 ```text
-Login URL     : http://127.0.0.1:2089/login
-Local login   : http://127.0.0.1:2087/login
+Server IP     : 203.0.113.10
+Login URL     : https://panel.example.com/login
+Access mode   : Domain-only (loopback + HTTPS hostname)
+Panel note    : domain-only; HTTP :2087 is not open on Server IP. Use Login URL (HTTPS on 443). Optional: cpn network set-ip-backup --on
 Listen port   : 2087
-Public URL    : http://127.0.0.1:2089
-Lab tip       : Windows host may use the public URL when NAT forwards the guest port
 ```
 
 Resolution order for the primary login URL: `panel_public_url` if set, else `https://<panel_hostname>/login` if set, else `http://127.0.0.1:<listen_port>/login`.
@@ -210,38 +230,52 @@ Options used by account commands:
 - `--yes` : skip destructive-operation confirmation where supported (`y`/`yes` also accepted at the prompt).
 - `--force` : required with `account deactivate` when targeting the last active panel admin.
 
-## Passkeys
+## Passkeys, TOTP, and MFA
 
-Manage WebAuthn passkeys for panel accounts from SSH (no web UI). Output never includes credential secrets; only id, label, and timestamps.
+Full flag tables, enroll-url caveats, and playbooks: **[MFA-CLI.md](MFA-CLI.md)**. Hostname / RP ID rules: [MULTI-HOSTNAME-MFA.md](MULTI-HOSTNAME-MFA.md).
 
-```bash
-sudo cpn passkey list --username admin
-sudo cpn passkey remove --username admin --id <credential-id>
-sudo cpn passkey clear --username admin --yes
-```
-
-- `list`: print registered passkeys for the account (`id`, `label`, `created_unix`, `last_used_unix`).
-- `remove`: delete one passkey by `--id` from `list`.
-- `clear`: delete every passkey for the account; confirm with `yes`/`y` (case-insensitive) or pass `--yes` to skip the prompt. `no`/`n` (or empty) aborts.
-- All mutations and list require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir.
-
-## TOTP and MFA
-
-Clear or inspect authenticator (TOTP) state from SSH. Output never includes secrets or backup codes.
+All `passkey`, `totp`, and `mfa` subcommands require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir. Usernames resolve case-insensitively.
 
 ```bash
-sudo cpn totp status --username admin
-sudo cpn totp disable --username admin --yes
-sudo cpn totp clear --username admin --yes
-sudo cpn mfa clear --username admin --yes
+sudo cpn mfa status --username shadows
+sudo cpn mfa enroll-url --username shadows
+sudo cpn passkey list --username shadows
+sudo cpn passkey rename --username shadows --id <credential-id> --label "Laptop Windows Hello"
+sudo cpn passkey remove --username shadows --id <credential-id>
+sudo cpn passkey clear --username shadows --yes
+sudo cpn totp status --username shadows
+sudo cpn totp begin --username shadows
+sudo cpn totp confirm --username shadows --code 123456
+sudo cpn totp disable --username shadows --yes
+sudo cpn totp clear --username shadows --yes
+sudo cpn mfa clear --username shadows --yes
 ```
 
-- `totp status`: prints `totp_enabled=` and `pending_enroll=` (boolean flags only).
-- `totp disable` / `totp clear`: remove the TOTP secret and pending enrollment without an authenticator code; confirm with `yes`/`y` or pass `--yes` to skip.
-- `mfa clear`: clears TOTP, all passkeys, and pending WebAuthn ceremony files; same confirmation rules (`yes`/`y`/`YES`, or `--yes`; `no`/`n` aborts).
-- Destructive confirmations are case-insensitive and trim whitespace (shared helper for account/site/plugin clears too).
-- After clearing all MFA for an admin with `totp_required`, the next password login may land on `/account/security/enroll-2fa` instead of `/login/2fa`. That is expected until the admin enrolls again.
-- Passkey clear alone does **not** remove TOTP; use `totp` or `mfa clear` when the Authenticator code page should stop appearing.
+| Group | Subcommands | Notes |
+|---|---|---|
+| `passkey` | `list`, `rename`, `remove`, `clear` | Registration cannot finish over SSH. Use `mfa enroll-url` then **Register passkey** in a desktop browser. `list` prints `id`, `label`, `type`, `created`, `last_used` (no secrets). `clear` does **not** remove TOTP. |
+| `totp` | `status`, `begin`, `confirm`, `disable`, `clear` | `begin` / `confirm` write secrets and backup codes to mode-600 temp files (not stdout). `disable` and `clear` are the same force-remove (no authenticator code required). |
+| `mfa` | `status`, `enroll-url`, `clear` | `status` combines TOTP + passkey + enroll flags. `enroll-url` mints a 15-minute primary-hostname HTTPS link. `clear` removes TOTP, all passkeys for the user, and pending WebAuthn ceremony files. |
+
+### Enroll passkeys or Windows Hello (`mfa enroll-url`)
+
+1. `sudo cpn mfa enroll-url --username shadows`
+2. Read `enroll_url_file=` (mode-600 temp file). Open that URL in a **desktop** browser within **15 minutes** by pasting into the **address bar**. Do **not** paste into chat/email first (link previews).
+3. On CPN **1.4.11** and older, the first GET/HEAD **burns** the single-use token. On intended/fixed builds, GET/HEAD peeks and shows **Continue to Security**; POST consumes the token.
+4. After continue, enroll MFA or open **Modify User → Security** when already enrolled, then **Register passkey**.
+5. Verify: `sudo cpn passkey list --username shadows`
+
+**Add more passkeys:** run `enroll-url` again (or sign in normally) and register on the Security tab. TOTP is one secret per account; extra factors are more passkeys.
+
+| Rule | Detail |
+|---|---|
+| TTL | 15 minutes (`expires_in_secs=`) |
+| Use | Single-use after continue (POST on fixed builds; after first GET/HEAD on 1.4.11 and older) |
+| Pending | One unused link per username; a new `enroll-url` replaces any prior unused link |
+| Disabled accounts | Fails until `account enable` |
+| Hostname | Link always uses primary `panel_public_url` / `panel_hostname`. Aliases need a separate passkey registered while browsing that alias. See [MULTI-HOSTNAME-MFA.md](MULTI-HOSTNAME-MFA.md). |
+
+Password reset (`cpn password` / `account passwd`) does **not** clear MFA. After `mfa clear` on a `totp_required` admin, the next login may land on `/account/security/enroll-2fa` until re-enrollment.
 
 ## Sites
 
@@ -300,7 +334,7 @@ sudo cpn network clear-migration
 - Sets `panel_public_url` to `https://hostname` (or `http://hostname` until a cert exists).
 - Defaults to **Domain-only** (loopback bind). Pass `--keep-ip-backup` to keep `0.0.0.0` HTTP bind during setup.
 - The listen port stays HTTP. Never open `https://SERVER_IP:2087` (browsers show `ERR_SSL_PROTOCOL_ERROR`).
-- Without a hostname, use `http://127.0.0.1:2087` locally or an SSH tunnel / NAT forward with `http://`.
+- Without a hostname, use `http://127.0.0.1:2087` on the server (or via SSH `-L` from your PC), or an HTTP NAT forward on the host.
 
 IP backup (emergency access when DNS/proxy fails):
 
@@ -457,6 +491,7 @@ Interactive SSH logins show a cool English CPN ASCII banner with:
 
 - "This server has installed CPN", panel version, and service active state
 - **Live** login URL(s) via `cpn panel url --motd` on every login (reads current listen port / public URL / hostname; not a static `/etc/motd` baked at install)
+- Forum and Support links: `https://discord.gg/nx9Kzrk` (two lines, CyberPanel-style)
 - `systemctl` / `cpn-installer --web` / `--cli` start hints, plus `cpn panel url` anytime
 - VirtualBox NAT tip when no hostname/public URL is set (example host forward `2089` -> guest listen port => `http://127.0.0.1:2089/login` on the host)
 - Host facts: time, load average, CPU (load-based), RAM, disk on `/`, uptime

@@ -23,6 +23,17 @@ fn safe_vhost_name(domain: &str) -> String {
 }
 
 fn ols_vhconf(docroot: &str, access_log: &str, error_log: &str) -> String {
+    // Include a default lsphp handler so brand-new sites are not HTML-only.
+    // Migrated CyberPanel hosts keep their rich vhost.conf (extUser/socket/proxies).
+    let lsphp = [
+        "/usr/local/lsws/lsphp85/bin/lsphp",
+        "/usr/local/lsws/lsphp84/bin/lsphp",
+        "/usr/local/lsws/lsphp83/bin/lsphp",
+        "/usr/local/lsws/lsphp82/bin/lsphp",
+    ]
+    .into_iter()
+    .find(|p| Path::new(p).is_file())
+    .unwrap_or("/usr/local/lsws/lsphp85/bin/lsphp");
     format!(
         "docRoot                   {docroot}/\n\
          enableGzip                1\n\
@@ -42,6 +53,28 @@ fn ols_vhconf(docroot: &str, access_log: &str, error_log: &str) -> String {
            logReferer              1\n\
            logUserAgent            1\n\
            useServer               0\n\
+         }}\n\
+         extprocessor lsphp {{\n\
+           type                    lsapi\n\
+           address                 uds://tmp/lshttpd/cpn-lsphp.sock\n\
+           maxConns                35\n\
+           env                     LSAPI_CHILDREN=35\n\
+           initTimeout             60\n\
+           retryTimeout            0\n\
+           persistConn             1\n\
+           respBuffer              0\n\
+           autoStart               1\n\
+           path                    {lsphp}\n\
+           backlog                 100\n\
+           instances               1\n\
+           priority                0\n\
+           memSoftLimit            2047M\n\
+           memHardLimit            2047M\n\
+           procSoftLimit           1400\n\
+           procHardLimit           1500\n\
+         }}\n\
+         scripthandler  {{\n\
+           add                     lsapi:lsphp php\n\
          }}\n\
          context / {{\n\
            allowBrowse             1\n\
@@ -99,39 +132,74 @@ fn ensure_ols_site_vhost(site: &SiteRecord) -> Result<bool, String> {
     let vh_name = safe_vhost_name(&site.domain);
     let vh_dir = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{vh_name}"));
     fs::create_dir_all(&vh_dir).map_err(|e| format!("Could not create OLS vhost dir: {e}"))?;
-    let vhconf = vh_dir.join("vhconf.conf");
-    let body = ols_vhconf(
-        &site.docroot,
-        &access.display().to_string(),
-        &error.display().to_string(),
-    );
+
+    // Prefer a rich CyberPanel/migrated `vhost.conf` over a thin CPN template.
+    // Overwriting migrated configs with a minimal vhconf caused PHP/proxy 404/500s.
+    let rich_vhost = vh_dir.join("vhost.conf");
+    let use_rich = rich_vhost.is_file()
+        && fs::metadata(&rich_vhost)
+            .map(|m| m.len() > 2000)
+            .unwrap_or(false);
     let mut changed = false;
-    let prev = fs::read_to_string(&vhconf).unwrap_or_default();
-    if prev != body {
-        fs::write(&vhconf, body).map_err(|e| format!("Could not write vhconf: {e}"))?;
-        changed = true;
-    }
+    let config_file = if use_rich {
+        format!("$SERVER_ROOT/conf/vhosts/{vh_name}/vhost.conf")
+    } else {
+        let vhconf = vh_dir.join("vhconf.conf");
+        let body = ols_vhconf(
+            &site.docroot,
+            &access.display().to_string(),
+            &error.display().to_string(),
+        );
+        let prev = fs::read_to_string(&vhconf).unwrap_or_default();
+        if prev != body {
+            // Never clobber a non-template vhconf that already has extprocessors / proxies.
+            let looks_custom = prev.contains("extprocessor")
+                || prev.contains("scriptHandler")
+                || prev.contains("vhssl")
+                || prev.len() > body.len().saturating_mul(2);
+            if !looks_custom {
+                fs::write(&vhconf, &body).map_err(|e| format!("Could not write vhconf: {e}"))?;
+                changed = true;
+            }
+        }
+        format!("$SERVER_ROOT/conf/vhosts/{vh_name}/vhconf.conf")
+    };
 
     let mut conf = fs::read_to_string(HTTPD_CONF)
         .map_err(|e| format!("Could not read httpd_config.conf: {e}"))?;
-    let vh_block = format!(
-        "\nvirtualHost {vh_name} {{\n  vhRoot                  {home}/\n  configFile              $SERVER_ROOT/conf/vhosts/{vh_name}/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}}\n",
-        home = home.display()
-    );
-    if !conf.contains(&format!("virtualHost {vh_name}")) {
+
+    let vh_markers = [
+        format!("virtualHost {vh_name}"),
+        format!("virtualhost {vh_name}"),
+    ];
+    let has_vh = vh_markers.iter().any(|m| conf.contains(m));
+    if !has_vh {
+        // CyberPanel child sites historically used parent account vhRoot.
+        let vh_root = home.display();
+        let vh_block = format!(
+            "\nvirtualHost {vh_name} {{\n  vhRoot                  {vh_root}/\n  configFile              {config_file}\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}}\n"
+        );
         conf.push_str(&vh_block);
         changed = true;
+    } else if use_rich {
+        // Retarget an existing thin vhconf pointer to the rich vhost.conf.
+        let thin = format!("$SERVER_ROOT/conf/vhosts/{vh_name}/vhconf.conf");
+        let rich = format!("$SERVER_ROOT/conf/vhosts/{vh_name}/vhost.conf");
+        if conf.contains(&thin) && !conf.contains(&rich) {
+            conf = conf.replace(&thin, &rich);
+            changed = true;
+        }
     }
 
     let map_line = format!(
         "  map                      {vh_name} {domain}\n",
         domain = site.domain
     );
-    for listener in ["CPNHttp", "Default"] {
+    // Wire HTTP and HTTPS. Skipping SSL left migrated sites HTTP-only or 404 on :443.
+    for listener in ["SSL", "Default", "CPNHttp"] {
         if let Some(updated) = insert_map_before_catchall(&conf, listener, &map_line) {
             conf = updated;
             changed = true;
-            break;
         }
     }
 
@@ -213,12 +281,13 @@ pub fn ensure_site_vhost_logging(site: &SiteRecord) -> Result<String, String> {
         Ok(false) => {}
         Err(err) => notes.push(format!("nginx wire skipped: {err}")),
     }
+    let vh_name = safe_vhost_name(&site.domain);
     if !site.vhost_wired
         && (Path::new(&format!(
-            "/usr/local/lsws/conf/vhosts/{}/vhconf.conf",
-            safe_vhost_name(&site.domain)
+            "/usr/local/lsws/conf/vhosts/{vh_name}/vhconf.conf"
         ))
         .is_file()
+            || Path::new(&format!("/usr/local/lsws/conf/vhosts/{vh_name}/vhost.conf")).is_file()
             || Path::new(&format!("/etc/nginx/conf.d/cpn-{}.conf", site.domain)).is_file())
     {
         let _ = modify_site(
@@ -267,5 +336,23 @@ mod tests {
         let star = updated.find("map                     CPN *").unwrap();
         let domain = updated.find("test2.newstargeted.com").unwrap();
         assert!(domain < star);
+    }
+
+    #[test]
+    fn insert_map_into_ssl_listener() {
+        let conf = r#"listener SSL {
+  address                 *:443
+  secure                  1
+  map                     apex.example.com apex.example.com
+}
+"#;
+        let updated = insert_map_before_catchall(
+            conf,
+            "SSL",
+            "  map                      child.example.com child.example.com\n",
+        )
+        .expect("insert ssl");
+        assert!(updated.contains("child.example.com"));
+        assert!(updated.contains("listener SSL"));
     }
 }

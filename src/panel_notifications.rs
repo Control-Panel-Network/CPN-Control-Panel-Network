@@ -1,6 +1,12 @@
 //! Panel notification store under `/var/lib/cpn/notifications/<user>.json`.
 //!
-//! Categories: `ssl`, `plugins`, `panel`, `generic`. Prefer
+//! Categories: `ssl`, `plugins`, `panel`, `generic`, plus long-lived
+//! `announcement` and `warning_long`.
+//!
+//! Retention: default notifications are auto-dismissed (removed on read) once
+//! older than 48 hours ([`DEFAULT_TTL_SECS`]). Items with `sticky: true`, or the
+//! `announcement` / `warning_long` categories, never expire and stay until the
+//! user dismisses them. Prefer
 //! [`notify_best_effort`] / [`notify_panel_admins`] from event sites so the inbox
 //! fills automatically without a parallel system.
 
@@ -20,8 +26,16 @@ pub const CATEGORY_PLUGINS: &str = "plugins";
 pub const CATEGORY_PANEL: &str = "panel";
 /// Site create/delete and other panel events.
 pub const CATEGORY_GENERIC: &str = "generic";
+/// Operator / remote announcements. Sticky: kept until the user dismisses them.
+pub const CATEGORY_ANNOUNCEMENT: &str = "announcement";
+/// Long-lived warnings. Sticky: kept until the user dismisses them.
+pub const CATEGORY_WARNING_LONG: &str = "warning_long";
 /// Toast / inbox severity: `error`, `warning`, `success`, or `info`.
 pub const SEVERITIES: &[&str] = &["error", "warning", "success", "info"];
+
+/// Default notifications (upgrade completed, SSL renewed, ...) are removed when
+/// older than this many seconds (48 hours). Sticky notifications are exempt.
+pub const DEFAULT_TTL_SECS: u64 = 48 * 60 * 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PanelNotification {
@@ -37,6 +51,84 @@ pub struct PanelNotification {
     pub created_at: u64,
     #[serde(default)]
     pub read: bool,
+    /// Explicit long-lived flag. Sticky items skip the 48 hour auto-dismiss and
+    /// stay until the user dismisses them. Older JSON defaults to `false`.
+    #[serde(default)]
+    pub sticky: bool,
+    /// Optional machine tag. `update` marks upgrade-completed items so the
+    /// per-user "update notifications" toggle can hide them.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// Optional safe links (GitHub commit / compare / release) shown under the body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<NotificationLink>,
+}
+
+/// `kind` value for panel / tip upgrade completed notifications.
+pub const KIND_UPDATE: &str = "update";
+
+/// Titles of update notifications written before `kind` existed.
+const LEGACY_UPDATE_TITLES: &[&str] = &["Panel upgrade completed", "Panel version event"];
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NotificationLink {
+    pub label: String,
+    pub url: String,
+}
+
+/// Only plain `https://github.com/...` URLs without markup characters are
+/// ever stored or returned to the browser.
+pub fn is_safe_link_url(url: &str) -> bool {
+    let u = url.trim();
+    u.len() <= 300
+        && u.starts_with("https://github.com/")
+        && u.chars().all(|c| {
+            c.is_ascii_graphic() && !matches!(c, '<' | '>' | '"' | '\'' | '`' | '\\' | '{' | '}')
+        })
+}
+
+fn sanitize_links(links: Vec<NotificationLink>) -> Vec<NotificationLink> {
+    links
+        .into_iter()
+        .filter(|l| is_safe_link_url(&l.url))
+        .map(|l| NotificationLink {
+            label: l.label.trim().chars().take(80).collect(),
+            url: l.url.trim().to_string(),
+        })
+        .filter(|l| !l.label.is_empty())
+        .take(4)
+        .collect()
+}
+
+/// True for update-completed notifications (tagged, or legacy by title).
+pub fn is_update_notification(item: &PanelNotification) -> bool {
+    item.kind == KIND_UPDATE
+        || (item.kind.is_empty()
+            && item.category.trim().eq_ignore_ascii_case(CATEGORY_PANEL)
+            && LEGACY_UPDATE_TITLES.contains(&item.title.trim()))
+}
+
+/// True for categories that are always long-lived (announcements, long warnings).
+pub fn is_sticky_category(category: &str) -> bool {
+    let cat = category.trim().to_ascii_lowercase();
+    cat == CATEGORY_ANNOUNCEMENT || cat == CATEGORY_WARNING_LONG
+}
+
+/// True when the item stays until manually dismissed (flag or sticky category).
+pub fn is_sticky(item: &PanelNotification) -> bool {
+    item.sticky || is_sticky_category(&item.category)
+}
+
+/// True when a default (non-sticky) item is older than [`DEFAULT_TTL_SECS`].
+pub fn is_expired(item: &PanelNotification, now: u64) -> bool {
+    !is_sticky(item) && now.saturating_sub(item.created_at) > DEFAULT_TTL_SECS
+}
+
+/// Drop expired default notifications. Returns how many were removed.
+pub fn prune_expired(store: &mut NotificationStore, now: u64) -> usize {
+    let before = store.items.len();
+    store.items.retain(|item| !is_expired(item, now));
+    before - store.items.len()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -151,12 +243,28 @@ pub fn resolve_severity(item: &PanelNotification) -> &'static str {
     infer_severity(&item.category, &item.title, &item.body)
 }
 
-pub fn load_notifications(username: &str) -> NotificationStore {
+fn load_store_raw(username: &str) -> NotificationStore {
     let path = store_path(username);
     let Ok(raw) = fs::read_to_string(&path) else {
         return NotificationStore::default();
     };
     serde_json::from_str(&raw).unwrap_or_default()
+}
+
+/// Load a user's notifications, auto-dismissing expired default items.
+///
+/// Pruning happens on every read (API, sidebar render, push, mark-read) and is
+/// persisted best-effort, so every browser session sees the same feed.
+pub fn load_notifications(username: &str) -> NotificationStore {
+    load_notifications_at(username, now_unix())
+}
+
+fn load_notifications_at(username: &str, now: u64) -> NotificationStore {
+    let mut store = load_store_raw(username);
+    if prune_expired(&mut store, now) > 0 {
+        let _ = write_store(&store_path(username), &store);
+    }
+    store
 }
 
 pub fn unread_count(store: &NotificationStore) -> usize {
@@ -181,6 +289,43 @@ pub fn push_notification_with_severity(
     category: &str,
     severity: Option<&str>,
 ) -> Result<PanelNotification, String> {
+    push_notification_full(username, title, body, category, severity, false)
+}
+
+/// Push with severity and an explicit `sticky` flag. Sticky items (and the
+/// `announcement` / `warning_long` categories) are never auto-dismissed.
+pub fn push_notification_full(
+    username: &str,
+    title: &str,
+    body: &str,
+    category: &str,
+    severity: Option<&str>,
+    sticky: bool,
+) -> Result<PanelNotification, String> {
+    push_notification_ext(
+        username,
+        title,
+        body,
+        category,
+        severity,
+        sticky,
+        "",
+        Vec::new(),
+    )
+}
+
+/// Full push including the optional `kind` tag and safe GitHub links.
+#[allow(clippy::too_many_arguments)]
+pub fn push_notification_ext(
+    username: &str,
+    title: &str,
+    body: &str,
+    category: &str,
+    severity: Option<&str>,
+    sticky: bool,
+    kind: &str,
+    links: Vec<NotificationLink>,
+) -> Result<PanelNotification, String> {
     let path = store_path(username);
     let mut store = load_notifications(username);
     let category = category.trim().to_string();
@@ -193,14 +338,25 @@ pub fn push_notification_with_severity(
         .and_then(normalize_severity)
         .unwrap_or_else(|| infer_severity(&category, &title, &body))
         .to_string();
+    let now = now_unix();
+    let mut seq = store.items.len() + 1;
+    let mut id = format!("n-{now}-{seq}");
+    while store.items.iter().any(|existing| existing.id == id) {
+        seq += 1;
+        id = format!("n-{now}-{seq}");
+    }
+    let sticky = sticky || is_sticky_category(&category);
     let item = PanelNotification {
-        id: format!("n-{}-{}", now_unix(), store.items.len() + 1),
+        id,
         title,
         body,
         category,
         severity,
-        created_at: now_unix(),
+        created_at: now,
         read: false,
+        sticky,
+        kind: kind.trim().chars().take(32).collect(),
+        links: sanitize_links(links),
     };
     store.items.insert(0, item.clone());
     // Cap growth so the file stays small.
@@ -223,9 +379,79 @@ pub fn mark_read(username: &str, ids: &[String], all: bool) -> Result<Notificati
     Ok(store)
 }
 
+/// Dismiss (remove) specific notifications. Works for sticky items too.
+pub fn dismiss(username: &str, ids: &[String]) -> Result<NotificationStore, String> {
+    let path = store_path(username);
+    let mut store = load_notifications(username);
+    let before = store.items.len();
+    store
+        .items
+        .retain(|item| !ids.iter().any(|id| id == &item.id));
+    if store.items.len() != before {
+        write_store(&path, &store)?;
+    }
+    Ok(store)
+}
+
+/// Remove every update-completed notification for a user (used when the
+/// "update notifications" preference is switched off). Returns how many went.
+pub fn remove_update_notifications(username: &str) -> Result<usize, String> {
+    let path = store_path(username);
+    let mut store = load_notifications(username);
+    let before = store.items.len();
+    store.items.retain(|item| !is_update_notification(item));
+    let removed = before - store.items.len();
+    if removed > 0 {
+        write_store(&path, &store)?;
+    }
+    Ok(removed)
+}
+
+/// Notify panel admins that an upgrade completed, honoring each admin's
+/// "update notifications" preference (default on). Returns how many were created.
+pub fn notify_update_admins(title: &str, body: &str, links: Vec<NotificationLink>) -> usize {
+    let mut created = 0;
+    for user in panel_admin_usernames() {
+        if !crate::panel_user_prefs::load_user_update_notifications(&user) {
+            continue;
+        }
+        if push_notification_ext(
+            &user,
+            title,
+            body,
+            CATEGORY_PANEL,
+            None,
+            false,
+            KIND_UPDATE,
+            links.clone(),
+        )
+        .is_ok()
+        {
+            created += 1;
+        }
+    }
+    created
+}
+
 fn item_public_json(item: &PanelNotification) -> serde_json::Value {
     let severity = resolve_severity(item);
+    let sticky = is_sticky(item);
+    let links: Vec<serde_json::Value> = item
+        .links
+        .iter()
+        .filter(|l| is_safe_link_url(&l.url))
+        .map(|l| serde_json::json!({ "label": l.label, "url": l.url }))
+        .collect();
+    let expires_at = if sticky {
+        serde_json::Value::Null
+    } else {
+        serde_json::json!(item.created_at.saturating_add(DEFAULT_TTL_SECS))
+    };
     serde_json::json!({
+        "sticky": sticky,
+        "kind": item.kind,
+        "links": links,
+        "expires_at": expires_at,
         "id": item.id,
         "title": item.title,
         "body": item.body,
@@ -426,6 +652,222 @@ mod tests {
         });
     }
 
+    fn note(id: &str, category: &str, created_at: u64, sticky: bool) -> PanelNotification {
+        PanelNotification {
+            id: id.into(),
+            title: "Panel upgrade completed".into(),
+            body: "Updated to stable".into(),
+            category: category.into(),
+            severity: String::new(),
+            created_at,
+            read: false,
+            sticky,
+            kind: String::new(),
+            links: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn default_items_expire_after_48_hours() {
+        let now = 10_000_000u64;
+        let mut store = NotificationStore {
+            items: vec![
+                note("fresh", CATEGORY_PANEL, now - 60, false),
+                note("edge", CATEGORY_PANEL, now - DEFAULT_TTL_SECS, false),
+                note("old", CATEGORY_PANEL, now - DEFAULT_TTL_SECS - 1, false),
+                note("ancient", CATEGORY_PANEL, 1, false),
+            ],
+        };
+        assert_eq!(prune_expired(&mut store, now), 2);
+        let ids: Vec<&str> = store.items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["fresh", "edge"]);
+    }
+
+    #[test]
+    fn sticky_and_announcement_items_never_expire() {
+        let now = 10_000_000u64;
+        let old = now - DEFAULT_TTL_SECS * 10;
+        let mut store = NotificationStore {
+            items: vec![
+                note("flag", CATEGORY_PANEL, old, true),
+                note("announce", CATEGORY_ANNOUNCEMENT, old, false),
+                note("warnlong", "WARNING_LONG", old, false),
+                note("plain", CATEGORY_PANEL, old, false),
+            ],
+        };
+        assert_eq!(prune_expired(&mut store, now), 1);
+        let ids: Vec<&str> = store.items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["flag", "announce", "warnlong"]);
+    }
+
+    #[test]
+    fn load_prunes_and_persists_for_all_sessions() {
+        with_test_data_dir(|| {
+            let now = now_unix().max(DEFAULT_TTL_SECS * 4);
+            let old = now - DEFAULT_TTL_SECS - 5;
+            let store = NotificationStore {
+                items: vec![
+                    note("n-old", CATEGORY_PANEL, old, false),
+                    note("n-keep", CATEGORY_ANNOUNCEMENT, old, false),
+                    note("n-new", CATEGORY_PANEL, now, false),
+                ],
+            };
+            write_store(&store_path("Admin"), &store).expect("write");
+            let loaded = load_notifications_at("Admin", now);
+            assert_eq!(loaded.items.len(), 2);
+            // Persisted: a raw re-read no longer contains the expired item.
+            let raw = load_store_raw("Admin");
+            assert!(raw.items.iter().all(|i| i.id != "n-old"));
+            assert_eq!(raw.items.len(), 2);
+        });
+    }
+
+    #[test]
+    fn push_marks_announcement_sticky_and_public_json_reports_it() {
+        with_test_data_dir(|| {
+            let ann = push_notification("Admin", "Maintenance window", "Sat 02:00", "announcement")
+                .expect("push");
+            assert!(ann.sticky);
+            let flagged =
+                push_notification_full("Admin", "Heads up", "x", "panel", Some("warning"), true)
+                    .expect("push");
+            assert!(flagged.sticky);
+            let plain = push_notification("Admin", "Panel upgrade completed", "x", CATEGORY_PANEL)
+                .expect("push");
+            assert!(!plain.sticky);
+            let json = notifications_public_json(&load_notifications("Admin"));
+            let items = json["items"].as_array().expect("items");
+            let find = |id: &str| items.iter().find(|i| i["id"] == id).expect("item").clone();
+            assert_eq!(find(&ann.id)["sticky"], true);
+            assert!(find(&ann.id)["expires_at"].is_null());
+            assert_eq!(find(&plain.id)["sticky"], false);
+            assert_eq!(
+                find(&plain.id)["expires_at"].as_u64(),
+                Some(plain.created_at + DEFAULT_TTL_SECS)
+            );
+        });
+    }
+
+    #[test]
+    fn dismiss_removes_sticky_and_mark_read_keeps_it() {
+        with_test_data_dir(|| {
+            let ann =
+                push_notification("Admin", "Announcement", "x", "announcement").expect("push");
+            let plain =
+                push_notification("Admin", "Upgrade completed", "x", CATEGORY_PANEL).expect("push");
+            let marked = mark_read("Admin", &[], true).expect("mark all");
+            assert_eq!(marked.items.len(), 2);
+            assert_eq!(unread_count(&marked), 0);
+            let after = dismiss("Admin", std::slice::from_ref(&ann.id)).expect("dismiss");
+            assert_eq!(after.items.len(), 1);
+            assert_eq!(after.items[0].id, plain.id);
+            assert_eq!(load_notifications("Admin").items.len(), 1);
+        });
+    }
+
+    fn commit_link(sha: &str) -> NotificationLink {
+        NotificationLink {
+            label: format!("View commit {sha}"),
+            url: format!("https://github.com/Acme/Fork/commit/{sha}"),
+        }
+    }
+
+    #[test]
+    fn update_push_stores_safe_links_and_exposes_them() {
+        with_test_data_dir(|| {
+            let bad = NotificationLink {
+                label: "x".into(),
+                url: "javascript:alert(1)".into(),
+            };
+            let quote = NotificationLink {
+                label: "x".into(),
+                url: "https://github.com/a/b/commit/abc\" onclick=\"x".into(),
+            };
+            let item = push_notification_ext(
+                "Admin",
+                "Panel upgrade completed",
+                "Updated to stable @ 19f7a9a (1.4.12)",
+                CATEGORY_PANEL,
+                None,
+                false,
+                KIND_UPDATE,
+                vec![commit_link("19f7a9a"), bad, quote],
+            )
+            .expect("push");
+            assert_eq!(item.links, vec![commit_link("19f7a9a")]);
+            assert!(is_update_notification(&item));
+            let json = notifications_public_json(&load_notifications("Admin"));
+            assert_eq!(json["items"][0]["kind"], "update");
+            assert_eq!(
+                json["items"][0]["links"][0]["url"],
+                "https://github.com/Acme/Fork/commit/19f7a9a"
+            );
+        });
+    }
+
+    #[test]
+    fn link_url_validation_rejects_markup_and_other_hosts() {
+        assert!(is_safe_link_url("https://github.com/a/b/commit/abc1234"));
+        assert!(!is_safe_link_url("http://github.com/a/b"));
+        assert!(!is_safe_link_url("https://evil.example/a"));
+        assert!(!is_safe_link_url("https://github.com/a/b?x=<script>"));
+        assert!(!is_safe_link_url("https://github.com/a b"));
+    }
+
+    #[test]
+    fn notify_update_admins_honors_user_preference() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            create_account(
+                "updowner",
+                None,
+                true,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            let on = notify_update_admins("Panel upgrade completed", "a", vec![]);
+            assert_eq!(on, 1);
+            assert_eq!(load_notifications("updowner").items.len(), 1);
+
+            crate::panel_user_prefs::save_user_update_notifications("updowner", false).unwrap();
+            let off = notify_update_admins("Panel upgrade completed", "b", vec![]);
+            assert_eq!(off, 0);
+            assert_eq!(load_notifications("updowner").items.len(), 1);
+
+            // Non-update notifications are unaffected by the toggle.
+            notify_panel_admins("Plugin installed", "x", CATEGORY_PLUGINS);
+            assert_eq!(load_notifications("updowner").items.len(), 2);
+
+            // Switching off removes existing update items (and legacy titled ones).
+            push_notification("updowner", "Panel version event", "legacy", CATEGORY_PANEL)
+                .expect("push");
+            assert_eq!(remove_update_notifications("updowner").unwrap(), 2);
+            let left = load_notifications("updowner").items;
+            assert_eq!(left.len(), 1);
+            assert_eq!(left[0].title, "Plugin installed");
+
+            crate::panel_user_prefs::save_user_update_notifications("updowner", true).unwrap();
+            assert_eq!(
+                notify_update_admins("Panel upgrade completed", "c", vec![]),
+                1
+            );
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
+    }
+
+    #[test]
+    fn upgrade_failures_are_not_update_notifications() {
+        let mut item = note("f", CATEGORY_PANEL, 1, false);
+        item.title = "Panel upgrade failed".into();
+        assert!(!is_update_notification(&item));
+    }
+
     #[test]
     fn legacy_json_without_severity_still_loads() {
         with_test_data_dir(|| {
@@ -435,18 +877,21 @@ mod tests {
             }
             fs::write(
                 &path,
-                r#"{
+                format!(
+                    r#"{{
   "items": [
-    {
+    {{
       "id": "n-1",
       "title": "SSL expiring",
       "body": "example.com",
       "category": "ssl",
-      "created_at": 1,
+      "created_at": {},
       "read": false
-    }
+    }}
   ]
-}"#,
+}}"#,
+                    now_unix()
+                ),
             )
             .expect("write");
             let store = load_notifications("Legacy");

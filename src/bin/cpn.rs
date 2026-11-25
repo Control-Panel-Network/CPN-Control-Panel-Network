@@ -16,6 +16,7 @@ use cpn_installer::cli_common::{
     read_password_confirmed, require_root_for_mutation,
 };
 use cpn_installer::cli_doctor;
+use cpn_installer::cli_mail::{self, MailCommands};
 use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
@@ -97,6 +98,11 @@ enum Commands {
         #[command(subcommand)]
         command: SiteCommands,
     },
+    /// Local mailbox import and password sync (classic virtual-mail stacks)
+    Mail {
+        #[command(subcommand)]
+        command: MailCommands,
+    },
     /// Listen port, panel hostname, and port migration
     Network {
         #[command(subcommand)]
@@ -117,6 +123,12 @@ enum Commands {
     Package {
         #[command(subcommand)]
         command: PackageCommands,
+    },
+    /// MariaDB store for panel state (`cpn_panel`) and mailbox auth (`cpn_mail`)
+    #[command(name = "panel-db")]
+    PanelDb {
+        #[command(subcommand)]
+        command: cpn_installer::cli_panel_db::PanelDbCommands,
     },
     /// Copy another hosting panel into CPN, then remove it
     #[command(name = "panel-migrate")]
@@ -446,6 +458,12 @@ fn run() -> Result<(), String> {
             purge_stack,
             dry_run,
         } => {
+            cpn_installer::panel_audit_cli::record_cli(
+                "cli.uninstall",
+                if dry_run { "dry-run" } else { "host" },
+                true,
+                "uninstall started",
+            );
             let code =
                 cpn_installer::cli_uninstall::run(cpn_installer::cli_uninstall::UninstallOptions {
                     yes,
@@ -455,6 +473,16 @@ fn run() -> Result<(), String> {
                     purge_stack,
                     dry_run,
                 });
+            cpn_installer::panel_audit_cli::record_cli(
+                "cli.uninstall",
+                if dry_run { "dry-run" } else { "host" },
+                code == 0,
+                if code == 0 {
+                    "uninstall finished"
+                } else {
+                    "uninstall failed"
+                },
+            );
             if code == 0 {
                 Ok(())
             } else {
@@ -476,6 +504,12 @@ fn run() -> Result<(), String> {
             let (password, generate) = read_password_confirmed(password_stdin, generate)?;
             let result = reset_account_password(&username, password.as_deref(), generate)?;
             let confirmed = result.public.username;
+            cpn_installer::panel_audit_cli::record_cli(
+                "cli.password",
+                &confirmed,
+                true,
+                "password updated",
+            );
             print_password_updated_ok(&confirmed);
             print_generated(result.generated_password)?;
             Ok(())
@@ -552,6 +586,13 @@ fn run() -> Result<(), String> {
                     default_password_policy(),
                     &language,
                 )?;
+                let created = result.public.username.clone();
+                cpn_installer::panel_audit_cli::record_cli(
+                    "cli.account.create",
+                    &created,
+                    true,
+                    "account created",
+                );
                 let _ = result.public;
                 println!("created account ok");
                 print_generated(result.generated_password)?;
@@ -567,6 +608,12 @@ fn run() -> Result<(), String> {
                 let (password, generate) = read_password_confirmed(password_stdin, generate)?;
                 let result = reset_account_password(&username, password.as_deref(), generate)?;
                 let confirmed = result.public.username;
+                cpn_installer::panel_audit_cli::record_cli(
+                    "cli.password",
+                    &confirmed,
+                    true,
+                    "password updated",
+                );
                 print_password_updated_ok(&confirmed);
                 print_generated(result.generated_password)?;
                 Ok(())
@@ -575,6 +622,12 @@ fn run() -> Result<(), String> {
                 require_root_for_mutation()?;
                 confirm_delete("Delete the selected account? This cannot be undone.", yes)?;
                 delete_account(&username)?;
+                cpn_installer::panel_audit_cli::record_cli(
+                    "cli.account.delete",
+                    &username,
+                    true,
+                    "account deleted",
+                );
                 println!("deleted account ok");
                 Ok(())
             }
@@ -723,6 +776,10 @@ fn run() -> Result<(), String> {
                 Ok(())
             }
         },
+        Commands::Mail { command } => cli_mail::run(command, require_root_for_mutation),
+        Commands::PanelDb { command } => {
+            cpn_installer::cli_panel_db::run(command, require_root_for_mutation)
+        }
         Commands::Network { command } => run_network(command, require_root_for_mutation),
         Commands::Plugin { command } => match command {
             PluginCommands::List { domain } => cli_plugins::list_plugins(domain.as_deref()),
@@ -774,7 +831,16 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
-            eprintln!("error: {message}");
+            // Err payloads may carry account/MFA/package context that CodeQL
+            // rust/cleartext-logging traces into this sink (#172). Keep a fixed
+            // stderr line and write the detail to a mode-600 temp file.
+            match cpn_installer::cli_common::write_mode600_temp_file("cpn-cli-error", &message) {
+                Ok(path) => {
+                    eprintln!("error: command failed");
+                    eprintln!("error_details_file={}", path.display());
+                }
+                Err(_) => eprintln!("error: command failed"),
+            }
             ExitCode::FAILURE
         }
     }

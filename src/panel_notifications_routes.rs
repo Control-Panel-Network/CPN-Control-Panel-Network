@@ -3,7 +3,7 @@
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::panel_notifications::{
-    load_notifications, mark_read, notifications_public_json, push_notification_with_severity,
+    dismiss, load_notifications, mark_read, notifications_public_json, push_notification_full,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -50,6 +50,9 @@ pub struct MarkReadBody {
     ids: Vec<String>,
     #[serde(default)]
     all: bool,
+    /// When true, remove the listed ids instead of marking them read (per-item X).
+    #[serde(default)]
+    dismiss: bool,
 }
 
 #[post("/api/panel/notifications/mark-read")]
@@ -64,7 +67,15 @@ pub async fn panel_notifications_mark_read(
     if !body.all && body.ids.is_empty() {
         return json_err(400, "Provide ids or set all=true");
     }
-    match mark_read(&user, &body.ids, body.all) {
+    if body.dismiss && body.ids.is_empty() {
+        return json_err(400, "dismiss requires ids");
+    }
+    let result = if body.dismiss {
+        dismiss(&user, &body.ids)
+    } else {
+        mark_read(&user, &body.ids, body.all)
+    };
+    match result {
         Ok(store) => json_ok(notifications_public_json(&store)),
         Err(err) => json_err(500, &err),
     }
@@ -82,6 +93,9 @@ pub struct PushBody {
     severity: String,
     #[serde(default)]
     level: String,
+    /// Optional: keep until dismissed (skip the 48 hour auto-dismiss).
+    #[serde(default)]
+    sticky: bool,
 }
 
 /// Authenticated self-service push (smoke / operator tooling). Category defaults to `panel`.
@@ -111,7 +125,14 @@ pub async fn panel_notifications_push(
     } else {
         Some(severity_raw)
     };
-    match push_notification_with_severity(&user, &body.title, &body.body, category, severity) {
+    match push_notification_full(
+        &user,
+        &body.title,
+        &body.body,
+        category,
+        severity,
+        body.sticky,
+    ) {
         Ok(item) => {
             let store = load_notifications(&user);
             let mut payload = notifications_public_json(&store);

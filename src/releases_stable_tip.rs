@@ -20,6 +20,9 @@ pub struct StableTipInfo {
     pub short_sha: String,
     pub label: String,
     pub error: Option<String>,
+    pub resolution_note: Option<String>,
+    pub from_cache: bool,
+    pub rate_limited: bool,
 }
 
 /// Branch followed by "Upgrade to latest commits" (saved setting or env override).
@@ -97,43 +100,8 @@ pub(crate) async fn curl_github_json(url: &str) -> Result<(u16, String), String>
     Ok((status, body))
 }
 
-fn urlencoding_lite(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for ch in value.chars() {
-        match ch {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(ch),
-            _ => {
-                for byte in ch.to_string().as_bytes() {
-                    out.push_str(&format!("%{byte:02X}"));
-                }
-            }
-        }
-    }
-    out
-}
-
 pub async fn resolve_ref_sha(repo: &str, git_ref: &str) -> Result<String, String> {
-    let trimmed = git_ref.trim().trim_start_matches("refs/heads/");
-    if trimmed.is_empty() {
-        return Err("Empty git ref".into());
-    }
-    let encoded = urlencoding_lite(trimmed);
-    let url = format!("https://api.github.com/repos/{repo}/commits/{encoded}");
-    let (status, body) = curl_github_json(&url).await?;
-    if status != 200 {
-        return Err(format!(
-            "GitHub commits API returned HTTP {status} for {repo}@{trimmed}"
-        ));
-    }
-    let value: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|error| format!("Could not parse GitHub commit JSON: {error}"))?;
-    let sha = value
-        .get("sha")
-        .and_then(|item| item.as_str())
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .ok_or_else(|| format!("GitHub commit response missing sha for {repo}@{trimmed}"))?;
-    Ok(sha.to_string())
+    crate::releases_commit_resolve::resolve_ref_sha(repo, git_ref).await
 }
 
 /// Tip of the configured update branch (`stable` unless the operator picked another).
@@ -144,15 +112,18 @@ pub async fn fetch_stable_tip(repo: &str) -> StableTipInfo {
 /// Tip of an explicit branch.
 pub async fn fetch_branch_tip(repo: &str, branch: &str) -> StableTipInfo {
     let branch = branch.trim().to_string();
-    match resolve_ref_sha(repo, &branch).await {
-        Ok(sha) => {
-            let short = short_sha(&sha);
+    match crate::releases_commit_resolve::resolve_ref_resilient(repo, &branch).await {
+        Ok(resolved) => {
+            let short = short_sha(&resolved.sha);
             StableTipInfo {
                 label: format!("{branch} @ {short}"),
                 branch,
                 short_sha: short,
-                sha,
+                sha: resolved.sha,
                 error: None,
+                resolution_note: resolved.note,
+                from_cache: resolved.source == "cache" || resolved.source == "cache-short-sha",
+                rate_limited: resolved.rate_limited,
             }
         }
         Err(error) => StableTipInfo {
@@ -161,6 +132,9 @@ pub async fn fetch_branch_tip(repo: &str, branch: &str) -> StableTipInfo {
             short_sha: String::new(),
             label: String::new(),
             error: Some(error),
+            resolution_note: None,
+            from_cache: false,
+            rate_limited: false,
         },
     }
 }

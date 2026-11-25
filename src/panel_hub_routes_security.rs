@@ -2,14 +2,15 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_security::{
     hostname_ssl_page, mail_ssl_page, malware_scan_page, modsec_page, modsec_rules_page,
     rule_packs_page, run_sshd_toggle, secure_ssh_page, security_hub_main,
 };
 use crate::panel_hub_pages_security_csf::{csf_page, run_csf_enable, run_csf_install};
 use crate::panel_hub_pages_ssl_le::manage_ssl_page as manage_ssl_providers_page;
-use crate::panel_pages::panel_shell;
 use crate::panel_user_prefs::clear_ssh_security_review_snooze;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -19,7 +20,8 @@ pub async fn security_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Security",
@@ -36,7 +38,8 @@ pub async fn security_ssh(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Secure SSH",
@@ -102,7 +105,8 @@ pub async fn security_modsec(http: HttpRequest, state: web::Data<Arc<AppState>>)
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "ModSecurity",
@@ -118,7 +122,8 @@ pub async fn security_modsec_rules(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "ModSec Rules",
@@ -134,7 +139,8 @@ pub async fn security_rule_packs(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Rule Packs",
@@ -147,7 +153,8 @@ pub async fn security_malware(http: HttpRequest, state: web::Data<Arc<AppState>>
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Malware scan",
@@ -188,7 +195,8 @@ pub async fn security_csf(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "CSF",
@@ -267,7 +275,8 @@ pub async fn security_ssl(
             .append_header(("Location", loc))
             .finish();
     }
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "SSL",
@@ -284,7 +293,8 @@ pub async fn security_ssl_manage(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Manage SSL",
@@ -304,7 +314,8 @@ pub async fn security_ssl_hostname(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Hostname SSL",
@@ -353,10 +364,32 @@ pub async fn security_ssl_mail(http: HttpRequest, state: web::Data<Arc<AppState>
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "security",
         "Mail Server SSL",
         &mail_ssl_page(),
     ))
+}
+
+#[post("/security/ssl/mail/issue")]
+pub async fn security_ssl_mail_issue(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/ssl/mail",
+            None,
+            Some("Only panel admins can issue mail SSL."),
+        );
+    }
+    match crate::panel_ops_mail_ssl::ensure_mail_ssl_default() {
+        Ok(msg) => redirect_notice("/security/ssl/mail", Some(&msg), None),
+        Err(err) => redirect_notice("/security/ssl/mail", None, Some(&err)),
+    }
 }

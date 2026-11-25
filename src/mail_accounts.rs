@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,14 +43,23 @@ pub struct MailAccount {
     pub mailbox_password: String,
     pub created_at_unix: u64,
     pub updated_at_unix: u64,
+    /// Soft-delete timestamp; when set the mailbox is hidden from the normal list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_at_unix: Option<u64>,
+}
+
+impl MailAccount {
+    pub fn is_deleted(&self) -> bool {
+        self.deleted_at_unix.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct MailAccountsFile {
+pub struct MailAccountsFile {
     #[serde(default)]
-    schema_version: u32,
+    pub schema_version: u32,
     #[serde(default)]
-    accounts: Vec<MailAccount>,
+    pub accounts: Vec<MailAccount>,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +105,11 @@ fn load_file() -> MailAccountsFile {
     })
 }
 
+/// Mutable registry load for lifecycle helpers.
+pub fn load_file_mut() -> MailAccountsFile {
+    load_file()
+}
+
 fn save_file(file: &MailAccountsFile) -> Result<(), String> {
     let path = accounts_path();
     if let Some(parent) = path.parent() {
@@ -112,6 +126,17 @@ fn save_file(file: &MailAccountsFile) -> Result<(), String> {
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     }
     Ok(())
+}
+
+/// Persist registry for lifecycle helpers.
+pub fn save_file_public(file: &MailAccountsFile) -> Result<(), String> {
+    save_file(file)
+}
+
+/// Refresh Postfix maps / SOGo after mailbox mutations.
+pub fn sync_after_mailbox_change(context: &str) {
+    crate::mail_hosted_domains::sync_hosted_mail_delivery_logged(context);
+    crate::apps_sogo_config::sync_users_if_installed();
 }
 
 fn normalize_address(raw: &str) -> Result<String, String> {
@@ -181,12 +206,7 @@ fn smtp_summary(account: &MailAccount) -> String {
 }
 
 pub fn to_public(account: &MailAccount) -> MailAccountPublic {
-    let (smtp_valid, smtp_error) = if account.enabled {
-        smtp_validity(account)
-    } else {
-        // Disabled accounts still show whether they could enable cleanly.
-        smtp_validity(account)
-    };
+    let (smtp_valid, smtp_error) = smtp_validity(account);
     MailAccountPublic {
         id: account.id.clone(),
         address: account.address.clone(),
@@ -199,15 +219,25 @@ pub fn to_public(account: &MailAccount) -> MailAccountPublic {
     }
 }
 
+/// All registry rows including soft-deleted (for lifecycle / sync).
 pub fn list_accounts() -> Vec<MailAccount> {
     load_file().accounts
 }
 
+/// Active (non-deleted) mailboxes.
+pub fn list_active_accounts() -> Vec<MailAccount> {
+    list_accounts()
+        .into_iter()
+        .filter(|a| !a.is_deleted())
+        .collect()
+}
+
 pub fn list_accounts_public() -> Vec<MailAccountPublic> {
-    list_accounts().iter().map(to_public).collect()
+    list_active_accounts().iter().map(to_public).collect()
 }
 
 pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
+    let _ = crate::mail_accounts_lifecycle::purge_expired_deleted_mailboxes();
     let address = normalize_address(&input.address)?;
     let account = MailAccount {
         id: format!("mbox-{}", now_unix()),
@@ -223,11 +253,11 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
         mailbox_password: input.mailbox_password,
         created_at_unix: now_unix(),
         updated_at_unix: now_unix(),
+        deleted_at_unix: None,
     };
     if account.enabled {
         validate_enabled_smtp(&account)?;
     } else if account.smtp_mode == MailSmtpMode::External && !account.smtp_host.is_empty() {
-        // Soft-check incomplete drafts only when host was provided.
         let _ = validate_enabled_smtp(&account);
     }
     let mut file = load_file();
@@ -236,9 +266,15 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
         .iter()
         .any(|a| a.address.eq_ignore_ascii_case(&account.address))
     {
-        return Err(format!("Mailbox `{}` already exists", account.address));
+        return Err(format!(
+            "Mailbox `{}` already exists (including soft-deleted entries still in the restore window)",
+            account.address
+        ));
     }
-    if account.smtp_mode == MailSmtpMode::PostfixLocal && !account.mailbox_password.is_empty() {
+    if account.enabled
+        && account.smtp_mode == MailSmtpMode::PostfixLocal
+        && !account.mailbox_password.is_empty()
+    {
         crate::panel_ops_mailbox_provision::provision_local_mailbox(
             &account.address,
             &account.mailbox_password,
@@ -247,10 +283,7 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
     file.accounts.push(account.clone());
     save_file(&file)?;
     if account.smtp_mode == MailSmtpMode::PostfixLocal {
-        // Route mail for this hosted domain to the local mailbox instead of the public MX.
-        crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("create mailbox");
-        // Keep the SOGo SQL user source in step with the registry (no-op without SOGo).
-        crate::apps_sogo_config::sync_users_if_installed();
+        sync_after_mailbox_change("create mailbox");
     }
     Ok(account)
 }
@@ -260,6 +293,9 @@ pub fn set_account_enabled(id: &str, enabled: bool) -> Result<MailAccount, Strin
     let Some(account) = file.accounts.iter_mut().find(|a| a.id == id) else {
         return Err(format!("Mailbox `{id}` not found"));
     };
+    if account.deleted_at_unix.is_some() {
+        return Err("Restore the mailbox before enabling or disabling it".into());
+    }
     if enabled {
         validate_enabled_smtp(account)?;
     }
@@ -268,8 +304,7 @@ pub fn set_account_enabled(id: &str, enabled: bool) -> Result<MailAccount, Strin
     let out = account.clone();
     save_file(&file)?;
     if out.smtp_mode == MailSmtpMode::PostfixLocal {
-        crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("toggle mailbox");
-        crate::apps_sogo_config::sync_users_if_installed();
+        sync_after_mailbox_change("toggle mailbox");
     }
     Ok(out)
 }
@@ -294,6 +329,7 @@ mod tests {
             mailbox_password: String::new(),
             created_at_unix: 0,
             updated_at_unix: 0,
+            deleted_at_unix: None,
         };
         assert!(validate_enabled_smtp(&account).is_err());
     }

@@ -12,16 +12,23 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${1:-$ROOT/site-dist}"
 
-mkdir -p "$DEST"
+mkdir -p "$DEST/data/cache" "$DEST/data/logs" "$DEST/api" "$DEST/modules"
 
 rsync -a --delete \
   --exclude '.git' \
   --exclude 'README.md' \
+  --exclude 'index.html.live-backup' \
   "$ROOT/site/" "$DEST/"
 
 install -m 0644 "$ROOT/scripts/install.sh" "$DEST/install.sh"
 install -m 0644 "$ROOT/scripts/upgrade.sh" "$DEST/upgrade.sh"
 install -m 0644 "$ROOT/scripts/cpn-bootstrap-lib.sh" "$DEST/cpn-bootstrap-lib.sh"
+
+# Canonical advisories live under docs/; refresh the site feed on every sync.
+mkdir -p "$DEST/data"
+if [[ -f "$ROOT/docs/security-advisories.json" ]]; then
+  install -m 0644 "$ROOT/docs/security-advisories.json" "$DEST/data/security-advisories.json"
+fi
 
 # Optional alias used by some older docs; keep if present in scripts/
 if [[ -f "$ROOT/scripts/preUpgrade.sh" ]]; then

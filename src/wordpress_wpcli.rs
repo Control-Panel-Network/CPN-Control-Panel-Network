@@ -212,6 +212,8 @@ fn php_bin() -> Option<String> {
     // Absolute paths first: panel systemd units often have a narrow PATH without /usr/bin.
     for candidate in [
         "/usr/bin/php",
+        "/usr/bin/php86",
+        "/usr/bin/php8.6",
         "/usr/bin/php85",
         "/usr/bin/php8.5",
         "/usr/bin/php84",
@@ -221,6 +223,8 @@ fn php_bin() -> Option<String> {
         "/usr/bin/php82",
         "/usr/bin/php8.2",
         "php",
+        "php86",
+        "php8.6",
         "php85",
         "php8.5",
         "php84",

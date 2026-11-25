@@ -1,7 +1,5 @@
 //! Dashboard landing HTML for the authenticated CPN Panel.
 
-use crate::panel_pages::panel_shell;
-
 /// Snapshot of dashboard CPU / RAM / disk gauges (also used by live metrics API).
 #[derive(Debug, Clone)]
 pub struct HostGaugesSnapshot {
@@ -14,6 +12,27 @@ pub struct HostGaugesSnapshot {
 }
 
 pub fn host_gauges_snapshot() -> HostGaugesSnapshot {
+    if !crate::panel_perf_cache::caches_bypassed() {
+        static CACHE: std::sync::OnceLock<
+            std::sync::Mutex<Option<(std::time::Instant, HostGaugesSnapshot)>>,
+        > = std::sync::OnceLock::new();
+        let slot = CACHE.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(guard) = slot.lock()
+            && let Some((at, snap)) = guard.as_ref()
+            && at.elapsed() < std::time::Duration::from_secs(20)
+        {
+            return snap.clone();
+        }
+        let snap = host_gauges_snapshot_live();
+        if let Ok(mut guard) = slot.lock() {
+            *guard = Some((std::time::Instant::now(), snap.clone()));
+        }
+        return snap;
+    }
+    host_gauges_snapshot_live()
+}
+
+fn host_gauges_snapshot_live() -> HostGaugesSnapshot {
     let cores = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
@@ -137,7 +156,7 @@ fn gauge_svg(value: u8) -> String {
     )
 }
 
-pub fn panel_dashboard_html(username: &str) -> String {
+pub fn panel_dashboard_html(username: &str, session_exp_unix: Option<u64>) -> String {
     let user = html_escape(username);
     let [
         (cpu_value, cpu_detail),
@@ -312,12 +331,97 @@ pub fn panel_dashboard_html(username: &str) -> String {
         stack = stack,
         layout_js = crate::panel_dashboard_layout::dashboard_layout_script(),
     );
-    panel_shell(username, "dashboard", "Dashboard", &main)
+    crate::panel_pages::panel_shell_exp(username, "dashboard", "Dashboard", &main, session_exp_unix)
+}
+
+/// Minimal dashboard when the blocking render exceeds the hub time budget (must stay fast:
+/// the previous fallback re-ran the full render synchronously and could exceed proxy timeouts → blank page).
+pub fn panel_dashboard_html_degraded(username: &str, session_exp_unix: Option<u64>) -> String {
+    panel_dashboard_html_fast(username, session_exp_unix)
+}
+
+/// Fast dashboard shell: gauges from local `/proc` only, no service probes or Activity Board.
+pub fn panel_dashboard_html_fast(username: &str, session_exp_unix: Option<u64>) -> String {
+    let user = html_escape(username);
+    let [
+        (cpu_value, cpu_detail),
+        (ram_value, ram_detail),
+        (disk_value, disk_detail),
+    ] = host_gauges();
+    let label = |v: Option<u8>| v.map(|n| n.to_string()).unwrap_or_else(|| "n/a".into());
+    let cpu_pct = label(cpu_value);
+    let ram_pct = label(ram_value);
+    let disk_pct = label(disk_value);
+    let cpu = gauge_svg(cpu_value.unwrap_or(0));
+    let ram = gauge_svg(ram_value.unwrap_or(0));
+    let disk = gauge_svg(disk_value.unwrap_or(0));
+    let main = format!(
+        r#"
+      <p class="panel-notice warn" role="status" style="margin:0 0 16px;">Host checks were still running when this page was requested. This is a quick dashboard. <a href="/dashboard" data-cpn-full-nav="1">Reload for the full dashboard</a> (widgets, statistics, activity).</p>
+      <div class="dashboard-heading">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Signed in as {user}.</p>
+        </div>
+      </div>
+      <div class="resource-grid" data-live-metrics="0">
+        <article class="resource-card">
+          <h2>CPU Usage</h2>
+          <div class="gauge" role="img" aria-label="CPU Usage: {cpu_pct}%">
+            {cpu}
+            <div class="gauge-copy"><strong>{cpu_pct}%</strong><span>{cpu_detail}</span></div>
+          </div>
+        </article>
+        <article class="resource-card">
+          <h2>RAM Usage</h2>
+          <div class="gauge" role="img" aria-label="RAM Usage: {ram_pct}%">
+            {ram}
+            <div class="gauge-copy"><strong>{ram_pct}%</strong><span>{ram_detail}</span></div>
+          </div>
+        </article>
+        <article class="resource-card">
+          <h2>Disk Usage</h2>
+          <div class="gauge" role="img" aria-label="Disk Usage: {disk_pct}%">
+            {disk}
+            <div class="gauge-copy"><strong>{disk_pct}%</strong><span>{disk_detail}</span></div>
+          </div>
+        </article>
+      </div>
+      <article class="section-card" style="margin-top:20px;">
+        <p class="muted" style="margin:0;">Use the sidebar to open Server, Docker, or Websites while gauges load. If the full dashboard does not appear after reload, wait a few seconds and try again.</p>
+      </article>"#,
+        user = user,
+        cpu_pct = cpu_pct,
+        ram_pct = ram_pct,
+        disk_pct = disk_pct,
+        cpu = cpu,
+        ram = ram,
+        disk = disk,
+        cpu_detail = html_escape(&cpu_detail),
+        ram_detail = html_escape(&ram_detail),
+        disk_detail = html_escape(&disk_detail),
+    );
+    crate::panel_pages::panel_shell_exp(username, "dashboard", "Dashboard", &main, session_exp_unix)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::gauge_stroke_for_usage;
+    use super::{gauge_stroke_for_usage, panel_dashboard_html_degraded, panel_dashboard_html_fast};
+
+    #[test]
+    fn degraded_dashboard_is_fast_path() {
+        let html = panel_dashboard_html_degraded("tester", None);
+        assert!(html.contains("quick dashboard"));
+        assert!(html.contains("Reload for the full dashboard"));
+        assert!(!html.contains("Activity Board"));
+    }
+
+    #[test]
+    fn fast_dashboard_includes_shell() {
+        let html = panel_dashboard_html_fast("tester", None);
+        assert!(html.contains("panel-layout"));
+        assert!(html.contains("CPU Usage"));
+    }
 
     #[test]
     fn gauge_thresholds_green_orange_red() {

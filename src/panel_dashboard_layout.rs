@@ -97,7 +97,7 @@ pub fn wrap_dash_widget(id: &str, label: &str, inner: &str) -> String {
 pub fn dashboard_layout_toolbar() -> String {
     r#"<div class="dash-layout-toolbar" id="dash-layout-toolbar">
   <button type="button" class="btn-secondary" id="dash-layout-edit">Edit overview</button>
-  <button type="button" class="btn-primary" id="dash-layout-save" disabled>Save</button>
+  <button type="button" class="btn-primary" id="dash-layout-save" disabled hidden>Save</button>
   <button type="button" class="btn-secondary" id="dash-layout-restore">Restore default</button>
   <p class="muted" id="dash-layout-status" aria-live="polite">Drag widgets on a wide screen, then Save. Restore default resets the stock order.</p>
 </div>"#
@@ -112,6 +112,7 @@ pub fn dashboard_layout_styles() -> &'static str {
   margin:0 0 14px;
 }
 .dash-layout-toolbar .muted { margin:0; flex:1 1 220px; font-size:12px; }
+#dash-layout-save[hidden] { display:none !important; }
 .dash-layout-stack { display:flex; flex-direction:column; gap:18px; min-width:0; }
 .dash-widget { min-width:0; position:relative; }
 /* Chrome stays hidden in view mode. display:flex must not override the hidden attribute. */
@@ -157,6 +158,10 @@ pub fn dashboard_layout_script() -> &'static str {
     editing=!!on;
     root.setAttribute('data-editing', editing?'1':'0');
     if(editBtn) editBtn.textContent=editing?'Done editing':'Edit overview';
+    if(saveBtn){
+      saveBtn.hidden=!editing;
+      if(!editing) setDirty(false);
+    }
     widgets().forEach(function(el){
       var chrome=el.querySelector('.dash-widget-chrome');
       if(chrome) chrome.hidden=!editing;
@@ -299,6 +304,11 @@ mod tests {
 
     #[test]
     fn widget_chrome_hidden_until_edit_overview() {
+        let toolbar = dashboard_layout_toolbar();
+        assert!(
+            toolbar.contains(r#"id="dash-layout-save" disabled hidden"#),
+            "Save must stay hidden until Edit overview: {toolbar}"
+        );
         let html = wrap_dash_widget("stats", "Statistics", "<p>inner</p>");
         assert!(
             html.contains(r#"class="dash-widget-chrome" hidden"#),
@@ -321,6 +331,10 @@ mod tests {
         assert!(
             js.contains("handle.draggable=!!editing"),
             "Edit overview must toggle handle.draggable: {js}"
+        );
+        assert!(
+            js.contains("saveBtn.hidden=!editing"),
+            "Edit overview must toggle Save visibility: {js}"
         );
         assert!(js.contains("Edit overview"));
         assert!(js.contains("dash-layout-save"));

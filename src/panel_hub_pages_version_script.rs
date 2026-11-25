@@ -148,7 +148,7 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
     if (value) value.textContent = show ? String(text) : "-";
   }}
-  var CACHE_KEY = "cpnVersionCache";
+  var CACHE_KEY = "cpnVersionCache" + (window.location.port ? ("_" + window.location.port) : "");
   function saveVersionCache(info) {{
     try {{
       if (!info || typeof sessionStorage === "undefined") return;

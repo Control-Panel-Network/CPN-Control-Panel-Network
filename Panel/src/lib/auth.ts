@@ -270,7 +270,8 @@ export function readSessionCookie(
   const fromScoped = readNamedCookie(cookieHeader, scoped);
   if (fromScoped) return fromScoped;
   if (port && port > 0) {
-    return readNamedCookie(cookieHeader, SESSION_COOKIE);
+    // Do not fall back to unscoped cookies on lab NAT ports (localhost:2087 vs :2092).
+    return null;
   }
-  return null;
+  return readNamedCookie(cookieHeader, SESSION_COOKIE);
 }
