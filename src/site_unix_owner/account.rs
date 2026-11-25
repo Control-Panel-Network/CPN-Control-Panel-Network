@@ -42,7 +42,10 @@ const RESERVED: &[&str] = &[
 ];
 
 /// Generate a candidate Unix username from a domain (prefix + digits).
-pub fn propose_unix_username(domain: &str, salt: u32) -> String {
+///
+/// `digit_seed` is only a uniqueness counter for the numeric suffix, not a
+/// cryptographic salt.
+pub fn propose_unix_username(domain: &str, digit_seed: u32) -> String {
     let mut prefix: String = domain
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
@@ -58,7 +61,7 @@ pub fn propose_unix_username(domain: &str, salt: u32) -> String {
     if prefix.len() < 3 {
         prefix = format!("{prefix}cpn");
     }
-    let digits = format!("{:04}", salt % 10_000);
+    let digits = format!("{:04}", digit_seed % 10_000);
     let mut name = format!("{prefix}{digits}");
     if name.len() > 32 {
         name.truncate(32);

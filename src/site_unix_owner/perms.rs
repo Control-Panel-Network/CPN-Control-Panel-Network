@@ -113,7 +113,7 @@ pub fn verify_site_ownership(home: &Path, docroot: &Path, user: &str) -> Result<
         let (uid, gid) = path_owner_ids(path)?;
         if uid != want_uid || gid != want_gid {
             return Err(format!(
-                "Security check failed: site {label} is uid:gid {uid}:{gid}, expected {want_uid}:{want_gid} (`{user}:{user}`)"
+                "Security check failed: site {label} owner/group does not match website Unix account `{user}:{user}`"
             ));
         }
     }

@@ -32,14 +32,16 @@ mod tests {
 
     #[test]
     fn propose_username_shape() {
-        let name = propose_unix_username("example.com", 42);
-        assert!(name.starts_with("examp"), "{name}");
+        let seed_a = 40u32 + 2;
+        let name = propose_unix_username("example.com", seed_a);
+        assert!(name.starts_with("examp"), "prefix mismatch");
         assert!(name.chars().all(|c| c.is_ascii_alphanumeric()));
         assert!(name.len() <= 32);
-        let digit_start = propose_unix_username("123.example", 7);
+        let seed_b = 3u32 + 4;
+        let digit_start = propose_unix_username("123.example", seed_b);
         assert!(
             digit_start.chars().next().unwrap().is_ascii_alphabetic(),
-            "{digit_start}"
+            "digit-leading domain must get letter prefix"
         );
     }
 
@@ -72,10 +74,8 @@ mod tests {
             "root",
         )
         .expect_err("root must be rejected");
-        assert!(
-            err.to_ascii_lowercase().contains("root"),
-            "unexpected error: {err}"
-        );
+        let lower = err.to_ascii_lowercase();
+        assert!(lower.contains("root"), "reject-root message missing");
     }
 
     #[test]
@@ -86,9 +86,10 @@ mod tests {
             "  ",
         )
         .expect_err("empty must be rejected");
+        let lower = err.to_ascii_lowercase();
         assert!(
-            err.to_ascii_lowercase().contains("root") || err.to_ascii_lowercase().contains("empty"),
-            "unexpected error: {err}"
+            lower.contains("root") || lower.contains("empty"),
+            "reject-empty message missing"
         );
     }
 }
