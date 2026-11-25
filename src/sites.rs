@@ -12,13 +12,15 @@
 //!   `shop.example.co.uk`) are first-class apex sites under `/home/<fqdn>/`, not nested
 //!   under the provider suffix (`contaboserver.net`, `co.uk`).
 //!
-//! # Ownership (OpenSSH SFTP chroot + PHP write)
+//! # Ownership (CPN website Unix account)
 //!
-//! Site home and parent chain stay `root:root` mode `0755` so jailed SFTP remains
-//! valid (parents must not be group-writable). The document root (`public_html`
-//! and its contents) is chowned to the preferred web runtime user (`nobody`,
-//! `apache`, `nginx`, or `www-data` when present) so PHP and the web server can
-//! write uploads without `chmod 777`. Never world-writable modes.
+//! Each primary website gets a **CPN-managed website Unix account** (not `root`,
+//! not the panel login name). Site home and `public_html` are owned
+//! `siteuser:siteuser` (same uid/gid account as user and group) mode `0755`.
+//! Subdomains inherit the parent's Unix account. Create fails if chown/chmod
+//! verification fails when running as root. Jailed OpenSSH SFTP uses a separate
+//! root-owned jail under `/var/lib/cpn/sftp-jails/` and must not reset website
+//! homes to `root:root`. Never world-writable modes.
 //!
 //! Machine-readable records stay under `/var/lib/cpn/sites/<domain>.json` (or
 //! `$CPN_DATA_DIR/sites/`) and point at `docroot`. Override the hosting home root
@@ -37,7 +39,7 @@ use crate::panel_ops_ssl_provider::{
     SiteSslSettings, SslProvider, initial_provider_for_new_site, load_ssl_defaults,
 };
 
-const SCHEMA_VERSION: u32 = 5;
+const SCHEMA_VERSION: u32 = 6;
 
 /// Who last suspended the site (drives which suspend message is shown).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,6 +86,10 @@ pub struct SiteRecord {
     /// When set, this site is a staging clone of the production FQDN.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub staging_of: Option<String>,
+    /// CPN website Unix account (`user:group` owner for the site home/docroot).
+    /// Not the panel login; never `root`. Subdomains usually share the parent account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unix_user: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -105,6 +111,8 @@ pub struct SiteModify {
     pub aliases: Option<Vec<String>>,
     /// `Some(None)` clears staging link; `Some(Some(fqdn))` sets production source.
     pub staging_of: Option<Option<String>>,
+    /// Replace the website Unix account when `Some`.
+    pub unix_user: Option<Option<String>>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -347,50 +355,45 @@ fn set_dir_mode(path: &Path, mode: u32) {
     let _ = mode;
 }
 
-fn try_chown_root(path: &Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::ffi::OsStrExt;
-        if let Ok(c_path) = std::ffi::CString::new(path.as_os_str().as_bytes()) {
-            // Best effort: root:root when running as root; ignore failures in labs.
-            unsafe {
-                let _ = libc::chown(c_path.as_ptr(), 0, 0);
-            }
-        }
-    }
-    let _ = path;
-}
-
 /// Create home + `public_html`, set safe modes, and write a placeholder index if missing.
 ///
-/// Home / chroot parents stay `root:root` `0755`. Docroot is best-effort chowned to
-/// the web runtime user so PHP can write (see module ownership notes).
+/// Ownership is applied by [`ensure_site_directories_owned`] (CPN website Unix
+/// `user:group`). This helper only creates the tree and placeholder files.
 pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
+    ensure_site_directories_owned(docroot, None).map(|_| ())
+}
+
+/// Like [`ensure_site_directories`], and returns the website Unix account used
+/// when ownership was applied (empty string in non-root labs).
+///
+/// When running as root, applies `user:user` ownership and **fails create** if
+/// the security check (owner/group/mode) does not pass.
+pub fn ensure_site_directories_owned(
+    docroot: &str,
+    preferred_unix_user: Option<&str>,
+) -> Result<String, String> {
     validate_docroot(docroot)?;
     let docroot_path = Path::new(docroot);
     fs::create_dir_all(docroot_path)
         .map_err(|error| format!("Could not create {}: {error}", docroot_path.display()))?;
     set_dir_mode(docroot_path, 0o755);
-    if let Some(home) = docroot_path.parent() {
-        set_dir_mode(home, 0o755);
-        try_chown_root(home);
-        if let Some(parent_home) = home.parent()
-            && parent_home != hosting_home_root()
-        {
-            set_dir_mode(parent_home, 0o755);
-            try_chown_root(parent_home);
-        }
-        let logs = home.join("logs");
-        let _ = fs::create_dir_all(&logs);
-        set_dir_mode(&logs, 0o755);
-        try_chown_root(&logs);
-        for name in ["access.log", "error.log"] {
-            let path = logs.join(name);
-            if !path.is_file() {
-                let _ = fs::write(&path, b"");
-                set_dir_mode(&path, 0o644);
-                try_chown_root(&path);
-            }
+    let home = docroot_path
+        .parent()
+        .ok_or_else(|| "Document root must have a parent site home directory".to_string())?;
+    set_dir_mode(home, 0o755);
+    if let Some(parent_home) = home.parent()
+        && parent_home != hosting_home_root()
+    {
+        set_dir_mode(parent_home, 0o755);
+    }
+    let logs = home.join("logs");
+    let _ = fs::create_dir_all(&logs);
+    set_dir_mode(&logs, 0o755);
+    for name in ["access.log", "error.log"] {
+        let path = logs.join(name);
+        if !path.is_file() {
+            let _ = fs::write(&path, b"");
+            set_dir_mode(&path, 0o644);
         }
     }
     let index = docroot_path.join("index.html");
@@ -400,13 +403,13 @@ pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
             .map_err(|error| format!("Could not write {}: {error}", index.display()))?;
         set_dir_mode(&index, 0o644);
     }
-    // Docroot (not site home): preferred web user so PHP/OLS can write uploads.
-    // Best-effort; labs without getent/chown keep the create success path.
-    #[cfg(unix)]
-    {
-        let _ = crate::wordpress_wpcli::chown_docroot_to_web_user(docroot_path);
-    }
-    Ok(())
+    let domain_hint = home.file_name().and_then(|n| n.to_str()).unwrap_or("site");
+    crate::site_unix_owner::ensure_owned_site_tree(
+        domain_hint,
+        home,
+        docroot_path,
+        preferred_unix_user,
+    )
 }
 
 fn persist_site(path: &Path, site: &SiteRecord) -> Result<(), String> {
@@ -525,7 +528,14 @@ pub fn create_site_with_ssl(
         }
         None => default_docroot(&domain, parent.as_deref()),
     };
-    ensure_site_directories(&resolved_docroot)?;
+    let preferred_unix = parent
+        .as_ref()
+        .and_then(|p| load_site_at(&site_path(p)).ok())
+        .and_then(|s| s.unix_user);
+    let unix_user = ensure_site_directories_owned(&resolved_docroot, preferred_unix.as_deref())
+        .map_err(|error| {
+            format!("Website create failed ownership/security check for `{domain}`: {error}")
+        })?;
     let now = now_unix();
     let provider = initial_provider_for_new_site(ssl_provider, parent_ssl);
     let _ = load_ssl_defaults(); // ensure defaults file convention is known
@@ -550,6 +560,11 @@ pub fn create_site_with_ssl(
         php_version: Some(crate::php_defaults::default_php_branch_for_sites()),
         aliases: Vec::new(),
         staging_of: None,
+        unix_user: if unix_user.trim().is_empty() {
+            None
+        } else {
+            Some(unix_user)
+        },
     };
     persist_site(&path, &site)?;
     // Best-effort: create log files and wire OLS/nginx access/error log paths.
@@ -662,6 +677,18 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
         site.staging_of = staging
             .map(|d| d.trim().to_ascii_lowercase())
             .filter(|d| !d.is_empty());
+    }
+    if let Some(unix_user) = patch.unix_user {
+        site.unix_user = unix_user
+            .map(|u| u.trim().to_string())
+            .filter(|u| !u.is_empty());
+        if site
+            .unix_user
+            .as_deref()
+            .is_some_and(|u| u.eq_ignore_ascii_case("root"))
+        {
+            return Err("Website Unix account cannot be root".into());
+        }
     }
     if let Some(ssl) = patch.ssl {
         site.ssl = ssl;

@@ -194,6 +194,7 @@ mod tests {
                 php_version: None,
                 aliases: Vec::new(),
                 staging_of: None,
+                unix_user: None,
             };
             let html = manage_overview_preview(&site);
             assert!(html.contains("7 days"));
@@ -223,6 +224,7 @@ mod tests {
                 php_version: Some("8.5".into()),
                 aliases: Vec::new(),
                 staging_of: None,
+                unix_user: None,
             };
             let html = site_preview_cards(
                 &[site],

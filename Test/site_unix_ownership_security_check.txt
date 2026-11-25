@@ -1,0 +1,3 @@
+Executable coverage: src/site_unix_owner.rs unit tests (username, secure modes, reject root/empty).
+Create path: src/sites.rs ensure_site_directories_owned + create_site_with_ssl.
+Doctor heal: sites.ownership via cpn doctor heal --id sites.ownership.

@@ -433,6 +433,7 @@ mod tests {
             php_version: None,
             aliases: vec!["www.example.com".into(), "cdn.example.com".into()],
             staging_of: None,
+            unix_user: None,
         };
         let csv = hostnames_csv(&site);
         assert!(csv.contains("example.com"));

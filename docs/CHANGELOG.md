@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Tachyon VirusTotal enabled by default**: When Tachyon webmail is installed or healed (including tip-upgrade), CPN installs the bundled `virustotal` extension under the Tachyon data plugins tree, sets `[plugins] enable = On`, and adds `virustotal` to `enabled_list`. INI key matching uses an exact assignment boundary so `enable` never collides with `enabled_list`. Works without an API key (GUI links); optional free public key for inline results. No VirusTotal secrets are written by CPN.
+- **Website Unix ownership on create**: New websites and sub-domains get a CPN website Unix account as both user and group (`siteuser:siteuser`) for the site home and `public_html`. Create runs a security check (owner/group/mode) and fails closed if chown/chmod verification fails. System Repair `sites.ownership` detects root-owned registered homes; `cpn doctor heal --id sites.ownership` heals them to the existing website Unix account when present. Jailed SFTP uses `/var/lib/cpn/sftp-jails/` so OpenSSH chroot no longer forces website homes back to `root:root`. See `to-do/SITE-UNIX-OWNERSHIP.md`.
 
 ## [1.4.13] - 25/11/2026
 
