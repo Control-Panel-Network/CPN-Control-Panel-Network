@@ -373,10 +373,15 @@ pub(crate) async fn install_webmail(
             .await?;
             drop(download_area);
             configure_webmail_runtime(state, "/opt/cpn-webmail/tachyon", engine).await?;
-            // Best-effort: import SnappyMail contacts/settings from CyberPanel or backups.
+            // Best-effort: import SnappyMail contacts/settings from prior-panel or backups.
             // Mailboxes stay on IMAP; never wipe Tachyon on migrate failure.
             let _ = tokio::task::spawn_blocking(
                 crate::install_snappymail_migrate::migrate_snappymail_into_tachyon,
+            )
+            .await;
+            // VirusTotal extension enabled by default (optional API key; survives heal).
+            let _ = tokio::task::spawn_blocking(
+                crate::install_tachyon_virustotal::ensure_tachyon_virustotal_default,
             )
             .await;
         }

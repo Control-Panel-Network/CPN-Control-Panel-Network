@@ -97,6 +97,7 @@ pub mod install_snappymail_retire;
 pub mod install_snappymail_retire_db;
 pub mod install_tachyon_prune;
 pub mod install_tachyon_release;
+pub mod install_tachyon_virustotal;
 pub mod install_webmail;
 pub mod install_webmail_engines;
 pub mod install_webmail_heal;

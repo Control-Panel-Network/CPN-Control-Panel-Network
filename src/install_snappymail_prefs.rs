@@ -49,6 +49,8 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
     }
     // OpenPGP (SnappyMail-family + Roundcube Enigma when present).
     let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
+    // VirusTotal Tachyon extension: install + enable by default (API key optional).
+    let _ = crate::install_tachyon_virustotal::ensure_tachyon_virustotal_default();
     Ok(())
 }
 

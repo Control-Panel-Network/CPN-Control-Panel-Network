@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Tachyon VirusTotal enabled by default**: When Tachyon webmail is installed or healed (including tip-upgrade), CPN installs the bundled `virustotal` extension under the Tachyon data plugins tree and adds it to `application.ini` `[plugins] enabled_list`. Works without an API key (GUI links); optional free public key for inline results. No VirusTotal secrets are written by CPN.
+
 ## [1.4.13] - 25/11/2026
 
 Patch release after v1.4.12. Panel state moves into MariaDB with an automatic, backed-up migrate on upgrade; Tachyon webmail gains old-version pruning, extensions repository and client key fixes; the prior webmail can be retired after Tachyon is live; Docker image automatic updates reach stable; plus faster panel navigation, firewall editing and UX, Apache PHP controls, and several migrate and lab-script hardening fixes.
