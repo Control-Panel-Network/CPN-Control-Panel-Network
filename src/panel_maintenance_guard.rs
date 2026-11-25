@@ -40,6 +40,15 @@ pub struct PanelMaintenanceGuardMiddleware<S> {
 }
 
 fn path_is_exempt(path: &str) -> bool {
+    // Webmail admin SSO / password verify: PHP on the internal listener posts here with the
+    // shared bridge token only (no browser session Cookie). Owner panel pages stay reachable
+    // via session bypass during tip-upgrade, but these loopback calls would otherwise get 503
+    // and Tachyon Admin would show a dead-end "Authentication failed". Still gated by
+    // loopback peer + bridge token inside the handlers.
+    if path == "/api/internal/tachyon-admin/session" || path == "/api/internal/tachyon-admin/verify"
+    {
+        return true;
+    }
     matches!(
         path,
         "/api/panel-maintenance"
@@ -238,5 +247,13 @@ mod tests {
         assert!(!path_is_exempt("/settings/version"));
         assert!(!path_is_exempt("/dashboard"));
         assert!(!path_is_exempt("/login"));
+    }
+
+    #[test]
+    fn exempt_paths_cover_webmail_admin_bridge() {
+        assert!(path_is_exempt("/api/internal/tachyon-admin/session"));
+        assert!(path_is_exempt("/api/internal/tachyon-admin/verify"));
+        assert!(!path_is_exempt("/api/internal/tachyon-admin/other"));
+        assert!(!path_is_exempt("/api/internal/other"));
     }
 }

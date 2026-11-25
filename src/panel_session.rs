@@ -96,36 +96,17 @@ fn load_or_create_persisted_secret() -> Option<String> {
     let path = secret_path();
     if let Ok(raw) = fs::read_to_string(&path) {
         let trimmed = raw.trim();
-        if !trimmed.is_empty() {
+        // A weak or default value on disk is replaced, never trusted.
+        if crate::secret_hygiene::weak_reason(trimmed, crate::secret_hygiene::MIN_SECRET_LEN)
+            .is_none()
+        {
             return Some(trimmed.to_string());
         }
     }
-    let bytes: [u8; 32] = rand::rng().random();
-    let value = bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    if let Ok(mut file) = options.open(&path) {
-        use std::io::Write;
-        let _ = file.write_all(value.as_bytes());
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
-        }
-        return Some(value);
-    }
-    None
+    let value = crate::secret_hygiene::strong_hex(32);
+    crate::secret_hygiene::write_private(&path, value.as_bytes())
+        .ok()
+        .map(|()| value)
 }
 
 /// Resolve HMAC secret for panel sessions (issue #8).
@@ -439,6 +420,25 @@ pub fn request_https_from_headers(http: &actix_web::HttpRequest) -> bool {
 mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
+
+    #[test]
+    fn weak_persisted_session_secret_is_replaced_and_strong_one_is_kept() {
+        with_test_data_dir(|| {
+            let weak = ["Change", "Me"].concat();
+            fs::write(secret_path(), &weak).unwrap();
+            let fresh = load_or_create_persisted_secret().expect("replacement secret");
+            assert_ne!(fresh, weak);
+            assert!(
+                crate::secret_hygiene::weak_reason(&fresh, crate::secret_hygiene::MIN_SECRET_LEN)
+                    .is_none()
+            );
+            assert_eq!(
+                load_or_create_persisted_secret().as_deref(),
+                Some(fresh.as_str())
+            );
+            assert_eq!(fs::read_to_string(secret_path()).unwrap().trim(), fresh);
+        });
+    }
 
     #[test]
     fn round_trip_session_token() {

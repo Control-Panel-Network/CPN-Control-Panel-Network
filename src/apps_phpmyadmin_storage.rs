@@ -44,18 +44,22 @@ fn load_or_create_control_password() -> Result<String, String> {
         let raw =
             fs::read_to_string(&path).map_err(|e| format!("Could not read control secret: {e}"))?;
         let pass = raw.trim().to_string();
-        if !pass.is_empty() {
+        if crate::secret_hygiene::weak_reason(&pass, crate::secret_hygiene::MIN_SECRET_LEN)
+            .is_none()
+        {
             return Ok(pass);
         }
     }
-    let pass = random_password();
-    fs::write(&path, format!("{pass}\n"))
+    let pass = loop {
+        let candidate = random_password();
+        if crate::secret_hygiene::weak_reason(&candidate, crate::secret_hygiene::MIN_SECRET_LEN)
+            .is_none()
+        {
+            break candidate;
+        }
+    };
+    crate::secret_hygiene::write_private(&path, format!("{pass}\n").as_bytes())
         .map_err(|e| format!("Could not write control secret: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
-    }
     Ok(pass)
 }
 
