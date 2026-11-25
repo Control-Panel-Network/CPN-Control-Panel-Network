@@ -24,8 +24,8 @@ pub(super) fn path_owner_ids(path: &Path) -> Result<(u32, u32), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        let meta = fs::metadata(path)
-            .map_err(|e| format!("Could not stat {}: {e}", path.display()))?;
+        let meta =
+            fs::metadata(path).map_err(|e| format!("Could not stat {}: {e}", path.display()))?;
         Ok((meta.uid(), meta.gid()))
     }
     #[cfg(not(unix))]
@@ -39,8 +39,8 @@ fn path_mode(path: &Path) -> Result<u32, String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let meta = fs::metadata(path)
-            .map_err(|e| format!("Could not stat {}: {e}", path.display()))?;
+        let meta =
+            fs::metadata(path).map_err(|e| format!("Could not stat {}: {e}", path.display()))?;
         Ok(meta.permissions().mode() & 0o7777)
     }
     #[cfg(not(unix))]
@@ -98,9 +98,8 @@ fn set_mode(path: &Path, mode: u32) -> Result<(), String> {
 
 /// Verify home and docroot are owned by `user:user` with a secure home mode.
 pub fn verify_site_ownership(home: &Path, docroot: &Path, user: &str) -> Result<(), String> {
-    let (want_uid, want_gid) = passwd_ids(user).ok_or_else(|| {
-        format!("Website Unix account `{user}` is missing after ownership apply")
-    })?;
+    let (want_uid, want_gid) = passwd_ids(user)
+        .ok_or_else(|| format!("Website Unix account `{user}` is missing after ownership apply"))?;
     if want_uid == 0 {
         return Err("Refusing website ownership as root (uid 0)".into());
     }
@@ -143,8 +142,7 @@ pub fn apply_site_ownership(
     if !running_as_root() {
         return Err("Applying site ownership requires root".into());
     }
-    fs::create_dir_all(home)
-        .map_err(|e| format!("Could not create {}: {e}", home.display()))?;
+    fs::create_dir_all(home).map_err(|e| format!("Could not create {}: {e}", home.display()))?;
     fs::create_dir_all(docroot)
         .map_err(|e| format!("Could not create {}: {e}", docroot.display()))?;
     set_mode(home, 0o755)?;
@@ -185,7 +183,9 @@ pub fn ensure_owned_site_tree(
         let inherited = inherit_unix_user_from_parents(home);
         let user = if let Some(u) = preferred_user.map(str::trim).filter(|s| !s.is_empty()) {
             if !user_exists(u) {
-                return Err(format!("Preferred website Unix account `{u}` does not exist"));
+                return Err(format!(
+                    "Preferred website Unix account `{u}` does not exist"
+                ));
             }
             if u.eq_ignore_ascii_case("root") {
                 return Err("Preferred website Unix account cannot be root".into());

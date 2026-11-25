@@ -377,9 +377,9 @@ pub fn ensure_site_directories_owned(
     fs::create_dir_all(docroot_path)
         .map_err(|error| format!("Could not create {}: {error}", docroot_path.display()))?;
     set_dir_mode(docroot_path, 0o755);
-    let home = docroot_path.parent().ok_or_else(|| {
-        "Document root must have a parent site home directory".to_string()
-    })?;
+    let home = docroot_path
+        .parent()
+        .ok_or_else(|| "Document root must have a parent site home directory".to_string())?;
     set_dir_mode(home, 0o755);
     if let Some(parent_home) = home.parent()
         && parent_home != hosting_home_root()
@@ -403,10 +403,7 @@ pub fn ensure_site_directories_owned(
             .map_err(|error| format!("Could not write {}: {error}", index.display()))?;
         set_dir_mode(&index, 0o644);
     }
-    let domain_hint = home
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("site");
+    let domain_hint = home.file_name().and_then(|n| n.to_str()).unwrap_or("site");
     crate::site_unix_owner::ensure_owned_site_tree(
         domain_hint,
         home,
@@ -535,15 +532,10 @@ pub fn create_site_with_ssl(
         .as_ref()
         .and_then(|p| load_site_at(&site_path(p)).ok())
         .and_then(|s| s.unix_user);
-    let unix_user = ensure_site_directories_owned(
-        &resolved_docroot,
-        preferred_unix.as_deref(),
-    )
-    .map_err(|error| {
-        format!(
-            "Website create failed ownership/security check for `{domain}`: {error}"
-        )
-    })?;
+    let unix_user = ensure_site_directories_owned(&resolved_docroot, preferred_unix.as_deref())
+        .map_err(|error| {
+            format!("Website create failed ownership/security check for `{domain}`: {error}")
+        })?;
     let now = now_unix();
     let provider = initial_provider_for_new_site(ssl_provider, parent_ssl);
     let _ = load_ssl_defaults(); // ensure defaults file convention is known

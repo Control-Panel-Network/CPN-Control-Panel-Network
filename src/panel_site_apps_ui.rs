@@ -472,7 +472,7 @@ mod tests {
             php_version: None,
             aliases: Vec::new(),
             staging_of: None,
-        unix_user: None,
+            unix_user: None,
         }
     }
 

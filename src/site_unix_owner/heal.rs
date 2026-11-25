@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::account::{ensure_primary_unix_user, resolve_unix_user_for_site, running_as_root};
 use super::perms::{apply_site_ownership, path_owner_ids};
-use crate::sites::{site_home_from_record, SiteRecord};
+use crate::sites::{SiteRecord, site_home_from_record};
 
 /// Heal ownership for one registered site (home inode + docroot).
 pub fn heal_site_ownership(site: &SiteRecord) -> Result<String, String> {

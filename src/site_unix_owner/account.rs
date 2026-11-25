@@ -3,13 +3,42 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::sites::{hosting_home_root, site_home_from_record, SiteRecord};
+use crate::sites::{SiteRecord, hosting_home_root, site_home_from_record};
 
 const RESERVED: &[&str] = &[
-    "root", "bin", "daemon", "adm", "lp", "sync", "shutdown", "halt", "mail", "operator",
-    "games", "ftp", "nobody", "systemd-network", "dbus", "polkitd", "sshd", "chrony",
-    "tcpdump", "cpn", "cpn-panel", "cpn-webmail", "mysql", "mariadb", "nginx", "apache",
-    "httpd", "postfix", "dovecot", "vmail", "docker", "lscpd", "lsadm",
+    "root",
+    "bin",
+    "daemon",
+    "adm",
+    "lp",
+    "sync",
+    "shutdown",
+    "halt",
+    "mail",
+    "operator",
+    "games",
+    "ftp",
+    "nobody",
+    "systemd-network",
+    "dbus",
+    "polkitd",
+    "sshd",
+    "chrony",
+    "tcpdump",
+    "cpn",
+    "cpn-panel",
+    "cpn-webmail",
+    "mysql",
+    "mariadb",
+    "nginx",
+    "apache",
+    "httpd",
+    "postfix",
+    "dovecot",
+    "vmail",
+    "docker",
+    "lscpd",
+    "lsadm",
 ];
 
 /// Generate a candidate Unix username from a domain (prefix + digits).
@@ -203,8 +232,7 @@ pub fn ensure_primary_unix_user(domain: &str, home: &Path) -> Result<String, Str
     }
     if !running_as_root() {
         return Err(
-            "Site Unix ownership requires root to create or assign the website Unix account"
-                .into(),
+            "Site Unix ownership requires root to create or assign the website Unix account".into(),
         );
     }
     let username = unique_username(domain)?;

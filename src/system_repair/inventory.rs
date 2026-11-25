@@ -115,11 +115,7 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             Some("sites.ownership"),
         );
     } else {
-        let sample: Vec<String> = root_homes
-            .iter()
-            .take(5)
-            .map(|(d, _)| d.clone())
-            .collect();
+        let sample: Vec<String> = root_homes.iter().take(5).map(|(d, _)| d.clone()).collect();
         push(
             checks,
             "sites.ownership",

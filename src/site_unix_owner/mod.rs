@@ -21,8 +21,8 @@ pub use account::{
 };
 pub use heal::{heal_all_root_owned_site_homes, heal_site_ownership, root_owned_site_homes};
 pub use perms::{
-    apply_site_ownership, ensure_owned_site_tree, mode_is_secure_home, verify_site_ownership,
-    OwnershipApplyReport,
+    OwnershipApplyReport, apply_site_ownership, ensure_owned_site_tree, mode_is_secure_home,
+    verify_site_ownership,
 };
 
 #[cfg(test)]
@@ -87,8 +87,7 @@ mod tests {
         )
         .expect_err("empty must be rejected");
         assert!(
-            err.to_ascii_lowercase().contains("root")
-                || err.to_ascii_lowercase().contains("empty"),
+            err.to_ascii_lowercase().contains("root") || err.to_ascii_lowercase().contains("empty"),
             "unexpected error: {err}"
         );
     }
