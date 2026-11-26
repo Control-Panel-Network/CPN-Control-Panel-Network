@@ -386,6 +386,7 @@ pub mod panel_ops_email_queue;
 pub mod panel_ops_fail2ban;
 pub mod panel_ops_files;
 pub mod panel_ops_files_archive;
+pub mod panel_ops_files_perms;
 pub mod panel_ops_firewall;
 pub mod panel_ops_firewall_heal;
 pub mod panel_ops_firewall_rules;

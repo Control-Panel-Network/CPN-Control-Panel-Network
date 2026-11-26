@@ -266,6 +266,15 @@
       if(op==='extract'){
         if(names.length!==1){ alert('Select one archive to extract'); return; }
         submitOp('extract', {names:names});
+        return;
+      }
+      if(op==='fix_permissions'){
+        if(!names.length){ alert('Select one or more items'); return; }
+        var msg='Fix permissions for '+names.length+' item(s)? '+
+          'Folders are fixed recursively (owner/group and modes for the folder and contents). '+
+          'Website paths use the CPN site Unix user:group; this cannot be undone easily.';
+        if(!confirm(msg)) return;
+        submitOp('fix_permissions', {names:names});
       }
     });
   });
