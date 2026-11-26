@@ -2,13 +2,16 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-const FCONTEXT_STAMP_VER: &str = "1";
+/// Bumped when fcontext paths change so hosts re-run `semanage` once.
+const FCONTEXT_STAMP_VER: &str = "2";
 const MODULE: &str = "cpn_webmail_imap";
 const MODULE_VER: &str = "1.2";
+const WEBMAIL_CODE_ROOT: &str = "/opt/cpn-webmail";
+const WEBMAIL_DATA_ROOT: &str = "/var/lib/cpn-webmail";
 
 /// Allow httpd_t to connect to pop_port_t (IMAP 143/993), smtp_port_t (25/587),
 /// sieve_port_t (ManageSieve 4190), and http_port_t (HTTPS 443 package repo).
@@ -115,35 +118,67 @@ allow httpd_t http_port_t:tcp_socket name_connect;
     let _ = fs::write(&stamp, format!("{MODULE_VER}\n"));
 }
 
-/// Mail port allows plus SnappyMail data_dir fcontext/restorecon.
+/// Mail port allows, data-dir fcontext, and code-tree restorecon.
 ///
-/// The fcontext rule and the recursive `restorecon` only run when the stamp file is missing or
-/// stale; they used to run on every Email > Webmail page view.
+/// Expensive `semanage fcontext` for the data tree still runs only when the stamp is missing
+/// or stale (it used to run on every Email > Webmail page view).
+///
+/// Code under `/opt/cpn-webmail` is always `restorecon`'d when SELinux is on. Tachyon/SnappyMail
+/// upgrades stage archives under `/var/tmp` and `cp -a` can leave new `tachyon/v/<ver>` trees as
+/// `tmp_t`; PHP-FPM (`httpd_t`) then fails to `include` those files and `/tachyon/` returns an
+/// empty HTTP 200. `restorecon` is cheap when labels already match.
 pub fn ensure_webmail_selinux() {
     if !selinux_present() {
         return;
     }
     ensure_httpd_mail_ports();
+    restorecon_webmail_code();
     let dir = Path::new("/var/lib/cpn/selinux");
     let stamp = dir.join("cpn_webmail_fcontext.ver");
     let stamp_ok = fs::read_to_string(&stamp)
         .map(|s| s.trim() == FCONTEXT_STAMP_VER)
         .unwrap_or(false);
     if stamp_ok {
+        // Data tree can also drift after operator copies; keep labels correct without semanage.
+        restorecon_path(WEBMAIL_DATA_ROOT);
         return;
     }
     let status = Command::new("bash")
         .args([
             "-c",
-            "command -v semanage >/dev/null 2>&1 && \
-             (semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || \
-              semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || true); \
-             restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true",
+            &format!(
+                "command -v semanage >/dev/null 2>&1 && \
+             (semanage fcontext -a -t httpd_sys_rw_content_t '{WEBMAIL_DATA_ROOT}(/.*)?' || \
+              semanage fcontext -m -t httpd_sys_rw_content_t '{WEBMAIL_DATA_ROOT}(/.*)?' || true); \
+             (semanage fcontext -a -t usr_t '{WEBMAIL_CODE_ROOT}(/.*)?' || \
+              semanage fcontext -m -t usr_t '{WEBMAIL_CODE_ROOT}(/.*)?' || true); \
+             restorecon -Rv {WEBMAIL_DATA_ROOT} >/dev/null 2>&1 || true; \
+             restorecon -Rv {WEBMAIL_CODE_ROOT} >/dev/null 2>&1 || true"
+            ),
         ])
         .status();
     if status.map(|s| s.success()).unwrap_or(false) && fs::create_dir_all(dir).is_ok() {
         let _ = fs::write(&stamp, format!("{FCONTEXT_STAMP_VER}\n"));
     }
+}
+
+/// Relabel webmail PHP code so `httpd_t` can read version trees after `/var/tmp` staging.
+pub fn restorecon_webmail_code() {
+    if !selinux_present() {
+        return;
+    }
+    restorecon_path(WEBMAIL_CODE_ROOT);
+}
+
+fn restorecon_path(path: &str) {
+    if !Path::new(path).exists() {
+        return;
+    }
+    let _ = Command::new("restorecon")
+        .args(["-R", path])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 }
 
 /// True when the kernel exposes SELinux (selinuxfs mounted); other hosts skip every probe.
@@ -211,5 +246,18 @@ allow httpd_t http_port_t:tcp_socket name_connect;"#;
         assert!(te.contains("smtp_port_t"));
         assert!(te.contains("sieve_port_t"));
         assert!(te.contains("http_port_t"));
+    }
+
+    #[test]
+    fn fcontext_stamp_covers_code_and_data_roots() {
+        assert_eq!(super::FCONTEXT_STAMP_VER, "2");
+        assert_eq!(super::WEBMAIL_CODE_ROOT, "/opt/cpn-webmail");
+        assert_eq!(super::WEBMAIL_DATA_ROOT, "/var/lib/cpn-webmail");
+    }
+
+    #[test]
+    fn restorecon_webmail_code_is_noop_without_selinuxfs() {
+        // Safe to call on Windows/dev hosts; must not panic when selinuxfs is absent.
+        super::restorecon_webmail_code();
     }
 }

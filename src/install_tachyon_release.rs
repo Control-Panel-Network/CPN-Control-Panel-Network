@@ -264,11 +264,18 @@ fn install_release_files(
     let final_dir = v_root.join(ver);
     let tmp_dir = v_root.join(format!(".{ver}.cpn-new"));
     let _ = std::fs::remove_dir_all(&tmp_dir);
-    run(
-        "cp",
-        &["-a", &src_ver.to_string_lossy(), &tmp_dir.to_string_lossy()],
-    )?;
+    // Archives are staged under /var/tmp (tmp_t). Preserve mode/ownership but not the
+    // SELinux context so PHP-FPM is not left with an unreadable tmp_t version tree.
+    let src_s = src_ver.to_string_lossy().to_string();
     let tmp_s = tmp_dir.to_string_lossy().to_string();
+    if run(
+        "cp",
+        &["-a", "--no-preserve=context", &src_s, &tmp_s],
+    )
+    .is_err()
+    {
+        run("cp", &["-a", &src_s, &tmp_s])?;
+    }
     let perms = run("chown", &["-R", "root:root", &tmp_s])
         .and_then(|_| run("chmod", &["-R", "u=rwX,g=rX,o=rX", &tmp_s]));
     if let Err(e) = perms {
@@ -283,6 +290,8 @@ fn install_release_files(
         let _ = std::fs::remove_dir_all(&tmp_dir);
         format!("activate {}: {e}", final_dir.display())
     })?;
+    // Belt-and-suspenders: even without --no-preserve=context, fix labels before PHP reloads.
+    crate::install_selinux_mail::restorecon_webmail_code();
     // Entry points last, after the version directory they select is in place.
     // include.php (APP_DATA_FOLDER_PATH) and the data/ tree are intentionally not touched.
     for name in ["index.php", "_include.php", ".htaccess"] {
