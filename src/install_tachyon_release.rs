@@ -268,12 +268,7 @@ fn install_release_files(
     // SELinux context so PHP-FPM is not left with an unreadable tmp_t version tree.
     let src_s = src_ver.to_string_lossy().to_string();
     let tmp_s = tmp_dir.to_string_lossy().to_string();
-    if run(
-        "cp",
-        &["-a", "--no-preserve=context", &src_s, &tmp_s],
-    )
-    .is_err()
-    {
+    if run("cp", &["-a", "--no-preserve=context", &src_s, &tmp_s]).is_err() {
         run("cp", &["-a", &src_s, &tmp_s])?;
     }
     let perms = run("chown", &["-R", "root:root", &tmp_s])
