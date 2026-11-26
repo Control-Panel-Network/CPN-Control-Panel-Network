@@ -22,10 +22,10 @@ pub fn el_major_from_os_release(contents: &str) -> Option<u32> {
         };
         let raw = rest.trim().trim_matches('"').trim_matches('\'');
         let major = raw.split('.').next().unwrap_or("");
-        if let Ok(n) = major.parse::<u32>() {
-            if (8..=10).contains(&n) {
-                return Some(n);
-            }
+        if let Ok(n) = major.parse::<u32>()
+            && (8..=10).contains(&n)
+        {
+            return Some(n);
         }
     }
     None
