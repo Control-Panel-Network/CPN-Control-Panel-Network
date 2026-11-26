@@ -282,12 +282,27 @@ pub fn default_docroot(domain: &str, parent: Option<&str>) -> String {
 }
 
 /// Domain home derived from a site record (parent of `public_html` when standard).
+///
+/// When the registered docroot already exists on disk (common after classic
+/// migrate), prefer that real tree over the theoretical nested layout so
+/// ownership heal does not invent a parallel `/home/<child>/...` path.
 pub fn site_home_from_record(site: &SiteRecord) -> PathBuf {
     let path = Path::new(&site.docroot);
-    if path.file_name().and_then(|name| name.to_str()) == Some("public_html")
+    let leaf = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
+    if leaf == "public_html"
         && let Some(parent) = path.parent()
     {
         return parent.to_path_buf();
+    }
+    if path.is_dir() {
+        // Leaf content folders under an existing site home (legacy migrate shapes).
+        if matches!(leaf, "demo-public" | "public" | "html" | "www" | "htdocs")
+            && let Some(parent) = path.parent()
+        {
+            return parent.to_path_buf();
+        }
+        // Classic: the registered docroot directory is the site home itself.
+        return path.to_path_buf();
     }
     let parent = resolve_parent_domain(&site.domain).ok().flatten();
     site_home_dir(&site.domain, parent.as_deref())
