@@ -198,10 +198,10 @@ fn resolve_site_or_mailbox_user(path: &Path) -> Result<Option<String>, String> {
                 .filter(|s| !s.is_empty())
                 .map(str::to_string)
                 .or_else(|| find_unix_user_by_home(&home));
-            if let Some(user) = user {
-                if best.as_ref().is_none_or(|(best_len, _)| len > *best_len) {
-                    best = Some((len, user));
-                }
+            if let Some(user) = user
+                && best.as_ref().is_none_or(|(best_len, _)| len > *best_len)
+            {
+                best = Some((len, user));
             }
         }
         if let Some((_, user)) = best {
