@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Blank `/tachyon/` after Tachyon version upgrade on SELinux hosts**: Upgrades stage the archive under `/var/tmp` and copy the new `tachyon/v/<version>` tree with `cp -a`, which can leave the tree labeled `tmp_t`. PHP-FPM (`httpd_t`) then cannot `include` the version files and the public mount returns HTTP 200 with an empty body. Install now prefers `cp -a --no-preserve=context`, always `restorecon`s `/opt/cpn-webmail` on webmail heal (not only the data tree, and not only once via the fcontext stamp), and the HTTP health check fails closed on an empty body with a clear hint.
+
 ### Added
 
 - **File Manager Fix permissions**: Root and Site File Manager gain a **Fix permissions** toolbar action that uses the same selection checkmarks as Copy / Delete. Website paths under the hosting home are set to the CPN site Unix account `user:user` (mailbox homes under `e-mails/<local>` prefer the mailbox account when present) with dirs `0755` and files `0644`. Folders are fixed recursively. Non-site paths keep an existing non-root owner and only normalize modes; root-owned non-site paths, protected system paths, jail escapes, and symlinks are refused. See `to-do/SITE-UNIX-OWNERSHIP.md`.
