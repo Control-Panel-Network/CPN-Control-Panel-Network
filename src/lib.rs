@@ -417,6 +417,7 @@ pub mod panel_ops_php_ini;
 pub mod panel_ops_pkgmgr;
 pub mod panel_ops_process;
 pub mod panel_ops_proton_mail;
+pub mod panel_ops_rspamd_repo;
 pub mod panel_ops_security;
 pub mod panel_ops_security_ssl;
 pub mod panel_ops_services;
