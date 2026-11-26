@@ -125,7 +125,9 @@ fn ensure_fixable(path: &Path, jail: &Path) -> Result<(), String> {
         return Err("Refusing to fix permissions on the filesystem root".into());
     }
     if path == hosting_home_root().as_path() {
-        return Err("Refusing to fix permissions on the hosting home root; select a site path".into());
+        return Err(
+            "Refusing to fix permissions on the hosting home root; select a site path".into(),
+        );
     }
     Ok(())
 }
