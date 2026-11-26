@@ -288,7 +288,10 @@ pub fn default_docroot(domain: &str, parent: Option<&str>) -> String {
 /// ownership heal does not invent a parallel `/home/<child>/...` path.
 pub fn site_home_from_record(site: &SiteRecord) -> PathBuf {
     let path = Path::new(&site.docroot);
-    let leaf = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
+    let leaf = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
     if leaf == "public_html"
         && let Some(parent) = path.parent()
     {
