@@ -120,16 +120,45 @@ pub fn enable_spamassassin() -> Result<String, String> {
 }
 
 pub fn enable_rspamd() -> Result<String, String> {
+    ensure_rspamd_for_auth_results()
+}
+
+/// Install (via official EL repo when needed), heal, enable rspamd, and wire Postfix milters
+/// so Tachyon Auth UI gets SPF/DMARC Authentication-Results.
+pub fn ensure_rspamd_for_auth_results() -> Result<String, String> {
+    let mut notes: Vec<String> = Vec::new();
     let st = rspamd_status();
     if !st.installed {
-        install_packages_dnf_or_apt(&["rspamd"], &["rspamd"])?;
+        match crate::panel_ops_rspamd_repo::ensure_rspamd_dnf_repo() {
+            Ok(msg) => notes.push(msg),
+            Err(e) => notes.push(format!("rspamd repo soft-skip: {e}")),
+        }
+        install_packages_dnf_or_apt(&["rspamd"], &["rspamd"]).map_err(|e| {
+            format!(
+                "rspamd package install failed ({e}). On EL hosts enable the official rspamd.com repo (Email > Rspamd Enable retries this), or install rspamd manually."
+            )
+        })?;
+        notes.push("installed rspamd".into());
     }
     let heal = heal_rspamd_for_auth_results().unwrap_or_default();
+    if !heal.is_empty() {
+        notes.push(heal);
+    }
     enable_now(&["rspamd"])?;
+    notes.push("rspamd enabled".into());
     // Re-wire Postfix milters so smtpd includes rspamd after start.
     let milters = crate::panel_ops_opendkim::ensure_postfix_opendkim_milters()
         .unwrap_or_else(|e| format!("milter wire skipped: {e}"));
-    Ok(format!("Rspamd enable requested. {heal} {milters}"))
+    notes.push(milters);
+    Ok(format!("Rspamd Auth-Results ready: {}", notes.join(" | ")))
+}
+
+/// Fail-soft wrapper for mail heal / OpenDKIM ensure (never aborts the caller).
+pub fn soft_ensure_rspamd_for_auth_results() -> String {
+    match ensure_rspamd_for_auth_results() {
+        Ok(msg) => msg,
+        Err(e) => format!("rspamd Auth-Results soft-skip: {e}"),
+    }
 }
 
 /// Ensure rspamd can finish milter EOM and emit Authentication-Results (Tachyon Auth UI).

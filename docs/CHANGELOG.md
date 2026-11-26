@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tachyon Auth UI SPF/DMARC still `none` on EL10 (and EL hosts without rspamd in AppStream/EPEL)**: OpenDKIM alone writes `dkim=` Authentication-Results, so webmail correctly shows SPF/DMARC as `none` until rspamd's milter adds those results. `#714` already wired rspamd when active, but the package is missing from default EL10 repos, so heal never started it. CPN now writes the official rspamd.com `centos-<major>` DNF repo when needed, soft-ensures rspamd during OpenDKIM/mail Auth-Results heal (fail-soft), and re-wires `smtpd_milters` to include `:11332`. Email > Rspamd Enable uses the same path. Cloudflare DNS publish is unrelated to inbound Auth-Results icons.
+
 ### Added
 
 - **File Manager Fix permissions**: Root and Site File Manager gain a **Fix permissions** toolbar action that uses the same selection checkmarks as Copy / Delete. Website paths under the hosting home are set to the CPN site Unix account `user:user` (mailbox homes under `e-mails/<local>` prefer the mailbox account when present) with dirs `0755` and files `0644`. Folders are fixed recursively. Non-site paths keep an existing non-root owner and only normalize modes; root-owned non-site paths, protected system paths, jail escapes, and symlinks are refused. See `to-do/SITE-UNIX-OWNERSHIP.md`.

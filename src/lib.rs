@@ -409,6 +409,7 @@ pub mod panel_ops_malware_scan;
 pub mod panel_ops_mariadb_local;
 pub mod panel_ops_opendkim;
 pub mod panel_ops_opendkim_conf;
+pub mod panel_ops_rspamd_repo;
 pub mod panel_ops_path;
 pub mod panel_ops_php;
 pub mod panel_ops_php_ext;
