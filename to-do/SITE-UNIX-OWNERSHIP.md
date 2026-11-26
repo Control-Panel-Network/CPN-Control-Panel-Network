@@ -28,3 +28,17 @@ random new user for populated production trees.
 
 Jailed OpenSSH accounts use `/var/lib/cpn/sftp-jails/<username>/` (root-owned chroot).
 They must not reset `/home/<fqdn>` back to `root:root`.
+
+## File Manager: Fix permissions
+
+Root and Site File Manager expose a **Fix permissions** toolbar action that uses the
+same selection checkmarks as Copy / Delete.
+
+| Path class | Owner:group | Modes |
+| --- | --- | --- |
+| Under hosting home `/home/<fqdn>/...` | CPN website Unix account `user:user` (mailbox homes under `e-mails/<local>` prefer the mailbox Unix account when present) | dirs `0755`, files `0644` |
+| Outside hosting homes | Keep existing non-root owner (modes only). Root-owned non-site paths are refused | dirs `0755`, files `0644` |
+
+Folders are fixed recursively. Protected system paths, `/`, the hosting home root,
+symlinks, and jail escapes are refused. The action does not create new Unix users;
+heal site ownership first when no account is found.
