@@ -32,6 +32,24 @@ pub fn used_mb_to_bytes(mb: u64) -> u64 {
     mb.saturating_mul(1024 * 1024)
 }
 
+/// Convert a KiB count (for example `ps` RSS / VSZ) to bytes for display formatters.
+pub fn kib_to_bytes(kib: u64) -> u64 {
+    kib.saturating_mul(1024)
+}
+
+pub fn format_kib_for_user(username: &str, kib: u64) -> String {
+    format_bytes_for_user(username, kib_to_bytes(kib))
+}
+
+pub fn format_kib_with(pref: StorageUnitPref, kib: u64) -> String {
+    format_bytes_with(pref, kib_to_bytes(kib))
+}
+
+/// Host memory summary fields stored as rounded MiB (from KiB / 1024).
+pub fn format_host_mib_for_user(username: &str, mib: u64) -> String {
+    format_bytes_for_user(username, used_mb_to_bytes(mib))
+}
+
 pub fn format_bytes_auto(bytes: u64) -> String {
     format_bytes_with(StorageUnitPref::Auto, bytes)
 }
@@ -261,5 +279,17 @@ mod tests {
         assert_eq!(format_used_count(3, 0), "Used 3 of 0");
         assert_eq!(format_used_count(3, 10), "Used 3 of 10");
         assert_eq!(format_used_count(0, UNLIMITED), "Used 0 of ∞");
+    }
+
+    #[test]
+    fn kib_and_host_mib_use_spaced_labels() {
+        let s = format_kib_with(StorageUnitPref::Auto, 512);
+        assert!(s.ends_with(" KB"), "{s}");
+        let ram = format_host_mib_for_user("nobody", 47_914);
+        assert!(
+            ram.contains(" GB") || ram.contains(" MB"),
+            "expected scaled RAM label, got {ram}"
+        );
+        assert!(!ram.contains("MB</") && !ram.ends_with("MB"), "{ram}");
     }
 }

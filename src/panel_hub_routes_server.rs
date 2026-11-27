@@ -464,7 +464,7 @@ pub async fn server_processes_page(
             &user,
             &nav,
             title,
-            &system_processes_hub_page(&tab, show_kill),
+            &system_processes_hub_page(&tab, &user, show_kill),
         )
     })
     .await

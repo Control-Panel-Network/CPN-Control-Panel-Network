@@ -106,10 +106,10 @@ fn tab_panel(id: &str, active: &str, inner: &str) -> String {
 }
 
 /// Combined System Processes Monitor page with tabs.
-pub fn system_processes_hub_page(active: &str, show_kill: bool) -> String {
+pub fn system_processes_hub_page(active: &str, viewer: &str, show_kill: bool) -> String {
     let active = normalize_spm_tab(active);
-    let top_body = processes_tab_body(show_kill);
-    let cpn_body = cpn_usage_tab_body(show_kill);
+    let top_body = processes_tab_body(viewer, show_kill);
+    let cpn_body = cpn_usage_tab_body(viewer, show_kill);
     let body = format!(
         r#"<div id="spm-hub-root">{tabs}{top_panel}{cpn_panel}{script}</div>"#,
         tabs = tabs_nav(active),
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn hub_has_both_tabs() {
-        let html = system_processes_hub_page("top", true);
+        let html = system_processes_hub_page("top", "test-viewer", true);
         assert!(html.contains("data-spm-tab=\"top\""));
         assert!(html.contains("data-spm-tab=\"cpn-usage\""));
         assert!(html.contains("spm-hub-root"));
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn cpn_tab_admin_kill_or_empty() {
-        let html = system_processes_hub_page("cpn-usage", true);
+        let html = system_processes_hub_page("cpn-usage", "test-viewer", true);
         assert!(
             html.contains("CPN-related processes")
                 || html.contains("empty-state")

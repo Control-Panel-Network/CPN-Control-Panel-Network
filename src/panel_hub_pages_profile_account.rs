@@ -42,7 +42,7 @@ pub fn account_tab_html(
         <label>Storage display unit
           <select name="storage_unit">{unit_opts}</select>
         </label>
-        <p class="muted" style="margin:0;">Auto picks KB, MB, GB, or TB from the real size. Forced units keep that unit for disk and bandwidth.</p>
+        <p class="muted" style="margin:0;">Auto picks KB, MB, GB, or TB from the real size. Forced units keep that unit for disk, bandwidth, and Server → Top Processes memory labels.</p>
         <button type="submit" class="btn-primary">Save details</button>
       </form>
       {pkg}"#,
