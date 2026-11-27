@@ -1,6 +1,8 @@
 //! Registry update column HTML for Docker Active Containers.
 
-use crate::panel_ops_docker_image_updates::{ImageUpdateSnapshot, UpdateCheckState, CACHE_TTL_SECS};
+use crate::panel_ops_docker_image_updates::{
+    CACHE_TTL_SECS, ImageUpdateSnapshot, UpdateCheckState,
+};
 
 fn html_escape(value: &str) -> String {
     value

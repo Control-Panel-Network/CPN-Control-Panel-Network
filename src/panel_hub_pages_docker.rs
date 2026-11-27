@@ -4,11 +4,11 @@ use crate::panel_hub_pages_docker_list::{DockerListQuery, docker_list_toolbar, p
 use crate::panel_hub_pages_docker_updates_ui::{
     cache_help_text, check_updates_button_href, update_status_cell, update_styles,
 };
-use crate::panel_ops_docker_image_updates::{container_update_map, ImageUpdateSnapshot};
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_ops_docker::{
     DockerContainerRow, docker_status, list_containers_detailed, list_images_detailed,
 };
+use crate::panel_ops_docker_image_updates::{ImageUpdateSnapshot, container_update_map};
 use crate::panel_ops_docker_inventory::filter_containers;
 
 pub(crate) fn html_escape(value: &str) -> String {
@@ -172,11 +172,13 @@ fn containers_table(
         let update_cell = updates
             .get(&row.id)
             .map(update_status_cell)
-            .unwrap_or_else(|| update_status_cell(&ImageUpdateSnapshot {
-                state: crate::panel_ops_docker_image_updates::UpdateCheckState::NotChecked,
-                detail: "Use Check for updates to query the registry.".into(),
-                checked_at: None,
-            }));
+            .unwrap_or_else(|| {
+                update_status_cell(&ImageUpdateSnapshot {
+                    state: crate::panel_ops_docker_image_updates::UpdateCheckState::NotChecked,
+                    detail: "Use Check for updates to query the registry.".into(),
+                    checked_at: None,
+                })
+            });
         body.push_str(&format!(
             r#"<tr>
           <td data-label="Container"><strong><a href="/docker/view/{name_link}">{name}</a></strong>{managed}<br><code class="muted">{id}</code></td>
@@ -414,11 +416,7 @@ pub fn docker_manage_page(
                 list_query.page.min(total_pages),
                 list_query.per_page,
             );
-            (
-                containers_table(&refs, &update_map, empty),
-                bar,
-                check_href,
-            )
+            (containers_table(&refs, &update_map, empty), bar, check_href)
         }
         Err(e) => (
             format!(

@@ -3,10 +3,10 @@
 //! Uses the local container CLI `manifest inspect` when possible, with a Docker Hub v2 fallback.
 
 use crate::account::now_unix;
-use crate::paths::default_data_dir;
-use crate::panel_ops_docker::{docker_bin, DockerContainerRow};
+use crate::panel_ops_docker::{DockerContainerRow, docker_bin};
 use crate::panel_ops_docker_image_ref::normalize_container_image_ref;
 use crate::panel_ops_docker_probe::{LIST_TIMEOUT, output_with_timeout};
+use crate::paths::default_data_dir;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -153,7 +153,7 @@ pub fn normalize_digest(raw: &str) -> Option<String> {
     if t.starts_with("sha256:") && t.len() > 15 {
         return Some(t.to_string());
     }
-  None
+    None
 }
 
 fn local_digest(bin: &str, image_ref: &str) -> Option<String> {
@@ -251,15 +251,16 @@ fn hub_repo_parts(image_ref: &str) -> Option<(String, String)> {
 }
 
 fn hub_remote_digest_http(image_ref: &str) -> Result<String, String> {
-    let (repo, tag) = hub_repo_parts(image_ref).ok_or_else(|| "Not a Docker Hub image.".to_string())?;
+    let (repo, tag) =
+        hub_repo_parts(image_ref).ok_or_else(|| "Not a Docker Hub image.".to_string())?;
     let scope = format!("repository:{repo}:pull");
     let token_url = format!(
         "https://auth.docker.io/token?service=registry.docker.io&scope={}",
         url_encode(&scope)
     );
     let token_body = curl_json(&token_url, None)?;
-    let token: HubToken =
-        serde_json::from_str(&token_body).map_err(|_| "Docker Hub auth token parse failed".to_string())?;
+    let token: HubToken = serde_json::from_str(&token_body)
+        .map_err(|_| "Docker Hub auth token parse failed".to_string())?;
     let bearer = token
         .token
         .or(token.access_token)
@@ -279,7 +280,9 @@ struct HubToken {
 fn url_encode(raw: &str) -> String {
     raw.bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
             _ => format!("%{b:02X}"),
         })
         .collect()
@@ -309,7 +312,11 @@ fn curl_json(url: &str, auth: Option<&str>) -> Result<String, String> {
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         let body = String::from_utf8_lossy(&output.stdout);
-        let msg = if err.trim().is_empty() { body.trim() } else { err.trim() };
+        let msg = if err.trim().is_empty() {
+            body.trim()
+        } else {
+            err.trim()
+        };
         if msg.contains("429") || body.contains("429") {
             return Err("Docker Hub rate limit; try again later.".into());
         }
@@ -357,7 +364,13 @@ fn curl_manifest_digest(url: &str, bearer: &str, accept: &str) -> Result<String,
     for line in headers.lines() {
         let lower = line.to_ascii_lowercase();
         if lower.starts_with("docker-content-digest:") {
-            let digest = line.split(':').skip(1).collect::<Vec<_>>().join(":").trim().to_string();
+            let digest = line
+                .split(':')
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join(":")
+                .trim()
+                .to_string();
             if !digest.is_empty() {
                 return Ok(digest);
             }
@@ -592,10 +605,8 @@ mod tests {
 
     #[test]
     fn classify_detects_update() {
-        let local =
-            "sha256:1111111111111111111111111111111111111111111111111111111111111111";
-        let remote =
-            "sha256:2222222222222222222222222222222222222222222222222222222222222222";
+        let local = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+        let remote = "sha256:2222222222222222222222222222222222222222222222222222222222222222";
         let (st, _) = classify(local, remote);
         assert_eq!(st, UpdateCheckState::UpdateAvailable);
         let (st2, _) = classify(local, local);
