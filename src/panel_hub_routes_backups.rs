@@ -340,6 +340,10 @@ pub struct DestinationsForm {
     remote_enabled: String,
     #[serde(default)]
     s3_enabled: String,
+    #[serde(default)]
+    ftp_enabled: String,
+    #[serde(default)]
+    dropbox_enabled: String,
 }
 
 #[post("/backups/destinations/save")]
@@ -352,16 +356,25 @@ pub async fn backups_destinations_save(
         return login_redirect(&http);
     };
     let unlocked = crate::panel_feature_gate::backup_destinations_unlocked();
-    let (gdrive, remote, s3) = if unlocked {
+    let (gdrive, remote, s3, ftp, dropbox) = if unlocked {
         (
             parse_flag(&form.gdrive_enabled),
             parse_flag(&form.remote_enabled),
             parse_flag(&form.s3_enabled),
+            parse_flag(&form.ftp_enabled),
+            parse_flag(&form.dropbox_enabled),
         )
     } else {
-        (false, false, false)
+        (false, false, false, false, false)
     };
-    match save_backup_destinations_toggles(parse_flag(&form.local_enabled), gdrive, remote, s3) {
+    match save_backup_destinations_toggles(
+        parse_flag(&form.local_enabled),
+        gdrive,
+        remote,
+        s3,
+        ftp,
+        dropbox,
+    ) {
         Ok(msg) => redirect_notice("/backups/destinations", Some(&msg), None),
         Err(err) => redirect_notice("/backups/destinations", None, Some(&err)),
     }

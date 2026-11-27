@@ -42,9 +42,14 @@ pub struct BackupContents {
     pub databases: bool,
     pub ftp: bool,
     pub panel_config: bool,
+    /// Site/subdomain: Maildirs, domain DKIM, email site plugins.
+    pub email: bool,
+    /// Panel: mail inventory, DKIM, webmail data, email host plugins/apps.
+    pub email_stack: bool,
 }
 
 impl BackupContents {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_flags(
         panel_config: bool,
         website_files: bool,
@@ -52,6 +57,8 @@ impl BackupContents {
         plugins_folder: bool,
         databases: bool,
         ftp: bool,
+        email: bool,
+        email_stack: bool,
     ) -> Self {
         Self {
             panel_config,
@@ -60,18 +67,21 @@ impl BackupContents {
             plugins_folder,
             databases,
             ftp,
+            email,
+            email_stack,
         }
     }
 
     pub fn any_selected(&self, scope: BackupScope) -> bool {
         match scope {
-            BackupScope::Panel => self.panel_config || self.databases,
+            BackupScope::Panel => self.panel_config || self.databases || self.email_stack,
             BackupScope::Site | BackupScope::Subdomain => {
                 self.website_files
                     || self.backups_folder
                     || self.plugins_folder
                     || self.databases
                     || self.ftp
+                    || self.email
             }
         }
     }
@@ -151,6 +161,8 @@ pub struct BackupRequest {
     pub plugins_folder: String,
     pub databases: String,
     pub ftp: String,
+    pub email: String,
+    pub email_stack: String,
 }
 
 pub fn create_selective_backup(req: &BackupRequest) -> Result<String, String> {
@@ -162,6 +174,8 @@ pub fn create_selective_backup(req: &BackupRequest) -> Result<String, String> {
         flag_true(&req.plugins_folder),
         flag_true(&req.databases),
         flag_true(&req.ftp),
+        flag_true(&req.email),
+        flag_true(&req.email_stack),
     );
     if flag_true(&req.ftp) {
         return Err(
@@ -171,6 +185,18 @@ pub fn create_selective_backup(req: &BackupRequest) -> Result<String, String> {
     }
     if !contents.any_selected(scope) {
         return Err("Select at least one contents option.".into());
+    }
+    if scope == BackupScope::Panel && contents.email {
+        return Err(
+            "Email mailboxes belong to Website/Subdomain scope. Use Email stack on Panel, or Email on a domain."
+                .into(),
+        );
+    }
+    if matches!(scope, BackupScope::Site | BackupScope::Subdomain) && contents.email_stack {
+        return Err(
+            "Email stack (webmail + host mail plugins) is a Panel contents option. Use Email for domain Maildirs."
+                .into(),
+        );
     }
     let (dir, _) = resolve_archive_dir(scope, &req.domain)?;
     fs::create_dir_all(&dir).map_err(|error| format!("Could not create backups dir: {error}"))?;
@@ -208,6 +234,9 @@ pub fn create_selective_backup(req: &BackupRequest) -> Result<String, String> {
             if contents.databases {
                 stage_database_dump(&staging)?;
             }
+            if contents.email_stack {
+                crate::backups_email::stage_panel_email_stack(&staging)?;
+            }
         }
         BackupScope::Site | BackupScope::Subdomain => {
             let site = load_site(&req.domain)?;
@@ -226,6 +255,9 @@ pub fn create_selective_backup(req: &BackupRequest) -> Result<String, String> {
                 if src.is_dir() {
                     stage_path_copy(&src, &staging.join("plugins"))?;
                 }
+            }
+            if contents.email {
+                crate::backups_email::stage_site_email(&staging, &site)?;
             }
             if contents.databases {
                 stage_database_dump(&staging)?;
@@ -352,6 +384,8 @@ pub fn create_panel_backup() -> Result<String, String> {
         plugins_folder: "0".into(),
         databases: "0".into(),
         ftp: "0".into(),
+        email: "0".into(),
+        email_stack: "0".into(),
     })
 }
 

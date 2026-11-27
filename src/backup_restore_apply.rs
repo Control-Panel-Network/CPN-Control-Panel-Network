@@ -212,6 +212,42 @@ pub(crate) fn restore_cpn(
             );
         }
     }
+    let home = Path::new(&site.docroot)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("/home").join(&site.domain));
+    if opts.include_email {
+        if let Some(emails) = find_dir_named(staging, "e-mails") {
+            let dest = home.join("e-mails");
+            fs::create_dir_all(&dest).map_err(|e| format!("e-mails mkdir: {e}"))?;
+            copy_tree(&emails, &dest)?;
+        } else if let Some(vmail) = find_dir_named(staging, "vmail") {
+            let dest = home.join("e-mails");
+            fs::create_dir_all(&dest).map_err(|e| format!("e-mails mkdir: {e}"))?;
+            // Classic vmail/<domain>/... or flat mailbox trees.
+            let nested = vmail.join(&site.domain);
+            let src = if nested.is_dir() { nested } else { vmail };
+            copy_tree(&src, &dest)?;
+        } else {
+            warnings.push("Email was selected but no e-mails/ or vmail/ tree was found.".into());
+        }
+        if let Some(plugins) = find_dir_named(staging, "email-plugins") {
+            let dest = home.join("plugins");
+            fs::create_dir_all(&dest).map_err(|e| format!("email-plugins mkdir: {e}"))?;
+            copy_tree(&plugins, &dest)?;
+        }
+        if find_dir_named(staging, "email-stack").is_some() {
+            warnings.push(
+                "Panel email-stack payload was present; apply it from a Panel-scope restore (webmail data and host mail plugins are not overwritten during site restore)."
+                    .into(),
+            );
+        }
+    } else if find_dir_named(staging, "e-mails").is_some()
+        || find_dir_named(staging, "vmail").is_some()
+        || find_dir_named(staging, "email-stack").is_some()
+    {
+        warnings.push("Email payload was present but not selected.".into());
+    }
     crate::backup_restore_accounts::restore_accounts_from_staging(
         staging,
         &crate::backup_restore_accounts::AccountsRestoreOpts {

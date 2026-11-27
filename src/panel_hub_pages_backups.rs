@@ -89,6 +89,20 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+fn urlencoding_simple(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() * 3);
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 pub fn backups_hub_main() -> String {
     let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut body = section_heading(
@@ -231,7 +245,7 @@ pub fn backups_restore_page(
                 body.push_str(r#"<p class="empty-state">No archives found. Copy a supported archive into a documented upload location, then list again.</p>"#);
             } else {
                 let mut table = String::from(
-                    r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Restore</th></tr></thead><tbody>"#,
+                    r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Restore</th><th>Delete</th></tr></thead><tbody>"#,
                 );
                 for hit in files {
                     let target_domain = if domain.trim().is_empty() {
@@ -243,6 +257,11 @@ pub fn backups_restore_page(
                     // Safe DOM id fragment: archive names are filesystem basenames.
                     let id_frag = html_escape(&hit.name).replace([' ', '.', '/', '\\', ':'], "-");
                     let dir_disp = hit.dir.display().to_string();
+                    let return_to = format!(
+                        "/backups/restore?scope={}&domain={}",
+                        urlencoding_simple(scope),
+                        urlencoding_simple(&target_domain)
+                    );
                     table.push_str(&format!(
                         r#"<tr>
                           <td data-label="File"><code>{name}</code></td>
@@ -259,6 +278,7 @@ pub fn backups_restore_page(
                               <button type="submit" class="btn-primary">Select entities</button>
                             </form>
                           </td>
+                          <td data-label="Delete">{delete}</td>
                         </tr>"#,
                         name = html_escape(&hit.name),
                         size = html_escape(&format_bytes_eu(hit.size)),
@@ -267,6 +287,14 @@ pub fn backups_restore_page(
                         domain = html_escape(&target_domain),
                         formats = format_options("auto"),
                         id = id_frag,
+                        delete = crate::backups_delete::delete_archive_form_html(
+                            "/backups/delete",
+                            scope,
+                            &target_domain,
+                            &dir_disp,
+                            &hit.name,
+                            &return_to,
+                        ),
                     ));
                 }
                 table.push_str("</tbody></table></div>");
@@ -277,6 +305,7 @@ pub fn backups_restore_page(
                     &table,
                     RESTORE_LIST_PER_PAGE,
                 ));
+                body.push_str(crate::backups_delete::delete_archive_modal_html());
                 body.push_str(&format!("<script>{}</script>", activity_list_script()));
             }
         }
@@ -305,7 +334,7 @@ pub fn backups_restore_page(
 pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> String {
     let s = load_schedule();
     let checked = if s.enabled { " checked" } else { "" };
-    let form = format!(
+    let mut body = format!(
         r#"<form method="post" action="/backups/schedule/save" class="stack-form" style="max-width:520px;">
       <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{checked}> Enable schedule record</label>
       <label for="cron">Cron expression</label>
@@ -322,6 +351,50 @@ pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> Strin
         scope = html_escape(&s.scope),
         domain = html_escape(&s.domain),
     );
+    body.push_str(
+        r#"<article class="section-card" style="margin-top:22px;"><h2>Archives for this schedule scope</h2>
+        <p class="muted">Delete local archives for the saved scope/domain. Confirmation is required; remote destination copies are not removed.</p>"#,
+    );
+    match crate::backup_restore_scan::list_restore_archives_with_fallback(&s.scope, &s.domain) {
+        Ok((_preferred, files)) if !files.is_empty() => {
+            let mut table = String::from(
+                r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Delete</th></tr></thead><tbody>"#,
+            );
+            for hit in files {
+                let dir_disp = hit.dir.display().to_string();
+                table.push_str(&format!(
+                    r#"<tr>
+                      <td data-label="File"><code>{name}</code></td>
+                      <td data-label="Size">{size}</td>
+                      <td data-label="Location">{location}</td>
+                      <td data-label="Delete">{delete}</td>
+                    </tr>"#,
+                    name = html_escape(&hit.name),
+                    size = html_escape(&format_bytes_eu(hit.size)),
+                    location = restore_location_cell(&hit.provenance, &dir_disp),
+                    delete = crate::backups_delete::delete_archive_form_html(
+                        "/backups/delete",
+                        &s.scope,
+                        &s.domain,
+                        &dir_disp,
+                        &hit.name,
+                        "/backups/schedule",
+                    ),
+                ));
+            }
+            table.push_str("</tbody></table></div>");
+            body.push_str(&table);
+            body.push_str(crate::backups_delete::delete_archive_modal_html());
+        }
+        Ok(_) => body.push_str(
+            r#"<p class="empty-state">No archives found for this schedule scope yet.</p>"#,
+        ),
+        Err(err) => body.push_str(&format!(
+            r#"<p class="panel-notice error" role="status">{}</p>"#,
+            html_escape(&err)
+        )),
+    }
+    body.push_str("</article>");
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -330,7 +403,7 @@ pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> Strin
         ],
         "Schedule Backup",
         "Automate backups.",
-        &form,
+        &body,
         notice,
         error,
     )

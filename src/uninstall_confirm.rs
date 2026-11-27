@@ -52,7 +52,7 @@ pub fn known_plugin_uninstall_impacts(plugin_id: &str) -> Option<Vec<&'static st
             "Does not delete Proton accounts or Bridge on operator workstations",
         ]),
         "backupDestinations" => Some(vec![
-            "Hides Google Drive, Remote SFTP/SCP, S3, and Incremental backup UIs until reinstalled",
+            "Hides Google Drive, Remote SFTP/SCP, FTP, S3, Dropbox, and Incremental backup UIs until reinstalled",
             "Clears the host backup-destinations feature flag",
             "Create, Restore, Schedule, and local Destinations stay available",
             "Does not delete existing local backup archives or stored destination secrets",
