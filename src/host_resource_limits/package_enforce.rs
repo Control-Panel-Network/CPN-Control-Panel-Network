@@ -32,10 +32,7 @@ fn unix_uid(username: &str) -> Option<u32> {
     if !output.status.success() {
         return None;
     }
-    String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .parse()
-        .ok()
+    String::from_utf8_lossy(&output.stdout).trim().parse().ok()
 }
 
 fn dropin_path_for_uid(uid: u32) -> PathBuf {
@@ -59,8 +56,7 @@ fn build_dropin_body(cpu_percent: i64, memory_mb: i64) -> String {
 fn write_dropin(uid: u32, body: &str) -> Result<(), String> {
     let path = dropin_path_for_uid(uid);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
     }
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -134,7 +130,9 @@ fn apply_unix_user_limits(username: &str, cpu: i64, mem: i64) -> Result<String, 
             "applied CPU={cpu}% MemoryMax={mem}M to user-{uid}.slice (`{username}`)"
         ))
     } else {
-        Ok(format!("cleared limits for user-{uid}.slice (`{username}`)"))
+        Ok(format!(
+            "cleared limits for user-{uid}.slice (`{username}`)"
+        ))
     }
 }
 

@@ -1083,11 +1083,7 @@ async fn main() -> std::io::Result<()> {
     });
     std::thread::spawn(|| {
         if let Err(error) = cpn_installer::host_resource_limits::heal_host_resources() {
-            cpn_installer::upgrade_tip_log::log_tagged_main_only(
-                "host-resources",
-                "warn",
-                &error,
-            );
+            cpn_installer::upgrade_tip_log::log_tagged_main_only("host-resources", "warn", &error);
         }
     });
     // Rotate any weak or default secret (idempotent; strong random secrets are kept) and

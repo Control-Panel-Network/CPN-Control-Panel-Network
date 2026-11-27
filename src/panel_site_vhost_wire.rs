@@ -117,7 +117,11 @@ fn ols_vhconf(
 }
 
 /// Best-effort LiteSpeed template limits after package changes.
-pub fn refresh_site_php_resource_limits(site: &SiteRecord, cpu: i64, mem: i64) -> Result<(), String> {
+pub fn refresh_site_php_resource_limits(
+    site: &SiteRecord,
+    cpu: i64,
+    mem: i64,
+) -> Result<(), String> {
     if !any_litespeed_installed() {
         return Ok(());
     }

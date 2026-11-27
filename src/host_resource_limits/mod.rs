@@ -7,9 +7,7 @@ pub use package_enforce::{
     apply_package_resources_for_id, apply_site_package_resources, host_limits_for_account,
     sync_all_site_package_resources,
 };
-pub use panel_reserve::{
-    PANEL_SLICE_NAME, PANEL_SLICE_PATH, ensure_panel_resource_reserve,
-};
+pub use panel_reserve::{PANEL_SLICE_NAME, PANEL_SLICE_PATH, ensure_panel_resource_reserve};
 
 /// Install/upgrade heal: panel reserve then package sync.
 pub fn heal_host_resources() -> Result<String, String> {
