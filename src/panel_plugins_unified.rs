@@ -581,19 +581,28 @@ mod tests {
     }
 
     #[test]
-    fn site_target_hides_host_scoped_backup_plugin() {
+    fn site_target_surfaces_host_scoped_backup_plugin() {
         let mut host_entry = site_entry("backupDestinations", "Backups");
         host_entry.host_scoped = true;
         host_entry.site_installable = false;
         let entries = vec![host_entry];
+        // Backup category (and destination search) must surface Host backupDestinations
+        // even when Install target is Site, so remote destinations stay discoverable.
         let site_items = collect_unified(&[], &entries, "", "Backups", "site");
-        assert!(site_items.is_empty());
+        assert_eq!(site_items.len(), 1);
+        assert!(matches!(
+            site_items[0],
+            UnifiedItem::Catalog(e) if e.id == "backupDestinations"
+        ));
         let host_items = collect_unified(&[], &entries, "", "Backup", "host");
         assert_eq!(host_items.len(), 1);
         assert!(matches!(
             host_items[0],
             UnifiedItem::Catalog(e) if e.id == "backupDestinations"
         ));
+        // Without Backup category or destination query, Site still hides host-only plugins.
+        let site_all = collect_unified(&[], &entries, "", "", "site");
+        assert!(site_all.is_empty());
     }
 
     #[test]
