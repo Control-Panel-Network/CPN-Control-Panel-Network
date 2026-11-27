@@ -1,6 +1,10 @@
 //! Docker Host package manage UI: containers, images search/pull, create container.
 
 use crate::panel_hub_pages_docker_list::{DockerListQuery, docker_list_toolbar, paginate_slice};
+use crate::panel_hub_pages_docker_updates_ui::{
+    cache_help_text, check_updates_button_href, update_status_cell, update_styles,
+};
+use crate::panel_ops_docker_image_updates::{container_update_map, ImageUpdateSnapshot};
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_ops_docker::{
     DockerContainerRow, docker_status, list_containers_detailed, list_images_detailed,
@@ -127,7 +131,11 @@ fn container_actions(row: &DockerContainerRow) -> String {
     out
 }
 
-fn containers_table(rows: &[&DockerContainerRow], empty_message: &str) -> String {
+fn containers_table(
+    rows: &[&DockerContainerRow],
+    updates: &std::collections::HashMap<String, ImageUpdateSnapshot>,
+    empty_message: &str,
+) -> String {
     if rows.is_empty() {
         return format!(
             r#"<p class="empty-state">{}</p>"#,
@@ -141,6 +149,7 @@ fn containers_table(rows: &[&DockerContainerRow], empty_message: &str) -> String
         <th scope="col">Owner</th>
         <th scope="col">Image</th>
         <th scope="col">Tag</th>
+        <th scope="col">Image update</th>
         <th scope="col">Status</th>
         <th scope="col">Actions</th>
       </tr></thead><tbody>"#,
@@ -160,12 +169,21 @@ fn containers_table(rows: &[&DockerContainerRow], empty_message: &str) -> String
         } else {
             html_escape(&row.owner)
         };
+        let update_cell = updates
+            .get(&row.id)
+            .map(update_status_cell)
+            .unwrap_or_else(|| update_status_cell(&ImageUpdateSnapshot {
+                state: crate::panel_ops_docker_image_updates::UpdateCheckState::NotChecked,
+                detail: "Use Check for updates to query the registry.".into(),
+                checked_at: None,
+            }));
         body.push_str(&format!(
             r#"<tr>
           <td data-label="Container"><strong><a href="/docker/view/{name_link}">{name}</a></strong>{managed}<br><code class="muted">{id}</code></td>
           <td data-label="Owner">{owner}</td>
           <td data-label="Image"><code>{image}</code></td>
           <td data-label="Tag"><code>{tag}</code></td>
+          <td data-label="Image update">{update_cell}</td>
           <td data-label="Status">{status}</td>
           <td data-label="Actions" class="docker-actions">{actions}</td>
         </tr>"#,
@@ -176,6 +194,7 @@ fn containers_table(rows: &[&DockerContainerRow], empty_message: &str) -> String
             owner = owner_cell,
             image = html_escape(&row.image),
             tag = html_escape(&row.tag),
+            update_cell = update_cell,
             status = container_status_html(row),
             actions = container_actions(row),
         ));
@@ -317,6 +336,7 @@ pub fn docker_manage_page(
         q: String::new(),
         page: 1,
         per_page: 10,
+        check_updates: false,
     });
     let status = docker_status();
     if !status.installed {
@@ -362,10 +382,11 @@ pub fn docker_manage_page(
         );
     }
     let image_count = list_images_detailed().map(|r| r.len()).unwrap_or(0);
-    let (table, list_bar) = match list_containers_detailed() {
+    let (table, list_bar, check_href) = match list_containers_detailed() {
         Ok(rows) => {
             let filtered = filter_containers(&rows, &list_query.q);
             let owned: Vec<DockerContainerRow> = filtered.into_iter().cloned().collect();
+            let update_map = container_update_map(&rows, list_query.check_updates);
             let total = owned.len();
             let (page_rows, total_pages) =
                 paginate_slice(&owned, list_query.page, list_query.per_page);
@@ -386,7 +407,18 @@ pub fn docker_manage_page(
                 total,
                 "",
             );
-            (containers_table(&refs, empty), bar)
+            let check_href = check_updates_button_href(
+                "/docker/list",
+                "q",
+                &list_query.q,
+                list_query.page.min(total_pages),
+                list_query.per_page,
+            );
+            (
+                containers_table(&refs, &update_map, empty),
+                bar,
+                check_href,
+            )
         }
         Err(e) => (
             format!(
@@ -394,21 +426,28 @@ pub fn docker_manage_page(
                 html_escape(&e)
             ),
             String::new(),
+            String::new(),
         ),
     };
     let body = format!(
-        r##"{toolbar}
+        r##"<style>{update_styles}</style>
+      {toolbar}
       <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
         <a class="btn-primary" href="/docker/create">+ Create Container</a>
         <a class="btn-secondary" href="/docker/stacks">Compose Stacks</a>
         <a class="btn-secondary" href="/docker/images">Manage Images ({image_count})</a>
+        <a class="btn-secondary" href="{check_href}">Check for updates</a>
       </p>
       <h2 style="margin:18px 0 10px;">Active Containers</h2>
       <p class="muted" style="margin:0 0 10px;">Running and stopped containers from the local Docker or Podman engine.</p>
+      <p class="muted" style="margin:0 0 10px;">{cache_help}</p>
       {list_bar}
       {table}"##,
+        update_styles = update_styles(),
         toolbar = toolbar("containers"),
         image_count = image_count,
+        check_href = check_href,
+        cache_help = cache_help_text(),
         list_bar = list_bar,
         table = table,
     );
