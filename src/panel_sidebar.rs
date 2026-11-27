@@ -396,10 +396,21 @@ pub fn sidebar_search_and_ip_script() -> &'static str {
   }
   function redirectLogin() {
     try {
+      if (window.__cpnPasskeyAbort) {
+        try { window.__cpnPasskeyAbort.abort(); } catch (_a) {}
+        window.__cpnPasskeyAbort = null;
+      }
+      var path = '';
+      try {
+        path = String(location.pathname || '') + String(location.search || '');
+      } catch (_p) { path = ''; }
       var dest = '/login?error=session_expired';
-      window.location.assign(dest);
+      if (path && path.charAt(0) === '/' && path.indexOf('/login') !== 0) {
+        dest = '/login?error=session_expired&next=' + encodeURIComponent(path);
+      }
+      window.location.replace(dest);
     } catch (_e) {
-      window.location.href = '/login';
+      window.location.href = '/login?error=session_expired';
     }
   }
   function tick() {
