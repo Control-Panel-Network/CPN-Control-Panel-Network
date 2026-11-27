@@ -268,6 +268,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
         let result = match *id {
             "cli.local_override" => panel_core::heal_local_override(),
             "panel.service" => panel_core::heal_panel_service(),
+            "panel.resource_reserve" => panel_core::heal_panel_resource_reserve(),
             "manifest" => panel_core::heal_manifest(),
             "email.stack" => email::heal_email_stack(),
             "email.firewall" => email::heal_email_firewall(),
@@ -276,6 +277,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
             "httpd" => host::heal_httpd(),
             "phpmyadmin" => host::heal_phpmyadmin(),
             "docker.engine" => host::heal_docker_engine(),
+            "host.package_resources" => host::heal_host_package_resources(),
             "site.preview.chromium" => site_preview::heal_chromium(),
             "sites.inventory" => inventory::heal_sites_inventory(),
             "sites.ownership" => inventory::heal_sites_ownership(),

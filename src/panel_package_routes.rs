@@ -97,6 +97,10 @@ pub struct PackageForm {
     #[serde(default)]
     subdomains: String,
     #[serde(default)]
+    host_cpu_percent: String,
+    #[serde(default)]
+    host_memory_mb: String,
+    #[serde(default)]
     fqdn_enabled: String,
     #[serde(default)]
     notes: String,
@@ -146,6 +150,8 @@ fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, Packa
         email_filters: collect_form_value(pairs, "email_filters"),
         alias_domains: collect_form_value(pairs, "alias_domains"),
         subdomains: collect_form_value(pairs, "subdomains"),
+        host_cpu_percent: collect_form_value(pairs, "host_cpu_percent"),
+        host_memory_mb: collect_form_value(pairs, "host_memory_mb"),
         fqdn_enabled: collect_form_value(pairs, "fqdn_enabled"),
         notes: collect_form_value(pairs, "notes"),
     };
@@ -170,6 +176,8 @@ impl PackageForm {
             email_filters: parse_limit_or_default(&self.email_filters, "email_filters")?,
             alias_domains: parse_limit_or_default(&self.alias_domains, "alias_domains")?,
             subdomains: parse_limit_or_default(&self.subdomains, "subdomains")?,
+            host_cpu_percent: parse_limit_or_default(&self.host_cpu_percent, "host_cpu_percent")?,
+            host_memory_mb: parse_limit_or_default(&self.host_memory_mb, "host_memory_mb")?,
             fqdn_enabled: parse_bool_flag(&self.fqdn_enabled),
             notes: self.notes.clone(),
             sidebar_hidden_nav_ids,

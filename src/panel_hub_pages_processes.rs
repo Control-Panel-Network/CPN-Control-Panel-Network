@@ -401,7 +401,7 @@ fn toolbar_html() -> String {
 fn cpu_tip_html(cores: u32) -> String {
     let cores = cores.max(1);
     format!(
-        r#"<p class="spm-tip" role="note"><strong>Why CPU% can exceed 100%:</strong> <code>ps</code> reports CPU as a sum across cores. On this host ({cores} cores), <strong>100% ≈ one full core</strong> and the theoretical max is about {max}%. Values like 109% mean a bit more than one core, not over 100% of the whole machine.</p>"#,
+        r#"<p class="spm-tip" role="note"><strong>Why CPU% can exceed 100%:</strong> <code>ps</code> reports CPU as a sum across cores. On this host ({cores} cores), <strong>100% ≈ one full core</strong> and the theoretical max is about {max}%. Values like 109% mean a bit more than one core, not over 100% of the whole machine. Fair-share caps come from <strong>Packages</strong> (Host CPU / Host memory) and systemd enforcement, not from this table alone.</p>"#,
         cores = cores,
         max = cores.saturating_mul(100),
     )

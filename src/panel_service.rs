@@ -314,6 +314,7 @@ pub fn ensure_panel_service_after_install(
     let unit_written = ensure_unit_file()?;
     save_allow_remote_preference(allow_remote)?;
     apply_allow_remote_dropin(allow_remote)?;
+    let _ = crate::host_resource_limits::ensure_panel_resource_reserve();
     let _ = systemctl(&["daemon-reload"]);
 
     systemctl(&["enable", UNIT_NAME]).map_err(|error| {

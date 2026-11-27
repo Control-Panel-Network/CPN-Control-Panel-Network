@@ -1081,6 +1081,15 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         cpn_installer::mail_light_heal::run_light_email_heal_logged("panel start");
     });
+    std::thread::spawn(|| {
+        if let Err(error) = cpn_installer::host_resource_limits::heal_host_resources() {
+            cpn_installer::upgrade_tip_log::log_tagged_main_only(
+                "host-resources",
+                "warn",
+                &error,
+            );
+        }
+    });
     // Rotate any weak or default secret (idempotent; strong random secrets are kept) and
     // tighten secret file modes. Runs on every start, so it also covers tip upgrades.
     std::thread::spawn(|| {
