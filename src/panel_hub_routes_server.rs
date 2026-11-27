@@ -3,8 +3,9 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    captured_session_exp, html_blocking, html_ok, login_redirect, owner_only_html, panel_shell_blocking,
-    redirect, redirect_flash, redirect_notice, require_panel_user, urlencoding_simple,
+    captured_session_exp, html_blocking, html_ok, login_redirect, owner_only_html,
+    panel_shell_blocking, redirect, redirect_flash, redirect_notice, require_panel_user,
+    urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_docker_apps::docker_apps_page;

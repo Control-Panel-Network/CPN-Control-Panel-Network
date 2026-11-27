@@ -130,7 +130,10 @@ where
 }
 
 /// [`html_blocking`] plus SPA fragment mode when the client sends `X-CPN-SPA: 1`.
-pub async fn html_blocking_spa(http: &HttpRequest, render: impl FnOnce() -> String + Send + 'static) -> HttpResponse {
+pub async fn html_blocking_spa(
+    http: &HttpRequest,
+    render: impl FnOnce() -> String + Send + 'static,
+) -> HttpResponse {
     let spa = crate::panel_spa_nav::request_wants_spa_fragment(http);
     html_blocking(move || crate::panel_spa_nav::with_spa_fragment(spa, render)).await
 }
