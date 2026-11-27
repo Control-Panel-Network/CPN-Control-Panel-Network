@@ -190,9 +190,8 @@ fn local_digest(bin: &str, image_ref: &str) -> Option<String> {
 
 #[derive(Debug, Deserialize)]
 struct ManifestInspect {
-    #[serde(default, alias = "digest")]
-    #[allow(non_snake_case)]
-    Digest: String,
+    #[serde(default, rename = "Digest", alias = "digest")]
+    digest: String,
     #[serde(default)]
     config: ManifestConfig,
 }
@@ -218,7 +217,7 @@ fn manifest_digest(bin: &str, image_ref: &str) -> Result<String, String> {
     }
     let parsed: ManifestInspect = serde_json::from_str(&stdout)
         .map_err(|_| "manifest inspect returned unexpected JSON".to_string())?;
-    if let Some(d) = normalize_digest(&parsed.Digest) {
+    if let Some(d) = normalize_digest(&parsed.digest) {
         return Ok(d);
     }
     if let Some(d) = normalize_digest(&parsed.config.digest) {
@@ -493,10 +492,10 @@ fn unique_image_refs(rows: &[DockerContainerRow]) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for row in rows {
-        if let Some(r) = container_image_ref(row) {
-            if seen.insert(r.clone()) {
-                out.push(r);
-            }
+        if let Some(r) = container_image_ref(row)
+            && seen.insert(r.clone())
+        {
+            out.push(r);
         }
     }
     out
