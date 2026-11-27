@@ -66,7 +66,7 @@ pub struct HostProcessSummary {
 fn meminfo_kb(raw: &str, key: &str) -> Option<u64> {
     for line in raw.lines() {
         if let Some(rest) = line.strip_prefix(key) {
-            let num = rest.trim().split_whitespace().next()?.parse::<u64>().ok()?;
+            let num = rest.split_whitespace().next()?.parse::<u64>().ok()?;
             return Some(num);
         }
     }
