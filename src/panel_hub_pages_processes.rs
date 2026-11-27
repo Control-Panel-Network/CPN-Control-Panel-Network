@@ -18,40 +18,65 @@ fn html_escape(value: &str) -> String {
 fn processes_page_styles() -> &'static str {
     r#"<style>
 .spm-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin:0 0 16px;}
-.spm-toolbar .muted{margin:0;max-width:56ch;}
-.spm-toolbar-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.spm-toolbar .muted{margin:0;max-width:62ch;}
+.spm-toolbar-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
 .spm-toolbar .btn-secondary,.spm-kill-btn{
   display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;
   border:0;border-radius:999px;font-weight:700;text-decoration:none;cursor:pointer;
   background:#e2e8f0;color:#0f172a;white-space:nowrap;
 }
 [data-color-mode="dark"] .spm-toolbar .btn-secondary{background:#334155;color:#f8fafc;}
+.spm-refresh-label{display:inline-flex;align-items:center;gap:8px;font-size:0.88rem;color:var(--muted);font-weight:600;}
+.spm-refresh-select{
+  min-height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--hairline);
+  background:transparent;color:inherit;font:inherit;font-weight:600;
+}
 .spm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 18px;}
 .spm-card{border:1px solid var(--hairline);border-radius:14px;padding:14px 16px;background:var(--canvas);min-width:0;}
 .spm-card h3{margin:0 0 10px;font-size:0.95rem;}
 .spm-kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:0.9rem;}
 .spm-kv dt{color:var(--muted);font-weight:600;}
 .spm-kv dd{margin:0;font-variant-numeric:tabular-nums;text-align:right;word-break:break-word;}
+.spm-load-card .spm-kv dt{min-width:7.5rem;}
+.spm-kv dt.spm-load-5,.spm-kv dd.spm-load-5{
+  background:rgba(59,130,246,.12);padding:4px 6px;margin:0 -6px;
+}
+.spm-kv dt.spm-load-5{border-radius:8px 0 0 8px;color:inherit;}
+.spm-kv dd.spm-load-5{border-radius:0 8px 8px 0;font-size:1.1rem;font-weight:800;}
+.spm-load-hint{margin:10px 0 0;font-size:0.8rem;color:var(--muted);}
 .spm-good{color:#15803d;font-weight:700;}
 .spm-bad{color:#b42318;font-weight:700;}
 [data-color-mode="dark"] .spm-good{color:#4ade80;}
 [data-color-mode="dark"] .spm-bad{color:#fda29b;}
+.spm-tip{
+  margin:0 0 16px;padding:12px 14px;border-radius:12px;border:1px solid var(--hairline);
+  background:rgba(59,130,246,.08);font-size:0.9rem;line-height:1.45;
+}
+.spm-tip strong{font-weight:700;}
 .spm-section{border:1px solid var(--hairline);border-radius:14px;padding:14px 16px;background:var(--canvas);}
-.spm-section-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin:0 0 12px;}
+.spm-section-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin:0 0 8px;}
 .spm-section-head h2{margin:0;font-size:1.05rem;}
+.spm-cpu-caption{margin:0 0 12px;font-size:0.82rem;color:var(--muted);}
 .spm-search{min-width:min(100%,240px);padding:8px 12px;border-radius:10px;border:1px solid var(--hairline);background:transparent;color:inherit;}
 .spm-table-wrap{overflow-x:auto;}
-.spm-table-wrap .data-table{width:100%;min-width:920px;}
+.spm-table-wrap .data-table{width:100%;min-width:1080px;table-layout:auto;}
+.spm-table-wrap .data-table th,.spm-table-wrap .data-table td{vertical-align:middle;}
+.spm-col-pid{white-space:nowrap;width:1%;font-variant-numeric:tabular-nums;font-weight:600;}
+.spm-col-user{white-space:nowrap;max-width:16ch;overflow:hidden;text-overflow:ellipsis;}
+.spm-col-state{white-space:nowrap;}
+.spm-col-cpu,.spm-col-mem{white-space:nowrap;min-width:9.5rem;}
+.spm-col-virt,.spm-col-res,.spm-col-time{white-space:nowrap;font-variant-numeric:tabular-nums;}
 .spm-cmd{display:block;max-width:28ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.spm-metric{font-variant-numeric:tabular-nums;font-weight:600;}
-.spm-bar{display:inline-flex;align-items:center;gap:8px;min-width:7.5rem;}
-.spm-bar-track{flex:1;height:6px;border-radius:999px;background:rgba(148,163,184,.35);overflow:hidden;}
+.spm-metric{font-variant-numeric:tabular-nums;font-weight:600;min-width:3.6rem;}
+.spm-bar{display:inline-flex;align-items:center;gap:8px;min-width:8.5rem;}
+.spm-bar-track{flex:1;height:6px;border-radius:999px;background:rgba(148,163,184,.35);overflow:hidden;min-width:3.5rem;}
 .spm-bar-fill{display:block;height:100%;border-radius:999px;background:#3b82f6;}
 .spm-hot .spm-metric-cpu,.spm-hot .spm-bar-fill{color:#b42318;background:#ef4444;}
 .spm-warm .spm-metric-cpu,.spm-warm .spm-bar-fill{color:#b54708;background:#f59e0b;}
 [data-color-mode="dark"] .spm-hot .spm-metric-cpu{color:#fda29b;}
 [data-color-mode="dark"] .spm-warm .spm-metric-cpu{color:#fec84b;}
-.spm-state{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:0.78rem;font-weight:700;}
+.spm-cpu-all{display:block;font-size:0.72rem;color:var(--muted);font-weight:600;margin-top:2px;}
+.spm-state{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:0.78rem;font-weight:700;white-space:nowrap;}
 .spm-state-run{background:rgba(34,197,94,.18);color:#15803d;}
 .spm-state-sleep{background:rgba(59,130,246,.18);color:#1d4ed8;}
 .spm-state-zom{background:rgba(239,68,68,.18);color:#b42318;}
@@ -63,13 +88,14 @@ fn processes_page_styles() -> &'static str {
 .spm-kill-btn:hover{filter:brightness(1.05);}
 .spm-list{display:none;margin-top:8px;gap:12px;}
 .spm-card-row{border:1px solid var(--hairline);border-radius:12px;padding:12px 14px;background:var(--canvas);min-width:0;}
-.spm-auto{display:flex;align-items:center;gap:8px;font-size:0.88rem;color:var(--muted);}
 @media (max-width:1100px){.spm-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width:719.98px){
   .spm-grid{grid-template-columns:1fr;}
   .spm-table-wrap{display:none;}
   .spm-list{display:grid;}
   .spm-toolbar .btn-secondary{width:100%;}
+  .spm-refresh-label{width:100%;}
+  .spm-refresh-select{flex:1;}
 }
 @media (min-width:720px){.spm-list{display:none !important;}}
 </style>"#
@@ -84,12 +110,30 @@ fn state_class(state: &str) -> &'static str {
     }
 }
 
-fn bar_width(pct: &str) -> u32 {
+/// Bar width for memory % (0-100 of host RAM).
+fn bar_width_mem(pct: &str) -> u32 {
     let v = pct.trim().parse::<f64>().unwrap_or(0.0).clamp(0.0, 100.0);
     v.round() as u32
 }
 
+/// Bar width for ps CPU%: scale against all cores so multi-core values stay readable.
+/// Raw ps % is still shown as text; 100% of one core fills `100/cores` of the track.
+fn bar_width_cpu(pct: &str, cores: u32) -> u32 {
+    let cores = cores.max(1) as f64;
+    let v = pct.trim().parse::<f64>().unwrap_or(0.0).max(0.0);
+    let of_all = (v / (cores * 100.0)) * 100.0;
+    of_all.clamp(0.0, 100.0).round() as u32
+}
+
+fn cpu_of_all_label(pct: &str, cores: u32) -> String {
+    let cores = cores.max(1) as f64;
+    let v = pct.trim().parse::<f64>().unwrap_or(0.0).max(0.0);
+    let of_all = (v / (cores * 100.0)) * 100.0;
+    format!("{of_all:.1}% of all cores")
+}
+
 fn summary_cards(s: &HostProcessSummary) -> String {
+    let cores = s.cpu.cores.max(1);
     format!(
         r#"<div class="spm-grid" aria-label="Host resource summary">
   <article class="spm-card"><h3>CPU Information</h3>
@@ -108,13 +152,15 @@ fn summary_cards(s: &HostProcessSummary) -> String {
       <dt>Zombie</dt><dd class="spm-bad">{zombie}</dd>
     </dl>
   </article>
-  <article class="spm-card"><h3>CPU Load Average</h3>
+  <article class="spm-card spm-load-card" id="spm-load-average">
+    <h3>CPU Load Average</h3>
     <dl class="spm-kv">
-      <dt>1 Min</dt><dd>{one}</dd>
-      <dt>5 Min</dt><dd>{five}</dd>
-      <dt>15 Min</dt><dd>{fifteen}</dd>
-      <dt>Current</dt><dd>{current}%</dd>
+      <dt>1 minute</dt><dd>{one}</dd>
+      <dt class="spm-load-5">5 minutes</dt><dd class="spm-load-5" data-load="5min">{five}</dd>
+      <dt>15 minutes</dt><dd>{fifteen}</dd>
+      <dt>Current CPU</dt><dd>{current}%</dd>
     </dl>
+    <p class="spm-load-hint">Load is runnable + waiting work over 1 / <strong>5</strong> / 15 minutes. On {cores} cores, sustained load near {cores}.0 means roughly full CPU.</p>
   </article>
   <article class="spm-card"><h3>Memory Usage</h3>
     <dl class="spm-kv">
@@ -141,7 +187,7 @@ fn summary_cards(s: &HostProcessSummary) -> String {
     </dl>
   </article>
 </div>"#,
-        cores = s.cpu.cores,
+        cores = cores,
         freq = html_escape(&s.cpu.frequency_mhz),
         model = html_escape(&s.cpu.model),
         cache = html_escape(&s.cpu.cache_kb),
@@ -168,23 +214,36 @@ fn summary_cards(s: &HostProcessSummary) -> String {
     )
 }
 
-fn metric_bar(pct: &str, kind: &str) -> String {
-    let w = bar_width(pct);
+fn metric_bar_cpu(pct: &str, cores: u32) -> String {
+    let w = bar_width_cpu(pct, cores);
+    let of_all = html_escape(&cpu_of_all_label(pct, cores));
     format!(
-        r#"<span class="spm-bar"><span class="spm-bar-track"><span class="spm-bar-fill" style="width:{w}%;"></span></span><span class="spm-metric {kind}">{pct}</span></span>"#,
+        r#"<span class="spm-bar" title="ps CPU% (can exceed 100% on multi-core hosts)"><span class="spm-bar-track"><span class="spm-bar-fill" style="width:{w}%;"></span></span><span class="spm-metric spm-metric-cpu">{pct}%</span></span><span class="spm-cpu-all">{of_all}</span>"#,
         w = w,
-        kind = kind,
+        pct = html_escape(pct),
+        of_all = of_all,
+    )
+}
+
+fn metric_bar_mem(pct: &str) -> String {
+    let w = bar_width_mem(pct);
+    format!(
+        r#"<span class="spm-bar"><span class="spm-bar-track"><span class="spm-bar-fill" style="width:{w}%;"></span></span><span class="spm-metric">{pct}%</span></span>"#,
+        w = w,
         pct = html_escape(pct),
     )
 }
 
-fn render_process_rows(rows: &[ProcessRow], show_kill: bool) -> (String, String) {
+fn render_process_rows(rows: &[ProcessRow], show_kill: bool, cores: u32) -> (String, String) {
     let mut table = String::from(
         r#"<div class="table-wrap spm-table-wrap"><table class="data-table" id="spm-table"><thead><tr>
-        <th>PID</th><th>USER</th><th>STATE</th><th>CPU %</th><th>MEMORY %</th><th>VIRT</th><th>RES</th><th>TIME</th><th>COMMAND</th>"#,
+        <th scope="col">PID</th><th scope="col">USER</th><th scope="col">STATE</th>
+        <th scope="col" title="ps %CPU: 100% ≈ one full core">CPU %</th>
+        <th scope="col">MEMORY %</th><th scope="col">VIRT</th><th scope="col">RES</th>
+        <th scope="col">TIME</th><th scope="col">COMMAND</th>"#,
     );
     if show_kill {
-        table.push_str("<th>ACTIONS</th>");
+        table.push_str("<th scope=\"col\">ACTIONS</th>");
     }
     table.push_str("</tr></thead><tbody>");
     let mut cards = String::from(r#"<div class="spm-list" aria-label="Running processes">"#);
@@ -203,8 +262,8 @@ fn render_process_rows(rows: &[ProcessRow], show_kill: bool) -> (String, String)
         let pid = html_escape(&row.pid);
         let state = html_escape(&row.state);
         let state_cls = state_class(&row.state);
-        let cpu_bar = metric_bar(&row.cpu, "spm-metric-cpu");
-        let mem_bar = metric_bar(&row.mem, "");
+        let cpu_bar = metric_bar_cpu(&row.cpu, cores);
+        let mem_bar = metric_bar_mem(&row.mem);
         let virt = html_escape(&row.virt);
         let res = html_escape(&row.res);
         let time = html_escape(&row.time);
@@ -220,14 +279,14 @@ fn render_process_rows(rows: &[ProcessRow], show_kill: bool) -> (String, String)
         };
         table.push_str(&format!(
             r#"<tr{row_class} data-proc-row data-search="{user} {pid} {state} {cmd_full}">
-              <td data-label="PID"><code>{pid}</code></td>
-              <td data-label="USER">{user}</td>
-              <td data-label="STATE"><span class="spm-state {state_cls}">{state}</span></td>
-              <td data-label="CPU %">{cpu_bar}</td>
-              <td data-label="MEMORY %">{mem_bar}</td>
-              <td data-label="VIRT">{virt}</td>
-              <td data-label="RES">{res}</td>
-              <td data-label="TIME">{time}</td>
+              <td data-label="PID" class="spm-col-pid"><code>{pid}</code></td>
+              <td data-label="USER" class="spm-col-user" title="{user}">{user}</td>
+              <td data-label="STATE" class="spm-col-state"><span class="spm-state {state_cls}">{state}</span></td>
+              <td data-label="CPU %" class="spm-col-cpu">{cpu_bar}</td>
+              <td data-label="MEMORY %" class="spm-col-mem">{mem_bar}</td>
+              <td data-label="VIRT" class="spm-col-virt">{virt}</td>
+              <td data-label="RES" class="spm-col-res">{res}</td>
+              <td data-label="TIME" class="spm-col-time">{time}</td>
               <td data-label="COMMAND"><code class="spm-cmd" title="{cmd_full}">{cmd_short}</code></td>
               {kill_cell}
             </tr>"#
@@ -235,7 +294,7 @@ fn render_process_rows(rows: &[ProcessRow], show_kill: bool) -> (String, String)
         cards.push_str(&format!(
             r#"<article class="spm-card-row" data-proc-row data-search="{user} {pid} {state} {cmd_full}">
               <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                <strong>{user}</strong><code>PID {pid}</code>
+                <strong title="{user}">{user}</strong><code>PID {pid}</code>
               </div>
               <p style="margin:8px 0;"><span class="spm-state {state_cls}">{state}</span>
                 · CPU {cpu_bar} · MEM {mem_bar}</p>
@@ -260,20 +319,80 @@ fn render_process_rows(rows: &[ProcessRow], show_kill: bool) -> (String, String)
     (table, cards)
 }
 
-fn search_script() -> &'static str {
+fn page_scripts() -> &'static str {
     r#"<script>
 (function(){
+  var STORAGE_KEY='cpn-spm-refresh-ms';
+  var ALLOWED={0:true,5000:true,10000:true,30000:true,60000:true};
   var input=document.getElementById('spm-search');
-  if(!input) return;
-  input.addEventListener('input', function(){
-    var q=(input.value||'').toLowerCase().trim();
-    document.querySelectorAll('[data-proc-row]').forEach(function(row){
-      var hay=(row.getAttribute('data-search')||'').toLowerCase();
-      row.style.display = (!q || hay.indexOf(q)!==-1) ? '' : 'none';
+  if(input){
+    input.addEventListener('input', function(){
+      var q=(input.value||'').toLowerCase().trim();
+      document.querySelectorAll('[data-proc-row]').forEach(function(row){
+        var hay=(row.getAttribute('data-search')||'').toLowerCase();
+        row.style.display = (!q || hay.indexOf(q)!==-1) ? '' : 'none';
+      });
     });
-  });
+  }
+  var sel=document.getElementById('spm-refresh-interval');
+  var timer=null;
+  function clearTimer(){ if(timer){ clearInterval(timer); timer=null; } }
+  function applyInterval(ms){
+    clearTimer();
+    if(!ms) return;
+    timer=setInterval(function(){ window.location.reload(); }, ms);
+  }
+  function readStored(){
+    try{
+      var raw=localStorage.getItem(STORAGE_KEY);
+      var n=parseInt(raw||'0',10);
+      return ALLOWED[n] ? n : 0;
+    }catch(e){ return 0; }
+  }
+  function writeStored(ms){
+    try{ localStorage.setItem(STORAGE_KEY, String(ms)); }catch(e){}
+  }
+  if(sel){
+    var initial=readStored();
+    sel.value=String(initial);
+    applyInterval(initial);
+    sel.addEventListener('change', function(){
+      var ms=parseInt(sel.value||'0',10);
+      if(!ALLOWED[ms]) ms=0;
+      writeStored(ms);
+      applyInterval(ms);
+    });
+  }
 })();
 </script>"#
+}
+
+fn toolbar_html() -> String {
+    r#"<div class="spm-toolbar">
+  <p class="muted">Snapshot from <code>ps</code> and <code>/proc</code> (CPU sorted). Auto-refresh defaults to Off.</p>
+  <div class="spm-toolbar-actions">
+    <label class="spm-refresh-label" for="spm-refresh-interval">Auto-refresh
+      <select id="spm-refresh-interval" class="spm-refresh-select" aria-label="Auto-refresh interval">
+        <option value="0" selected>Off</option>
+        <option value="5000">5 seconds</option>
+        <option value="10000">10 seconds</option>
+        <option value="30000">30 seconds</option>
+        <option value="60000">60 seconds</option>
+      </select>
+    </label>
+    <a class="btn-secondary" href="/server/processes" id="spm-refresh-btn">Refresh</a>
+  </div>
+</div>"#
+        .to_string()
+}
+
+fn cpu_tip_html(cores: u32) -> String {
+    let cores = cores.max(1);
+    format!(
+        r#"<p class="spm-tip" role="note"><strong>Why CPU% can exceed 100%:</strong> <code>ps</code> reports CPU as a sum across cores. On this host ({cores} cores), <strong>100% ≈ one full core</strong> and the theoretical max is about {max}%. Values like 109% mean a bit more than one core, not over 100% of the whole machine.</p>"#,
+        cores = cores,
+        max = cores.saturating_mul(100),
+    )
 }
 
 /// Build the System Processes Monitor page.
@@ -281,38 +400,37 @@ fn search_script() -> &'static str {
 pub fn processes_page(show_kill: bool) -> String {
     let styles = processes_page_styles();
     let summary = snapshot_host_process_summary();
+    let cores = summary.cpu.cores.max(1);
     let cards = summary_cards(&summary);
-    let toolbar = r#"<div class="spm-toolbar">
-  <p class="muted">One-shot snapshot from <code>ps</code> and <code>/proc</code> (CPU sorted). No auto-refresh by default.</p>
-  <div class="spm-toolbar-actions">
-    <label class="spm-auto"><input type="checkbox" id="spm-auto" disabled> Optional auto-refresh (off)</label>
-    <a class="btn-secondary" href="/server/processes">Refresh</a>
-  </div>
-</div>"#;
+    let tip = cpu_tip_html(cores);
+    let toolbar = toolbar_html();
     let cpn_teaser = cpn_usage_teaser_html();
     let body_main = match snapshot_top_processes(80) {
         Ok(rows) if rows.is_empty() => {
             format!(
-                "{toolbar}{cards}{cpn_teaser}<p class=\"empty-state\">No processes returned.</p>"
+                "{toolbar}{tip}{cards}{cpn_teaser}<p class=\"empty-state\">No processes returned.</p>"
             )
         }
         Ok(rows) => {
-            let (table, list) = render_process_rows(&rows, show_kill);
+            let (table, list) = render_process_rows(&rows, show_kill, cores);
             format!(
-                r#"{toolbar}{cards}{cpn_teaser}
+                r#"{toolbar}{tip}{cards}{cpn_teaser}
 <div class="spm-section">
   <div class="spm-section-head">
     <h2>Running Processes</h2>
     <input type="search" id="spm-search" class="spm-search" placeholder="Search processes..." autocomplete="off">
   </div>
+  <p class="spm-cpu-caption">{cores} cores: CPU % bars are scaled to the whole host (100% of one core ≈ {one_core_bar:.1}% of the bar). Raw <code>ps</code> % stays in the label.</p>
   {table}{list}
 </div>
 {script}"#,
-                script = search_script()
+                cores = cores,
+                one_core_bar = 100.0 / f64::from(cores),
+                script = page_scripts()
             )
         }
         Err(err) => format!(
-            "{toolbar}{cards}{cpn_teaser}<p class=\"panel-notice error\">{e}</p>",
+            "{toolbar}{tip}{cards}{cpn_teaser}<p class=\"panel-notice error\">{e}</p>",
             e = html_escape(&err)
         ),
     };
@@ -323,7 +441,7 @@ pub fn processes_page(show_kill: bool) -> String {
             ("Top Processes", None),
         ],
         "System Processes Monitor",
-        "CPU, memory, and running processes. Manual refresh only.",
+        "CPU, memory, and running processes. Choose an auto-refresh interval or refresh manually.",
         &format!("{styles}{body_main}"),
         None,
         None,
@@ -332,13 +450,16 @@ pub fn processes_page(show_kill: bool) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::processes_page;
+    use super::{bar_width_cpu, cpu_of_all_label, processes_page};
 
     #[test]
     fn processes_page_includes_monitor_chrome() {
         let html = processes_page(true);
         assert!(html.contains("System Processes Monitor") || html.contains("spm-toolbar"));
         assert!(html.contains("Refresh"));
+        assert!(html.contains("spm-refresh-interval"));
+        assert!(html.contains("5 minutes") || html.contains("spm-load-5"));
+        assert!(html.contains("Why CPU% can exceed 100%") || html.contains("spm-tip"));
         assert!(html.contains("spm-grid") || html.contains("panel-notice error"));
         assert!(
             html.contains("Running Processes")
@@ -350,7 +471,7 @@ mod tests {
                 || html.contains("empty-state")
                 || html.contains("panel-notice error")
         );
-        assert!(!html.to_lowercase().contains("auto-refresh every"));
+        assert!(html.contains("cpn-spm-refresh-ms") || html.contains("spm-refresh-interval"));
         assert!(html.contains("/server/cpn-usage") || html.contains("What CPN uses"));
     }
 
@@ -359,5 +480,14 @@ mod tests {
         let html = processes_page(false);
         assert!(!html.contains("/server/processes/kill"));
         assert!(!html.contains(">KILL</button>"));
+    }
+
+    #[test]
+    fn cpu_bar_scales_to_all_cores() {
+        // 100% on 12 cores ≈ 8% of host capacity on the bar.
+        assert_eq!(bar_width_cpu("100", 12), 8);
+        assert_eq!(bar_width_cpu("1200", 12), 100);
+        assert_eq!(bar_width_cpu("109", 12), 9);
+        assert!(cpu_of_all_label("109", 12).contains("of all cores"));
     }
 }
