@@ -1,9 +1,7 @@
 //! CPN panel resource usage page (Server → CPN usage).
 
 use crate::panel_ops_process::truncate_command;
-use crate::panel_ops_process_cpn::{
-    CpnUsageSnapshot, format_rss_kb_for_user, snapshot_cpn_usage,
-};
+use crate::panel_ops_process_cpn::{CpnUsageSnapshot, format_rss_kb_for_user, snapshot_cpn_usage};
 
 fn html_escape(value: &str) -> String {
     value
