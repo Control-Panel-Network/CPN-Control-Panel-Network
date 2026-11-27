@@ -8,7 +8,8 @@ use std::process::Command;
 
 use crate::panel_ops_process::ProcessRow;
 #[cfg(not(windows))]
-use crate::panel_ops_process::{format_kb_field, map_state, parse_percent};
+use crate::panel_ops_process::{format_kb_field_for_user, map_state, parse_percent};
+use crate::panel_storage_fmt::format_kib_for_user;
 
 /// One CPN-related process row with a friendly role label.
 #[derive(Debug, Clone)]
@@ -84,9 +85,10 @@ fn role_bucket(role: &str) -> &'static str {
 }
 
 /// Collect CPN panel + panel-owned webmail processes (Linux only).
-pub fn snapshot_cpn_usage() -> Result<CpnUsageSnapshot, String> {
+pub fn snapshot_cpn_usage(viewer: &str) -> Result<CpnUsageSnapshot, String> {
     #[cfg(windows)]
     {
+        let _ = viewer;
         Ok(CpnUsageSnapshot {
             note: "CPN usage snapshot is supported on Linux hosts only.".into(),
             ..Default::default()
@@ -134,8 +136,8 @@ pub fn snapshot_cpn_usage() -> Result<CpnUsageSnapshot, String> {
                 state: map_state(parts[2]),
                 cpu: parts[3].to_string(),
                 mem: parts[4].to_string(),
-                virt: format_kb_field(parts[5]),
-                res: format_kb_field(parts[6]),
+                virt: format_kb_field_for_user(viewer, parts[5]),
+                res: format_kb_field_for_user(viewer, parts[6]),
                 time: parts[7].to_string(),
                 command,
             };
@@ -165,15 +167,9 @@ pub fn snapshot_cpn_usage() -> Result<CpnUsageSnapshot, String> {
     }
 }
 
-/// Human-readable RSS from kilobytes.
-pub fn format_rss_kb(kb: u64) -> String {
-    if kb >= 1024 * 1024 {
-        format!("{:.1} GB", kb as f64 / (1024.0 * 1024.0))
-    } else if kb >= 1024 {
-        format!("{:.0} MB", kb as f64 / 1024.0)
-    } else {
-        format!("{kb} KB")
-    }
+/// Human-readable RSS from KiB using the viewer's storage unit preference.
+pub fn format_rss_kb_for_user(viewer: &str, kb: u64) -> String {
+    format_kib_for_user(viewer, kb)
 }
 
 #[cfg(test)]
@@ -200,14 +196,15 @@ mod tests {
 
     #[test]
     fn format_rss_scales() {
-        assert_eq!(format_rss_kb(512), "512 KB");
-        assert_eq!(format_rss_kb(57_176), "56 MB");
-        assert!(format_rss_kb(2_097_152).contains("GB"));
+        assert_eq!(format_rss_kb_for_user("test", 512), "512 KB");
+        let mb = format_rss_kb_for_user("test", 57_176);
+        assert!(mb.contains(" MB") || mb.contains(" GB"), "{mb}");
+        assert!(format_rss_kb_for_user("test", 2_097_152).contains(" GB"));
     }
 
     #[test]
     fn snapshot_runs_or_explains() {
-        match snapshot_cpn_usage() {
+        match snapshot_cpn_usage("test") {
             Ok(snap) => {
                 assert_eq!(
                     snap.total_count(),

@@ -4,6 +4,7 @@ use crate::panel_ops_process::{
     ProcessRow, cpu_heat_class, snapshot_top_processes, truncate_command,
 };
 use crate::panel_ops_process_host::{HostProcessSummary, snapshot_host_process_summary};
+use crate::panel_storage_fmt::{format_host_mib_for_user, format_kib_for_user};
 
 fn html_escape(value: &str) -> String {
     value
@@ -131,8 +132,18 @@ fn cpu_of_all_label(pct: &str, cores: u32) -> String {
     format!("{of_all:.1}% of all cores")
 }
 
-fn summary_cards(s: &HostProcessSummary) -> String {
+fn summary_cards(s: &HostProcessSummary, viewer: &str) -> String {
     let cores = s.cpu.cores.max(1);
+    let cache_kb: u64 = s.cpu.cache_kb.trim().parse().unwrap_or(0);
+    let cache_label = html_escape(&format_kib_for_user(viewer, cache_kb));
+    let mem_total = html_escape(&format_host_mib_for_user(viewer, s.memory.total_mb));
+    let mem_free = html_escape(&format_host_mib_for_user(viewer, s.memory.free_mb));
+    let mem_used = html_escape(&format_host_mib_for_user(viewer, s.memory.used_mb));
+    let buff = html_escape(&format_host_mib_for_user(viewer, s.memory.buff_cache_mb));
+    let swap_total = html_escape(&format_host_mib_for_user(viewer, s.swap.total_mb));
+    let swap_free = html_escape(&format_host_mib_for_user(viewer, s.swap.free_mb));
+    let swap_used = html_escape(&format_host_mib_for_user(viewer, s.swap.used_mb));
+    let swap_avail = html_escape(&format_host_mib_for_user(viewer, s.swap.available_mb));
     format!(
         r#"<div class="spm-grid" aria-label="Host resource summary">
   <article class="spm-card"><h3>CPU Information</h3>
@@ -140,7 +151,7 @@ fn summary_cards(s: &HostProcessSummary) -> String {
       <dt>Cores</dt><dd>{cores}</dd>
       <dt>Frequency</dt><dd>{freq} MHz</dd>
       <dt>Model</dt><dd>{model}</dd>
-      <dt>Cache</dt><dd>{cache} KB</dd>
+      <dt>Cache</dt><dd>{cache}</dd>
     </dl>
   </article>
   <article class="spm-card"><h3>Process Statistics</h3>
@@ -163,18 +174,18 @@ fn summary_cards(s: &HostProcessSummary) -> String {
   </article>
   <article class="spm-card"><h3>Memory Usage</h3>
     <dl class="spm-kv">
-      <dt>Total</dt><dd>{mem_total}MB</dd>
-      <dt>Free</dt><dd class="spm-good">{mem_free}MB</dd>
-      <dt>Used</dt><dd class="spm-bad">{mem_used}MB</dd>
-      <dt>Buff/Cache</dt><dd>{buff}MB</dd>
+      <dt>Total</dt><dd>{mem_total}</dd>
+      <dt>Free</dt><dd class="spm-good">{mem_free}</dd>
+      <dt>Used</dt><dd class="spm-bad">{mem_used}</dd>
+      <dt>Buff/Cache</dt><dd>{buff}</dd>
     </dl>
   </article>
   <article class="spm-card"><h3>Swap Memory</h3>
     <dl class="spm-kv">
-      <dt>Total</dt><dd>{swap_total}MB</dd>
-      <dt>Free</dt><dd class="spm-good">{swap_free}MB</dd>
-      <dt>Used</dt><dd class="spm-bad">{swap_used}MB</dd>
-      <dt>Available</dt><dd>{swap_avail}MB</dd>
+      <dt>Total</dt><dd>{swap_total}</dd>
+      <dt>Free</dt><dd class="spm-good">{swap_free}</dd>
+      <dt>Used</dt><dd class="spm-bad">{swap_used}</dd>
+      <dt>Available</dt><dd>{swap_avail}</dd>
     </dl>
   </article>
   <article class="spm-card"><h3>CPU Time Distribution</h3>
@@ -189,7 +200,7 @@ fn summary_cards(s: &HostProcessSummary) -> String {
         cores = cores,
         freq = html_escape(&s.cpu.frequency_mhz),
         model = html_escape(&s.cpu.model),
-        cache = html_escape(&s.cpu.cache_kb),
+        cache = cache_label,
         total = s.processes.total,
         running = s.processes.running,
         sleeping = s.processes.sleeping,
@@ -198,14 +209,14 @@ fn summary_cards(s: &HostProcessSummary) -> String {
         five = html_escape(&s.load.five),
         fifteen = html_escape(&s.load.fifteen),
         current = html_escape(&s.load.current_pct),
-        mem_total = s.memory.total_mb,
-        mem_free = s.memory.free_mb,
-        mem_used = s.memory.used_mb,
-        buff = s.memory.buff_cache_mb,
-        swap_total = s.swap.total_mb,
-        swap_free = s.swap.free_mb,
-        swap_used = s.swap.used_mb,
-        swap_avail = s.swap.available_mb,
+        mem_total = mem_total,
+        mem_free = mem_free,
+        mem_used = mem_used,
+        buff = buff,
+        swap_total = swap_total,
+        swap_free = swap_free,
+        swap_used = swap_used,
+        swap_avail = swap_avail,
         iowait = html_escape(&s.cpu_time.iowait_pct),
         idle = html_escape(&s.cpu_time.idle_pct),
         hirq = html_escape(&s.cpu_time.hard_irq_pct),
@@ -398,13 +409,13 @@ fn cpu_tip_html(cores: u32) -> String {
 
 /// Top Processes tab body (no outer feature shell).
 /// `show_kill` is true only for panel admins.
-pub fn processes_tab_body(show_kill: bool) -> String {
+pub fn processes_tab_body(viewer: &str, show_kill: bool) -> String {
     let summary = snapshot_host_process_summary();
     let cores = summary.cpu.cores.max(1);
-    let cards = summary_cards(&summary);
+    let cards = summary_cards(&summary, viewer);
     let tip = cpu_tip_html(cores);
     let toolbar = toolbar_html();
-    match snapshot_top_processes(80) {
+    match snapshot_top_processes(80, viewer) {
         Ok(rows) if rows.is_empty() => {
             format!("{toolbar}{tip}{cards}<p class=\"empty-state\">No processes returned.</p>")
         }
@@ -439,7 +450,7 @@ mod tests {
 
     #[test]
     fn processes_tab_includes_monitor_chrome() {
-        let html = processes_tab_body(true);
+        let html = processes_tab_body("test-viewer", true);
         assert!(html.contains("System Processes Monitor") || html.contains("spm-toolbar"));
         assert!(html.contains("Refresh"));
         assert!(html.contains("spm-refresh-interval"));
@@ -461,7 +472,7 @@ mod tests {
 
     #[test]
     fn kill_hidden_for_non_admin() {
-        let html = processes_tab_body(false);
+        let html = processes_tab_body("test-viewer", false);
         assert!(!html.contains("/server/processes/kill"));
         assert!(!html.contains(">KILL</button>"));
     }

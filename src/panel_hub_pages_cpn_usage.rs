@@ -1,7 +1,7 @@
 //! CPN panel resource usage page (Server → CPN usage).
 
 use crate::panel_ops_process::truncate_command;
-use crate::panel_ops_process_cpn::{CpnUsageSnapshot, format_rss_kb, snapshot_cpn_usage};
+use crate::panel_ops_process_cpn::{CpnUsageSnapshot, format_rss_kb_for_user, snapshot_cpn_usage};
 
 fn html_escape(value: &str) -> String {
     value
@@ -115,7 +115,7 @@ fn page_scripts() -> &'static str {
 </script>"#
 }
 
-fn summary_cards(snap: &CpnUsageSnapshot) -> String {
+fn summary_cards(snap: &CpnUsageSnapshot, viewer: &str) -> String {
     format!(
         r#"<div class="cpu-grid" aria-label="CPN resource summary">
   <article class="cpu-card"><h3>Panel service</h3>
@@ -147,16 +147,16 @@ fn summary_cards(snap: &CpnUsageSnapshot) -> String {
     </dl>
   </article>
 </div>"#,
-        panel_rss = html_escape(&format_rss_kb(snap.panel_rss_kb)),
+        panel_rss = html_escape(&format_rss_kb_for_user(viewer, snap.panel_rss_kb)),
         panel_cpu = snap.panel_cpu,
         panel_n = snap.panel_count,
-        web_rss = html_escape(&format_rss_kb(snap.webmail_rss_kb)),
+        web_rss = html_escape(&format_rss_kb_for_user(viewer, snap.webmail_rss_kb)),
         web_cpu = snap.webmail_cpu,
         web_n = snap.webmail_count,
-        other_rss = html_escape(&format_rss_kb(snap.other_rss_kb)),
+        other_rss = html_escape(&format_rss_kb_for_user(viewer, snap.other_rss_kb)),
         other_cpu = snap.other_cpu,
         other_n = snap.other_count,
-        total_rss = html_escape(&format_rss_kb(snap.total_rss_kb())),
+        total_rss = html_escape(&format_rss_kb_for_user(viewer, snap.total_rss_kb())),
         total_cpu = snap.total_cpu(),
         total_n = snap.total_count(),
     )
@@ -220,15 +220,15 @@ fn rows_table(snap: &CpnUsageSnapshot, show_kill: bool) -> String {
 }
 
 /// CPN usage tab body (no outer feature shell).
-pub fn cpn_usage_tab_body(show_kill: bool) -> String {
+pub fn cpn_usage_tab_body(viewer: &str, show_kill: bool) -> String {
     let toolbar = toolbar_html();
-    match snapshot_cpn_usage() {
+    match snapshot_cpn_usage(viewer) {
         Ok(snap) => {
             let tip = format!(
                 r#"<p class="cpu-tip" role="note"><strong>Tip:</strong> {note} High host load or swap usually comes from site workloads, databases, queues, or browsers, not from this panel total.</p>"#,
                 note = html_escape(&snap.note),
             );
-            let cards = summary_cards(&snap);
+            let cards = summary_cards(&snap, viewer);
             let table = rows_table(&snap, show_kill);
             format!(
                 r#"{toolbar}{tip}{cards}
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn cpn_usage_tab_chrome() {
-        let html = cpn_usage_tab_body(true);
+        let html = cpn_usage_tab_body("test-viewer", true);
         assert!(html.contains("cpu-toolbar") || html.contains("panel-notice error"));
         assert!(html.contains("Refresh") || html.contains("panel-notice error"));
         assert!(html.contains("cpu-refresh-interval") || html.contains("panel-notice error"));
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn cpn_kill_gated() {
-        let html = cpn_usage_tab_body(false);
+        let html = cpn_usage_tab_body("test-viewer", false);
         assert!(!html.contains(">KILL</button>"));
     }
 }

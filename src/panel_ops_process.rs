@@ -28,11 +28,11 @@ pub(crate) fn map_state(code: &str) -> String {
     }
 }
 
-pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
+pub fn snapshot_top_processes(limit: usize, viewer: &str) -> Result<Vec<ProcessRow>, String> {
     let limit = limit.clamp(1, 200);
     #[cfg(windows)]
     {
-        let _ = limit;
+        let _ = (limit, viewer);
         Err("Process snapshot is supported on Linux hosts only".into())
     }
     #[cfg(not(windows))]
@@ -72,8 +72,8 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
                 state: map_state(parts[2]),
                 cpu: parts[3].to_string(),
                 mem: parts[4].to_string(),
-                virt: format_kb_field(parts[5]),
-                res: format_kb_field(parts[6]),
+                virt: format_kb_field_for_user(viewer, parts[5]),
+                res: format_kb_field_for_user(viewer, parts[6]),
                 time: parts[7].to_string(),
                 command: parts[8..].join(" "),
             });
@@ -83,15 +83,9 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
 }
 
 #[cfg(not(windows))]
-pub(crate) fn format_kb_field(raw: &str) -> String {
+pub(crate) fn format_kb_field_for_user(viewer: &str, raw: &str) -> String {
     let kb: u64 = raw.trim().parse().unwrap_or(0);
-    if kb >= 1024 * 1024 {
-        format!("{:.1}G", kb as f64 / (1024.0 * 1024.0))
-    } else if kb >= 1024 {
-        format!("{:.1}M", kb as f64 / 1024.0)
-    } else {
-        format!("{kb}K")
-    }
+    crate::panel_storage_fmt::format_kib_for_user(viewer, kb)
 }
 
 /// Parse a `ps` percent field (`pcpu` / `pmem`) into an f64 (0 on parse failure).
@@ -171,7 +165,7 @@ mod tests {
 
     #[test]
     fn snapshot_runs_or_explains() {
-        match snapshot_top_processes(5) {
+        match snapshot_top_processes(5, "test-viewer") {
             Ok(rows) => {
                 assert!(rows.len() <= 5);
                 if let Some(row) = rows.first() {
