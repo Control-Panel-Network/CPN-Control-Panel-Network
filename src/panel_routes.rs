@@ -5,7 +5,9 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{captured_session_exp, html_blocking, panel_shell_blocking};
+use crate::panel_hub_http::{
+    captured_session_exp, html_blocking, html_blocking_shell_fn, panel_shell_blocking,
+};
 use crate::panel_hub_pages_category_overviews::websites_hub_main;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_ops_ssl_origin_retry::spawn_origin_backup_pass;
@@ -109,12 +111,7 @@ pub async fn websites_page(
             .append_header(("Location", loc))
             .finish();
     }
-    html_ok(panel_shell(
-        &user,
-        "websites",
-        "Websites",
-        &websites_hub_main(),
-    ))
+    html_blocking_shell_fn(&http, user, "websites", "Websites", websites_hub_main).await
 }
 
 #[get("/websites/list")]
@@ -887,7 +884,7 @@ pub async fn email_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let _ = (status, notice, error);
-    html_ok(panel_shell(&user, "email", "Email", &email_hub_html()))
+    html_blocking_shell_fn(&http, user, "email", "Email", email_hub_html).await
 }
 
 #[get("/databases")]
@@ -902,12 +899,14 @@ pub async fn databases_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let _ = (notice, error);
-    html_ok(panel_shell(
-        &user,
+    html_blocking_shell_fn(
+        &http,
+        user,
         "databases",
         "Databases & FTP",
-        &databases_hub_html(),
-    ))
+        databases_hub_html,
+    )
+    .await
 }
 
 #[post("/databases/install-mariadb")]

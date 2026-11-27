@@ -1097,6 +1097,7 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         cpn_installer::panel_db::state::ensure_logged("panel start");
     });
+    std::thread::spawn(cpn_installer::panel_perf_warm::spawn_startup_warm);
     // Keep the webmail admin owner bridge (login + session reuse) alive across webmail-only
     // updates that replace the hooked files without running any CPN heal.
     cpn_installer::tachyon_admin_bridge_install::spawn_bridge_watch();

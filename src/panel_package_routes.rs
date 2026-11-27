@@ -7,7 +7,7 @@ use crate::packages::{
     PackageInput, assign_package, create_package_for, delete_package, ensure_default_package,
     get_package, is_panel_admin, update_package_for,
 };
-use crate::panel_hub_http::authenticated_panel_shell;
+use crate::panel_hub_http::{authenticated_panel_shell, html_blocking_shell_fn};
 use crate::panel_packages::{packages_edit_main, packages_main, packages_new_main};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -226,13 +226,17 @@ pub async fn packages_page(
     let _ = ensure_default_package();
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    html_ok(authenticated_panel_shell(
-        &http,
-        &user,
-        "packages",
-        "Packages",
-        &packages_main(&user, notice, error),
-    ))
+    let notice_owned = notice.map(str::to_owned);
+    let error_owned = error.map(str::to_owned);
+    let user_for_main = user.clone();
+    html_blocking_shell_fn(&http, user, "packages", "Packages", move || {
+        packages_main(
+            &user_for_main,
+            notice_owned.as_deref(),
+            error_owned.as_deref(),
+        )
+    })
+    .await
 }
 
 #[get("/packages/new")]

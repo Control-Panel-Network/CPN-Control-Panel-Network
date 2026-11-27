@@ -108,7 +108,7 @@ impl PanelPerfCaches {
             site_disk: TtlCache::new(Duration::from_secs(90), 512),
             disk_mb: TtlCache::new(Duration::from_secs(90), 64),
             site_homes: TtlCache::new(Duration::from_secs(30), 4),
-            package_usage: TtlCache::new(Duration::from_secs(45), 64),
+            package_usage: TtlCache::new(Duration::from_secs(90), 64),
             db_disk: TtlCache::new(Duration::from_secs(60), 64),
             ssl_insight: TtlCache::new(Duration::from_secs(300), 256),
             mail_stack: TtlCache::new(Duration::from_secs(20), 4),
