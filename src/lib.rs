@@ -450,6 +450,7 @@ pub mod panel_packages;
 pub mod panel_pages;
 pub mod panel_password_gen;
 pub mod panel_perf_cache;
+pub mod panel_perf_warm;
 pub mod panel_phonehome;
 pub mod panel_phpmyadmin_proxy;
 pub mod panel_plugin_float;

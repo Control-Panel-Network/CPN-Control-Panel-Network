@@ -390,7 +390,11 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         notice_block("error", error)
     );
     if !is_panel_admin(username) {
-        let usage = usage_for_account(username).ok();
+        let usage = crate::package_quota::usage_for_account_opts(
+            username,
+            crate::package_quota::UsageCollectOpts::dashboard(),
+        )
+        .ok();
         let card = usage
             .as_ref()
             .map(|u| usage_card(username, u))

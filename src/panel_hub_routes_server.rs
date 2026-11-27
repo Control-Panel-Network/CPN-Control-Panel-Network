@@ -3,8 +3,8 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, owner_only_html, redirect, redirect_flash,
-    redirect_notice, require_panel_user, urlencoding_simple,
+    captured_session_exp, html_blocking, html_ok, login_redirect, owner_only_html, panel_shell_blocking,
+    redirect, redirect_flash, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_docker_apps::docker_apps_page;
@@ -44,7 +44,14 @@ pub async fn server_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> 
     };
     // Host probes behind the sidebar and hub tiles run on the blocking pool with a bounded
     // wait, so a slow probe can no longer pin a worker and surface as `408 Request Timeout`.
-    html_blocking(move || panel_shell(&user, "server", "Server", &server_hub_main())).await
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
+    html_blocking(move || {
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "server", "Server", &server_hub_main(), session_exp)
+        })
+    })
+    .await
 }
 
 #[get("/server/services")]
@@ -1379,14 +1386,15 @@ pub async fn settings_page(
     };
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
     html_blocking(move || {
-        let owner = is_panel_admin(&user);
-        panel_shell(
-            &user,
-            "settings",
-            "Settings",
-            &settings_hub_main_for(Some(&user), owner, notice.as_deref(), error.as_deref()),
-        )
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            let owner = is_panel_admin(&user);
+            let main =
+                settings_hub_main_for(Some(&user), owner, notice.as_deref(), error.as_deref());
+            panel_shell_blocking(&user, "settings", "Settings", &main, session_exp)
+        })
     })
     .await
 }

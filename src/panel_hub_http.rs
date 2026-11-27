@@ -129,6 +129,34 @@ where
     html_blocking_budget(HUB_RENDER_BUDGET, render).await
 }
 
+/// [`html_blocking`] plus SPA fragment mode when the client sends `X-CPN-SPA: 1`.
+pub async fn html_blocking_spa(http: &HttpRequest, render: impl FnOnce() -> String + Send + 'static) -> HttpResponse {
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(http);
+    html_blocking(move || crate::panel_spa_nav::with_spa_fragment(spa, render)).await
+}
+
+/// Hub/overview pages: blocking pool, SPA fragment, and sidebar session countdown.
+pub async fn html_blocking_shell_fn<F>(
+    http: &HttpRequest,
+    user: String,
+    active: &'static str,
+    title: &'static str,
+    build_main: F,
+) -> HttpResponse
+where
+    F: FnOnce() -> String + Send + 'static,
+{
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(http);
+    let session_exp = captured_session_exp(http);
+    html_blocking(move || {
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            let main = build_main();
+            panel_shell_blocking(&user, active, title, &main, session_exp)
+        })
+    })
+    .await
+}
+
 /// Same as [`html_blocking`] with an explicit budget (used by restore plan for large archives).
 pub async fn html_blocking_budget<F>(budget: std::time::Duration, render: F) -> HttpResponse
 where
