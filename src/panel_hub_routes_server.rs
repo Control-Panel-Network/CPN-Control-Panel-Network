@@ -18,8 +18,8 @@ use crate::panel_hub_pages_litespeed::{
     run_upgrade,
 };
 use crate::panel_hub_pages_server::{
-    package_manager_page, php_tuning_page, processes_page, run_service_control, server_hub_main,
-    services_page,
+    cpn_usage_page, package_manager_page, php_tuning_page, processes_page, run_service_control,
+    server_hub_main, services_page,
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
@@ -447,6 +447,17 @@ pub async fn server_processes_page(
     let show_kill = is_panel_admin(&user);
     html_blocking(move || panel_shell(&user, "server", "Top Processes", &processes_page(show_kill)))
         .await
+}
+
+#[get("/server/cpn-usage")]
+pub async fn server_cpn_usage_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_blocking(move || panel_shell(&user, "server", "CPN usage", &cpn_usage_page())).await
 }
 
 #[derive(Debug, serde::Deserialize)]

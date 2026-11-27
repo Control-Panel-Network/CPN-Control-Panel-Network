@@ -1,5 +1,6 @@
 //! System Processes Monitor page (Server → Top Processes).
 
+use crate::panel_hub_pages_cpn_usage::cpn_usage_teaser_html;
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_process::{
     ProcessRow, cpu_heat_class, snapshot_top_processes, truncate_command,
@@ -288,14 +289,17 @@ pub fn processes_page(show_kill: bool) -> String {
     <a class="btn-secondary" href="/server/processes">Refresh</a>
   </div>
 </div>"#;
+    let cpn_teaser = cpn_usage_teaser_html();
     let body_main = match snapshot_top_processes(80) {
         Ok(rows) if rows.is_empty() => {
-            format!("{toolbar}{cards}<p class=\"empty-state\">No processes returned.</p>")
+            format!(
+                "{toolbar}{cards}{cpn_teaser}<p class=\"empty-state\">No processes returned.</p>"
+            )
         }
         Ok(rows) => {
             let (table, list) = render_process_rows(&rows, show_kill);
             format!(
-                r#"{toolbar}{cards}
+                r#"{toolbar}{cards}{cpn_teaser}
 <div class="spm-section">
   <div class="spm-section-head">
     <h2>Running Processes</h2>
@@ -308,7 +312,7 @@ pub fn processes_page(show_kill: bool) -> String {
             )
         }
         Err(err) => format!(
-            "{toolbar}{cards}<p class=\"panel-notice error\">{e}</p>",
+            "{toolbar}{cards}{cpn_teaser}<p class=\"panel-notice error\">{e}</p>",
             e = html_escape(&err)
         ),
     };
@@ -347,6 +351,7 @@ mod tests {
                 || html.contains("panel-notice error")
         );
         assert!(!html.to_lowercase().contains("auto-refresh every"));
+        assert!(html.contains("/server/cpn-usage") || html.contains("What CPN uses"));
     }
 
     #[test]

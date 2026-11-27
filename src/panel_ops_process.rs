@@ -16,7 +16,7 @@ pub struct ProcessRow {
     pub command: String,
 }
 
-fn map_state(code: &str) -> String {
+pub(crate) fn map_state(code: &str) -> String {
     match code.chars().next().unwrap_or('?') {
         'R' => "Running".into(),
         'S' | 'I' => "Sleeping".into(),
@@ -82,7 +82,7 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
 }
 
 #[cfg(not(windows))]
-fn format_kb_field(raw: &str) -> String {
+pub(crate) fn format_kb_field(raw: &str) -> String {
     let kb: u64 = raw.trim().parse().unwrap_or(0);
     if kb >= 1024 * 1024 {
         format!("{:.1}G", kb as f64 / (1024.0 * 1024.0))

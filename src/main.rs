@@ -112,8 +112,9 @@ use cpn_installer::panel_hub_routes::{
     server_php_configs_save_basic, server_php_configs_set_default,
     server_php_configs_set_default_get, server_php_extensions, server_php_extensions_install,
     server_php_extensions_set_default, server_php_extensions_set_default_get,
-    server_php_extensions_uninstall, server_php_overview, server_php_tuning, server_processes_kill,
-    server_processes_page, server_services_control, server_services_page, settings_audit_export,
+    server_php_extensions_uninstall, server_php_overview, server_php_tuning, server_cpn_usage_page,
+    server_processes_kill, server_processes_page, server_services_control, server_services_page,
+    settings_audit_export,
     settings_audit_page, settings_audit_save, settings_connect_page, settings_cpn_settings_save,
     settings_design_page, settings_error_messages_page, settings_error_messages_preview,
     settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
@@ -1503,6 +1504,7 @@ async fn main() -> std::io::Result<()> {
             .service(server_litespeed_upgrade)
             .service(server_litespeed_downgrade)
             .service(server_processes_page)
+            .service(server_cpn_usage_page)
             .service(server_processes_kill)
             .service(server_php_overview)
             .service(server_php_extensions)

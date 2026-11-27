@@ -40,6 +40,7 @@ const FORCE_HIDDEN_NAV_IDS: &[&str] = &[
     "panel-migrate",
     "system-repair",
     "processes",
+    "cpn-usage",
     "logs",
     "package-manager",
     "litespeed",
