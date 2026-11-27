@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **CPN usage** (`/server/cpn-usage`): Operator view of what the panel itself uses (panel binary RSS/CPU plus panel-owned webmail PHP-FPM). Summary cards, process table, manual Refresh, optional auto-refresh (default Off). System Processes Monitor shows a compact teaser with a link. Site apps and queues stay on the full process list.
+- **System Processes Monitor tabs** (`/server/processes`): Top Processes and CPN usage share one page with pill tabs. Deep links: `/server/processes?tab=cpn-usage` and `/server/cpn-usage` (redirect). CPN usage tab includes admin Kill with confirmation via the same `/server/processes/kill` route. Host summary cards stay on a clean 3-column grid (no orphan teaser card).
 - **System Processes Monitor**: Server → Top Processes now shows host summary cards (CPU, process counts, load, memory, swap, CPU time), a searchable Running Processes table (PID, USER, STATE, CPU %, MEMORY %, VIRT, RES, TIME, COMMAND), admin-only Kill with confirmation and audit, and a manual Refresh control. Auto-refresh stays off by default (no 1s polling); work runs in `spawn_blocking`.
 - **Local storage destination**: `/backups/destinations` and `/backups/local` make local archives first-class with enable toggle and optional absolute path (default panel backups dir). Schedule Destination can target local.
 - **OneDrive backup destination**: Host plugin `backupDestinations` unlocks `/backups/onedrive` (Microsoft Graph OAuth client ID / secret / refresh token stored under panel data; no shipped secrets).

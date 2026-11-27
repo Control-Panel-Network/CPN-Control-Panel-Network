@@ -9,8 +9,9 @@ use crate::panel_ops_php::detect_php;
 use crate::panel_ops_pkgmgr::package_manager_status;
 use crate::panel_ops_services::{control_service, list_known_services};
 
-pub use crate::panel_hub_pages_cpn_usage::cpn_usage_page;
-pub use crate::panel_hub_pages_processes::processes_page;
+pub use crate::panel_hub_pages_processes_hub::{
+    normalize_spm_tab, spm_nav_id, system_processes_hub_page,
+};
 
 fn html_escape(value: &str) -> String {
     value

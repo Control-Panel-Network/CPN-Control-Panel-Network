@@ -272,7 +272,7 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 HubTile {
                     title: "CPN usage",
                     subtitle: "What the panel itself uses",
-                    href: "/server/cpn-usage",
+                    href: "/server/processes?tab=cpn-usage",
                     live: true,
                 },
                 HubTile {

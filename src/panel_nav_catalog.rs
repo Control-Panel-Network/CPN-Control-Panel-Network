@@ -584,7 +584,7 @@ pub(crate) const SERVER: &[NavEntry] = &[
     },
     NavEntry::Link {
         id: "cpn-usage",
-        href: "/server/cpn-usage",
+        href: "/server/processes?tab=cpn-usage",
         label: "CPN usage",
     },
     NavEntry::Group {

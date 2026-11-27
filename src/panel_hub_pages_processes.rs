@@ -1,7 +1,5 @@
 //! System Processes Monitor page (Server → Top Processes).
 
-use crate::panel_hub_pages_cpn_usage::cpn_usage_teaser_html;
-use crate::panel_hubs::feature_shell;
 use crate::panel_ops_process::{
     ProcessRow, cpu_heat_class, snapshot_top_processes, truncate_command,
 };
@@ -15,7 +13,8 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn processes_page_styles() -> &'static str {
+/// Shared SPM tab styles (also used by the tabbed hub).
+pub(crate) fn processes_tab_styles() -> &'static str {
     r#"<style>
 .spm-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin:0 0 16px;}
 .spm-toolbar .muted{margin:0;max-width:62ch;}
@@ -380,7 +379,7 @@ fn toolbar_html() -> String {
         <option value="60000">60 seconds</option>
       </select>
     </label>
-    <a class="btn-secondary" href="/server/processes" id="spm-refresh-btn">Refresh</a>
+    <a class="btn-secondary" href="/server/processes?tab=top" id="spm-refresh-btn">Refresh</a>
   </div>
 </div>"#
         .to_string()
@@ -395,26 +394,22 @@ fn cpu_tip_html(cores: u32) -> String {
     )
 }
 
-/// Build the System Processes Monitor page.
+/// Top Processes tab body (no outer feature shell).
 /// `show_kill` is true only for panel admins.
-pub fn processes_page(show_kill: bool) -> String {
-    let styles = processes_page_styles();
+pub fn processes_tab_body(show_kill: bool) -> String {
     let summary = snapshot_host_process_summary();
     let cores = summary.cpu.cores.max(1);
     let cards = summary_cards(&summary);
     let tip = cpu_tip_html(cores);
     let toolbar = toolbar_html();
-    let cpn_teaser = cpn_usage_teaser_html();
-    let body_main = match snapshot_top_processes(80) {
+    match snapshot_top_processes(80) {
         Ok(rows) if rows.is_empty() => {
-            format!(
-                "{toolbar}{tip}{cards}{cpn_teaser}<p class=\"empty-state\">No processes returned.</p>"
-            )
+            format!("{toolbar}{tip}{cards}<p class=\"empty-state\">No processes returned.</p>")
         }
         Ok(rows) => {
             let (table, list) = render_process_rows(&rows, show_kill, cores);
             format!(
-                r#"{toolbar}{tip}{cards}{cpn_teaser}
+                r#"{toolbar}{tip}{cards}
 <div class="spm-section">
   <div class="spm-section-head">
     <h2>Running Processes</h2>
@@ -430,31 +425,19 @@ pub fn processes_page(show_kill: bool) -> String {
             )
         }
         Err(err) => format!(
-            "{toolbar}{tip}{cards}{cpn_teaser}<p class=\"panel-notice error\">{e}</p>",
+            "{toolbar}{tip}{cards}<p class=\"panel-notice error\">{e}</p>",
             e = html_escape(&err)
         ),
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            ("Top Processes", None),
-        ],
-        "System Processes Monitor",
-        "CPU, memory, and running processes. Choose an auto-refresh interval or refresh manually.",
-        &format!("{styles}{body_main}"),
-        None,
-        None,
-    )
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{bar_width_cpu, cpu_of_all_label, processes_page};
+    use super::{bar_width_cpu, cpu_of_all_label, processes_tab_body};
 
     #[test]
-    fn processes_page_includes_monitor_chrome() {
-        let html = processes_page(true);
+    fn processes_tab_includes_monitor_chrome() {
+        let html = processes_tab_body(true);
         assert!(html.contains("System Processes Monitor") || html.contains("spm-toolbar"));
         assert!(html.contains("Refresh"));
         assert!(html.contains("spm-refresh-interval"));
@@ -472,12 +455,11 @@ mod tests {
                 || html.contains("panel-notice error")
         );
         assert!(html.contains("cpn-spm-refresh-ms") || html.contains("spm-refresh-interval"));
-        assert!(html.contains("/server/cpn-usage") || html.contains("What CPN uses"));
     }
 
     #[test]
     fn kill_hidden_for_non_admin() {
-        let html = processes_page(false);
+        let html = processes_tab_body(false);
         assert!(!html.contains("/server/processes/kill"));
         assert!(!html.contains(">KILL</button>"));
     }

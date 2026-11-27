@@ -247,6 +247,7 @@ pub mod panel_hub_pages_php_cfg;
 pub mod panel_hub_pages_php_cfg_apache;
 pub mod panel_hub_pages_php_ext;
 pub mod panel_hub_pages_processes;
+pub mod panel_hub_pages_processes_hub;
 pub mod panel_hub_pages_profile;
 pub mod panel_hub_pages_profile_account;
 pub mod panel_hub_pages_profile_tabs;
