@@ -177,7 +177,7 @@ mod tests {
                 || html.contains("panel-notice error")
         );
         if html.contains("/server/processes/kill") {
-            assert!(html.contains("return_tab"));
+            assert!(html.contains("return_tab") && html.contains("cpn-usage"));
         }
     }
 }

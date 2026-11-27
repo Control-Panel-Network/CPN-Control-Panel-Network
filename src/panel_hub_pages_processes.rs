@@ -270,6 +270,7 @@ fn render_process_rows(rows: &[ProcessRow], show_kill: bool, cores: u32) -> (Str
             format!(
                 r#"<td data-label="ACTIONS"><form method="post" action="/server/processes/kill" class="spm-kill-form" onsubmit="return confirm('Send SIGTERM to PID {pid}?');">
               <input type="hidden" name="pid" value="{pid}">
+              <input type="hidden" name="return_tab" value="top">
               <button type="submit" class="spm-kill-btn" title="Send SIGTERM">KILL</button>
             </form></td>"#
             )
@@ -305,6 +306,7 @@ fn render_process_rows(rows: &[ProcessRow], show_kill: bool, cores: u32) -> (Str
                 format!(
                     r#"<form method="post" action="/server/processes/kill" style="margin-top:10px;" onsubmit="return confirm('Send SIGTERM to PID {pid}?');">
                   <input type="hidden" name="pid" value="{pid}">
+                  <input type="hidden" name="return_tab" value="top">
                   <button type="submit" class="spm-kill-btn">KILL</button>
                 </form>"#
                 )
