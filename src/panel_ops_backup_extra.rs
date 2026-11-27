@@ -102,10 +102,31 @@ pub struct DropboxDest {
     pub note: String,
 }
 
+/// Microsoft OneDrive via Graph OAuth (operator-supplied client; no shipped secrets).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OneDriveDest {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default)]
+    pub client_secret_set: bool,
+    #[serde(default)]
+    pub refresh_token_set: bool,
+    /// Optional Graph drive item / folder id; empty = app root.
+    #[serde(default)]
+    pub folder_id: String,
+    #[serde(default)]
+    pub note: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BackupDestinations {
     #[serde(default)]
     pub local_enabled: bool,
+    /// Optional absolute path for panel-scope local archives (empty = default panel backups dir).
+    #[serde(default)]
+    pub local_path: String,
     #[serde(default)]
     pub google_drive: GoogleDriveDest,
     #[serde(default)]
@@ -116,6 +137,8 @@ pub struct BackupDestinations {
     pub ftp: FtpDest,
     #[serde(default)]
     pub dropbox: DropboxDest,
+    #[serde(default)]
+    pub onedrive: OneDriveDest,
     /// Legacy fields (older JSON). Prefer nested structs above.
     #[serde(default)]
     pub google_drive_note: String,
@@ -146,6 +169,11 @@ fn secret_path(name: &str) -> PathBuf {
 }
 
 fn write_secret(name: &str, value: &str) -> Result<(), String> {
+    write_dest_secret(name, value)
+}
+
+/// Write a destination secret file (mode 600). Used by local/OneDrive helpers too.
+pub(crate) fn write_dest_secret(name: &str, value: &str) -> Result<(), String> {
     let dir = secrets_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("Cannot create secrets dir: {e}"))?;
     #[cfg(unix)]
@@ -203,6 +231,8 @@ fn normalize_destinations(mut d: BackupDestinations) -> BackupDestinations {
     d.ftp.password_set = read_secret("ftp_password").is_some();
     d.dropbox.app_secret_set = read_secret("dropbox_app_secret").is_some();
     d.dropbox.refresh_token_set = read_secret("dropbox_refresh_token").is_some();
+    d.onedrive.client_secret_set = read_secret("onedrive_client_secret").is_some();
+    d.onedrive.refresh_token_set = read_secret("onedrive_refresh_token").is_some();
     d
 }
 
@@ -235,6 +265,12 @@ pub fn load_destinations() -> BackupDestinations {
                 note: "Configure Dropbox app key, secret, and refresh token.".into(),
                 ..Default::default()
             },
+            onedrive: OneDriveDest {
+                note: "Configure Microsoft Graph OAuth client ID, secret, and refresh token."
+                    .into(),
+                ..Default::default()
+            },
+            local_path: String::new(),
             google_drive_note: String::new(),
             remote_note: String::new(),
         };
@@ -257,6 +293,8 @@ pub fn save_destinations(dest: &BackupDestinations) -> Result<(), String> {
     out.ftp.password_set = read_secret("ftp_password").is_some();
     out.dropbox.app_secret_set = read_secret("dropbox_app_secret").is_some();
     out.dropbox.refresh_token_set = read_secret("dropbox_refresh_token").is_some();
+    out.onedrive.client_secret_set = read_secret("onedrive_client_secret").is_some();
+    out.onedrive.refresh_token_set = read_secret("onedrive_refresh_token").is_some();
     let raw = serde_json::to_string_pretty(&out).map_err(|e| e.to_string())?;
     fs::write(destinations_path(), raw).map_err(|e| format!("Cannot save destinations: {e}"))?;
     #[cfg(unix)]
@@ -466,42 +504,13 @@ pub fn test_dropbox() -> Result<String, String> {
     )
 }
 
+pub use crate::panel_ops_backup_local::{
+    effective_local_backup_dir, set_onedrive_secrets, test_onedrive, validate_local_backup_path,
+};
 pub use crate::panel_ops_backup_schedule::{list_restore_candidates, load_schedule, save_schedule};
 pub use crate::panel_ops_backup_upload::upload_backup_artifact;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::account::with_test_data_dir;
-
-    #[test]
-    fn destinations_roundtrip_and_legacy_defaults() {
-        with_test_data_dir(|| {
-            let legacy = r#"{
-              "local_enabled": true,
-              "google_drive_note": "legacy gdrive",
-              "remote_note": "legacy remote"
-            }"#;
-            fs::write(destinations_path(), legacy).unwrap();
-            let loaded = load_destinations();
-            assert!(loaded.local_enabled);
-            assert_eq!(loaded.google_drive.note, "legacy gdrive");
-            assert_eq!(loaded.remote.note, "legacy remote");
-
-            let mut d = loaded;
-            d.s3.enabled = true;
-            d.s3.bucket = "cpn-backups".into();
-            d.s3.endpoint = "https://s3.example.com".into();
-            set_s3_secrets("AKIA_TEST", "SECRET_TEST").unwrap();
-            save_destinations(&d).unwrap();
-            let again = load_destinations();
-            assert!(again.s3.enabled);
-            assert_eq!(again.s3.bucket, "cpn-backups");
-            assert!(again.s3.access_key_set);
-            assert!(again.s3.secret_key_set);
-            let raw = fs::read_to_string(destinations_path()).unwrap();
-            assert!(!raw.contains("AKIA_TEST"));
-            assert!(!raw.contains("SECRET_TEST"));
-        });
-    }
+pub(crate) fn destinations_path_for_test() -> PathBuf {
+    destinations_path()
 }

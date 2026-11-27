@@ -331,9 +331,42 @@ pub fn backups_restore_page(
     )
 }
 
+fn schedule_destination_options(selected: &str) -> String {
+    let d = crate::panel_ops_backup_extra::load_destinations();
+    let unlocked = crate::panel_feature_gate::backup_destinations_unlocked();
+    let mut opts: Vec<(&str, &str, bool)> = vec![("local", "Local storage", d.local_enabled)];
+    if unlocked {
+        opts.push(("google_drive", "Google Drive", d.google_drive.enabled));
+        opts.push(("onedrive", "OneDrive", d.onedrive.enabled));
+        opts.push(("remote", "Remote SFTP/SCP", d.remote.enabled));
+        opts.push(("ftp", "FTP", d.ftp.enabled));
+        opts.push(("s3", "S3-compatible", d.s3.enabled));
+        opts.push(("dropbox", "Dropbox", d.dropbox.enabled));
+    }
+    let mut out = String::new();
+    let sel = if selected.trim().is_empty() {
+        "local"
+    } else {
+        selected.trim()
+    };
+    for (value, label, enabled) in opts {
+        let selected_attr = if value == sel { " selected" } else { "" };
+        let hint = if enabled { "" } else { " (toggle off)" };
+        out.push_str(&format!(
+            r#"<option value="{value}"{selected_attr}>{label}{hint}</option>"#,
+            value = html_escape(value),
+            selected_attr = selected_attr,
+            label = html_escape(label),
+            hint = hint,
+        ));
+    }
+    out
+}
+
 pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> String {
     let s = load_schedule();
     let checked = if s.enabled { " checked" } else { "" };
+    let dest_opts = schedule_destination_options(&s.destination);
     let mut body = format!(
         r#"<form method="post" action="/backups/schedule/save" class="stack-form" style="max-width:520px;">
       <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{checked}> Enable schedule record</label>
@@ -343,6 +376,9 @@ pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> Strin
       <input id="scope" name="scope" type="text" value="{scope}">
       <label for="domain">Domain</label>
       <input id="domain" name="domain" type="text" value="{domain}">
+      <label for="destination">Destination</label>
+      <select id="destination" name="destination" style="width:100%;">{dest_opts}</select>
+      <p class="muted" style="margin:0;">Local storage uses the path from Destinations. Remote targets require the Host backupDestinations plugin and their toggles.</p>
       <button type="submit" class="btn-primary">Save schedule</button>
     </form>
     <p class="muted">Saved under the CPN data dir. A systemd timer runner is the next step; this page does not pretend a timer is installed.</p>"#,
@@ -350,6 +386,7 @@ pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> Strin
         cron = html_escape(&s.cron),
         scope = html_escape(&s.scope),
         domain = html_escape(&s.domain),
+        dest_opts = dest_opts,
     );
     body.push_str(
         r#"<article class="section-card" style="margin-top:22px;"><h2>Archives for this schedule scope</h2>
@@ -414,15 +451,19 @@ pub fn save_backup_schedule(
     cron: &str,
     scope: &str,
     domain: &str,
+    destination: &str,
 ) -> Result<String, String> {
     let mut existing = load_schedule();
     existing.enabled = enabled;
     existing.cron = cron.trim().to_string();
     existing.scope = scope.trim().to_string();
     existing.domain = domain.trim().to_string();
-    if existing.destination.is_empty() {
-        existing.destination = "local".into();
-    }
+    let dest = destination.trim().to_ascii_lowercase();
+    existing.destination = if dest.is_empty() {
+        "local".into()
+    } else {
+        dest
+    };
     save_schedule(&existing)?;
     Ok("Schedule saved".into())
 }

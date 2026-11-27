@@ -78,6 +78,8 @@ fn force_host_backup_discovery(query: &str, category: &str) -> bool {
         || q.contains("destinations")
         || q.contains("sftp")
         || q.contains("dropbox")
+        || q.contains("onedrive")
+        || q.contains("one drive")
         || q.contains("gdrive")
         || q.contains("google drive")
         || q.contains("google-drive")
