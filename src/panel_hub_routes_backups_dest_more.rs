@@ -95,10 +95,7 @@ pub async fn backups_ftp_save(
 }
 
 #[post("/backups/ftp/test")]
-pub async fn backups_ftp_test(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
+pub async fn backups_ftp_test(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };

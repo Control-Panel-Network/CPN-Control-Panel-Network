@@ -113,8 +113,7 @@ pub fn stage_panel_email_stack(staging: &Path) -> Result<(), String> {
     ] {
         let src = data.join(rel);
         if src.is_file() {
-            fs::copy(&src, panel_mail.join(rel))
-                .map_err(|e| format!("stage copy {rel}: {e}"))?;
+            fs::copy(&src, panel_mail.join(rel)).map_err(|e| format!("stage copy {rel}: {e}"))?;
         }
     }
 
@@ -190,12 +189,7 @@ fn stage_mail_database_dumps(dest: &Path) -> Result<(), String> {
         let dump_path = dest.join(format!("{db}.sql"));
         let file = fs::File::create(&dump_path).map_err(|e| format!("dump file {db}: {e}"))?;
         let status = Command::new(&dump_bin)
-            .args([
-                "--single-transaction",
-                "--routines",
-                "--databases",
-                db,
-            ])
+            .args(["--single-transaction", "--routines", "--databases", db])
             .stdout(file)
             .status();
         match status {

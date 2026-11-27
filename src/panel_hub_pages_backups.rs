@@ -386,7 +386,9 @@ pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> Strin
             body.push_str(&table);
             body.push_str(crate::backups_delete::delete_archive_modal_html());
         }
-        Ok(_) => body.push_str(r#"<p class="empty-state">No archives found for this schedule scope yet.</p>"#),
+        Ok(_) => body.push_str(
+            r#"<p class="empty-state">No archives found for this schedule scope yet.</p>"#,
+        ),
         Err(err) => body.push_str(&format!(
             r#"<p class="panel-notice error" role="status">{}</p>"#,
             html_escape(&err)

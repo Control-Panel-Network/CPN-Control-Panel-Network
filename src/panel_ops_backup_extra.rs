@@ -466,7 +466,7 @@ pub fn test_dropbox() -> Result<String, String> {
     )
 }
 
-pub use crate::panel_ops_backup_schedule::{load_schedule, list_restore_candidates, save_schedule};
+pub use crate::panel_ops_backup_schedule::{list_restore_candidates, load_schedule, save_schedule};
 pub use crate::panel_ops_backup_upload::upload_backup_artifact;
 
 #[cfg(test)]

@@ -87,7 +87,11 @@ fn path_under_allowed(path: &Path, allowed: &[PathBuf]) -> bool {
         }
         if is_broad_drop_root(&root_c) {
             // Operator drop roots: only direct children (no recursive deletes).
-            if canon.parent().map(|p| p == root_c.as_path()).unwrap_or(false) {
+            if canon
+                .parent()
+                .map(|p| p == root_c.as_path())
+                .unwrap_or(false)
+            {
                 return true;
             }
             continue;
