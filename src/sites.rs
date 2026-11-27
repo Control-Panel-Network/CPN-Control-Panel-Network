@@ -587,7 +587,8 @@ pub fn create_site_with_ssl(
     persist_site(&path, &site)?;
     // Best-effort: create log files and wire OLS/nginx access/error log paths.
     let _ = crate::panel_site_vhost_wire::ensure_site_vhost_logging(&site);
-    // Best-effort: Cloudflare site DNS, DKIM, SPF/DKIM/DMARC, auto SSL (never fails site create).
+    let _ = crate::host_resource_limits::apply_site_package_resources(&site);
+    // Best-effort: Cloudflare site DNS, SPF/DKIM/DMARC, auto SSL (never fails site create).
     let report = crate::panel_ops_domain_ready::after_site_created(&domain);
     // Optional unique internal IP when Nginx front mode is enabled.
     if crate::proxy_front::proxy_front_enabled() {

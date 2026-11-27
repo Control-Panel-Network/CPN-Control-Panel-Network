@@ -77,6 +77,7 @@ pub mod docker_outer_update;
 pub mod environment;
 pub mod foreign_panel;
 pub mod host_packages_catalog;
+pub mod host_resource_limits;
 pub mod http_helpers;
 pub mod http_origin_allowlist;
 pub mod install_http_ports;

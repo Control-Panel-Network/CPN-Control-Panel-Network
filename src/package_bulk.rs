@@ -19,6 +19,8 @@ pub struct PackageBulkPatch {
     pub forwarders: Option<i64>,
     pub email_filters: Option<i64>,
     pub fqdn_enabled: Option<bool>,
+    pub host_cpu_percent: Option<i64>,
+    pub host_memory_mb: Option<i64>,
     pub notes: Option<String>,
 }
 
@@ -36,6 +38,8 @@ impl PackageBulkPatch {
             && self.forwarders.is_none()
             && self.email_filters.is_none()
             && self.fqdn_enabled.is_none()
+            && self.host_cpu_percent.is_none()
+            && self.host_memory_mb.is_none()
             && self.notes.is_none()
     }
 }
@@ -87,6 +91,8 @@ pub fn duplicate_package(source_id: &str, new_name: &str, owner: &str) -> Result
             email_filters: src.email_filters,
             alias_domains: src.alias_domains,
             subdomains: src.subdomains,
+            host_cpu_percent: src.host_cpu_percent,
+            host_memory_mb: src.host_memory_mb,
             fqdn_enabled: src.fqdn_enabled,
             notes: src.notes,
             sidebar_hidden_nav_ids: src.sidebar_hidden_nav_ids,
@@ -110,6 +116,8 @@ fn apply_patch(pkg: &Package, patch: &PackageBulkPatch) -> PackageInput {
         email_filters: patch.email_filters.unwrap_or(pkg.email_filters),
         alias_domains: pkg.alias_domains,
         subdomains: pkg.subdomains,
+        host_cpu_percent: patch.host_cpu_percent.unwrap_or(pkg.host_cpu_percent),
+        host_memory_mb: patch.host_memory_mb.unwrap_or(pkg.host_memory_mb),
         fqdn_enabled: patch.fqdn_enabled.unwrap_or(pkg.fqdn_enabled),
         notes: patch.notes.clone().unwrap_or_else(|| pkg.notes.clone()),
         sidebar_hidden_nav_ids: pkg.sidebar_hidden_nav_ids.clone(),
