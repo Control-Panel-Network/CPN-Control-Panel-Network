@@ -7,7 +7,6 @@ use std::process::Command;
 
 pub const PANEL_SLICE_NAME: &str = "cpn-panel.slice";
 pub const PANEL_SLICE_PATH: &str = "/etc/systemd/system/cpn-panel.slice";
-pub const PANEL_SERVICE_DROPIN_DIR: &str = "/etc/systemd/system/cpn-installer.service.d";
 pub const PANEL_SERVICE_SLICE_DROPIN: &str =
     "/etc/systemd/system/cpn-installer.service.d/20-panel-resource-reserve.conf";
 

@@ -117,10 +117,8 @@ fn apply_unix_user_limits(username: &str, cpu: i64, mem: i64) -> Result<String, 
         let body = build_dropin_body(cpu, mem);
         write_dropin(uid, &body)?;
         true
-    } else if remove_dropin(uid)? {
-        true
     } else {
-        false
+        remove_dropin(uid)?
     };
     if reload {
         systemctl_daemon_reload()?;
