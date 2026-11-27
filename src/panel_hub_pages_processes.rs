@@ -281,15 +281,13 @@ pub fn processes_page(show_kill: bool) -> String {
     let styles = processes_page_styles();
     let summary = snapshot_host_process_summary();
     let cards = summary_cards(&summary);
-    let toolbar = format!(
-        r#"<div class="spm-toolbar">
+    let toolbar = r#"<div class="spm-toolbar">
   <p class="muted">One-shot snapshot from <code>ps</code> and <code>/proc</code> (CPU sorted). No auto-refresh by default.</p>
   <div class="spm-toolbar-actions">
     <label class="spm-auto"><input type="checkbox" id="spm-auto" disabled> Optional auto-refresh (off)</label>
     <a class="btn-secondary" href="/server/processes">Refresh</a>
   </div>
-</div>"#
-    );
+</div>"#;
     let body_main = match snapshot_top_processes(80) {
         Ok(rows) if rows.is_empty() => {
             format!("{toolbar}{cards}<p class=\"empty-state\">No processes returned.</p>")

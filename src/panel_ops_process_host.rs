@@ -181,11 +181,9 @@ fn read_cpu_time() -> (CpuTimeDist, Option<u8>) {
     let iowait = values[4];
     let hard_irq = values[5];
     let soft_irq = values[6];
-    let used_pct = if total > 0 {
-        Some((100 * total.saturating_sub(idle) / total) as u8)
-    } else {
-        None
-    };
+    let used_pct = (100u64.saturating_mul(total.saturating_sub(idle)))
+        .checked_div(total)
+        .map(|v| v as u8);
     (
         CpuTimeDist {
             iowait_pct: pct(iowait, total),
