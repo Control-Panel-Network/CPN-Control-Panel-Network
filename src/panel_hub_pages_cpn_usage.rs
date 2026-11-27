@@ -1,6 +1,5 @@
 //! CPN panel resource usage page (Server → CPN usage).
 
-use crate::panel_hubs::feature_shell;
 use crate::panel_ops_process::truncate_command;
 use crate::panel_ops_process_cpn::{CpnUsageSnapshot, format_rss_kb, snapshot_cpn_usage};
 
@@ -12,7 +11,8 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn page_styles() -> &'static str {
+/// CPN usage tab styles (shared with the processes hub).
+pub(crate) fn cpn_usage_tab_styles() -> &'static str {
     r#"<style>
 .cpu-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin:0 0 16px;}
 .cpu-toolbar .muted{margin:0;max-width:70ch;}
@@ -43,6 +43,11 @@ fn page_styles() -> &'static str {
 .cpu-table-wrap{overflow-x:auto;}
 .cpu-table-wrap .data-table{width:100%;min-width:920px;}
 .cpu-cmd{display:block;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cpu-kill-btn{
+  display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:0 12px;
+  border:0;border-radius:999px;font-weight:700;cursor:pointer;background:#dc2626;color:#fff;font-size:0.82rem;
+}
+.cpu-kill-btn:hover{filter:brightness(1.05);}
 @media (max-width:1100px){.cpu-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width:719.98px){
   .cpu-grid{grid-template-columns:1fr;}
@@ -66,8 +71,7 @@ fn toolbar_html() -> String {
         <option value="60000">60 seconds</option>
       </select>
     </label>
-    <a class="btn-secondary" href="/server/cpn-usage">Refresh</a>
-    <a class="btn-secondary" href="/server/processes">All processes</a>
+    <a class="btn-secondary" href="/server/processes?tab=cpn-usage">Refresh</a>
   </div>
 </div>"#
         .to_string()
@@ -158,7 +162,7 @@ fn summary_cards(snap: &CpnUsageSnapshot) -> String {
     )
 }
 
-fn rows_table(snap: &CpnUsageSnapshot) -> String {
+fn rows_table(snap: &CpnUsageSnapshot, show_kill: bool) -> String {
     if snap.rows.is_empty() {
         return "<p class=\"empty-state\">No CPN panel processes matched on this host.</p>"
             .to_string();
@@ -168,9 +172,12 @@ fn rows_table(snap: &CpnUsageSnapshot) -> String {
 <thead><tr>
   <th scope="col">Role</th><th scope="col">PID</th><th scope="col">USER</th>
   <th scope="col">STATE</th><th scope="col">CPU %</th><th scope="col">MEM %</th>
-  <th scope="col">RES</th><th scope="col">TIME</th><th scope="col">COMMAND</th>
-</tr></thead><tbody>"#,
+  <th scope="col">RES</th><th scope="col">TIME</th><th scope="col">COMMAND</th>"#,
     );
+    if show_kill {
+        html.push_str(r#"<th scope="col">ACTIONS</th>"#);
+    }
+    html.push_str("</tr></thead><tbody>");
     for item in &snap.rows {
         let role = html_escape(&item.role);
         let pid = html_escape(&item.row.pid);
@@ -182,6 +189,17 @@ fn rows_table(snap: &CpnUsageSnapshot) -> String {
         let time = html_escape(&item.row.time);
         let cmd_full = html_escape(&item.row.command);
         let cmd_short = html_escape(&truncate_command(&item.row.command, 72));
+        let kill_cell = if show_kill {
+            format!(
+                r#"<td data-label="ACTIONS"><form method="post" action="/server/processes/kill" class="cpu-kill-form" onsubmit="return confirm('Send SIGTERM to PID {pid}?');">
+  <input type="hidden" name="pid" value="{pid}">
+  <input type="hidden" name="return_tab" value="cpn-usage">
+  <button type="submit" class="cpu-kill-btn" title="Send SIGTERM">KILL</button>
+</form></td>"#
+            )
+        } else {
+            String::new()
+        };
         html.push_str(&format!(
             r#"<tr>
   <td>{role}</td>
@@ -193,6 +211,7 @@ fn rows_table(snap: &CpnUsageSnapshot) -> String {
   <td>{res}</td>
   <td>{time}</td>
   <td><code class="cpu-cmd" title="{cmd_full}">{cmd_short}</code></td>
+  {kill_cell}
 </tr>"#
         ));
     }
@@ -200,45 +219,17 @@ fn rows_table(snap: &CpnUsageSnapshot) -> String {
     html
 }
 
-/// Compact teaser for the System Processes Monitor page.
-pub fn cpn_usage_teaser_html() -> String {
-    match snapshot_cpn_usage() {
-        Ok(snap) => format!(
-            r#"<article class="spm-card" style="margin:0 0 18px;">
-  <h3>What CPN uses</h3>
-  <dl class="spm-kv">
-    <dt>Panel RSS</dt><dd>{panel}</dd>
-    <dt>Webmail FPM RSS</dt><dd>{web}</dd>
-    <dt>CPN total RSS</dt><dd><strong>{total}</strong></dd>
-    <dt>CPN CPU (sum)</dt><dd>{cpu:.1}%</dd>
-  </dl>
-  <p class="spm-load-hint" style="margin-top:10px;">Panel binary plus panel-owned webmail PHP-FPM only. <a href="/server/cpn-usage">Open CPN usage</a></p>
-</article>"#,
-            panel = html_escape(&format_rss_kb(snap.panel_rss_kb)),
-            web = html_escape(&format_rss_kb(snap.webmail_rss_kb)),
-            total = html_escape(&format_rss_kb(snap.total_rss_kb())),
-            cpu = snap.total_cpu(),
-        ),
-        Err(_) => r#"<article class="spm-card" style="margin:0 0 18px;">
-  <h3>What CPN uses</h3>
-  <p class="muted" style="margin:0;">Could not read CPN process snapshot. <a href="/server/cpn-usage">Open CPN usage</a></p>
-</article>"#
-            .to_string(),
-    }
-}
-
-/// Build the dedicated CPN usage page.
-pub fn cpn_usage_page() -> String {
-    let styles = page_styles();
+/// CPN usage tab body (no outer feature shell).
+pub fn cpn_usage_tab_body(show_kill: bool) -> String {
     let toolbar = toolbar_html();
-    let body = match snapshot_cpn_usage() {
+    match snapshot_cpn_usage() {
         Ok(snap) => {
             let tip = format!(
                 r#"<p class="cpu-tip" role="note"><strong>Tip:</strong> {note} High host load or swap usually comes from site workloads, databases, queues, or browsers, not from this panel total.</p>"#,
                 note = html_escape(&snap.note),
             );
             let cards = summary_cards(&snap);
-            let table = rows_table(&snap);
+            let table = rows_table(&snap, show_kill);
             format!(
                 r#"{toolbar}{tip}{cards}
 <div class="cpu-section">
@@ -253,39 +244,26 @@ pub fn cpn_usage_page() -> String {
             r#"{toolbar}<p class="panel-notice error">{e}</p>"#,
             e = html_escape(&err)
         ),
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            ("CPN usage", None),
-        ],
-        "What CPN uses",
-        "Panel binary and panel-owned webmail PHP-FPM RSS/CPU. Manual refresh; auto-refresh defaults to Off.",
-        &format!("{styles}{body}"),
-        None,
-        None,
-    )
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{cpn_usage_page, cpn_usage_teaser_html};
+    use super::cpn_usage_tab_body;
 
     #[test]
-    fn cpn_usage_page_chrome() {
-        let html = cpn_usage_page();
-        assert!(html.contains("What CPN uses") || html.contains("cpu-toolbar"));
+    fn cpn_usage_tab_chrome() {
+        let html = cpn_usage_tab_body(true);
+        assert!(html.contains("cpu-toolbar") || html.contains("panel-notice error"));
         assert!(html.contains("Refresh") || html.contains("panel-notice error"));
         assert!(html.contains("cpu-refresh-interval") || html.contains("panel-notice error"));
-        assert!(html.contains("/server/processes") || html.contains("panel-notice error"));
+        assert!(html.contains("tab=cpn-usage") || html.contains("panel-notice error"));
         assert!(!html.contains('\u{2014}'));
     }
 
     #[test]
-    fn teaser_links_to_usage_page() {
-        let html = cpn_usage_teaser_html();
-        assert!(html.contains("/server/cpn-usage"));
-        assert!(html.contains("What CPN uses"));
+    fn cpn_kill_gated() {
+        let html = cpn_usage_tab_body(false);
+        assert!(!html.contains(">KILL</button>"));
     }
 }

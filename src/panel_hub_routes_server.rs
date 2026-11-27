@@ -3,8 +3,8 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice,
-    require_panel_user, urlencoding_simple,
+    html_blocking, html_ok, login_redirect, owner_only_html, redirect, redirect_flash,
+    redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_docker_apps::docker_apps_page;
@@ -18,8 +18,8 @@ use crate::panel_hub_pages_litespeed::{
     run_upgrade,
 };
 use crate::panel_hub_pages_server::{
-    cpn_usage_page, package_manager_page, php_tuning_page, processes_page, run_service_control,
-    server_hub_main, services_page,
+    normalize_spm_tab, package_manager_page, php_tuning_page, run_service_control, server_hub_main,
+    services_page, spm_nav_id, system_processes_hub_page,
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
@@ -436,17 +436,38 @@ pub async fn server_services_control(
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct SpmTabQuery {
+    #[serde(default)]
+    tab: String,
+}
+
 #[get("/server/processes")]
 pub async fn server_processes_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<SpmTabQuery>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    let tab = normalize_spm_tab(&query.tab).to_string();
     let show_kill = is_panel_admin(&user);
-    html_blocking(move || panel_shell(&user, "server", "Top Processes", &processes_page(show_kill)))
-        .await
+    let nav = spm_nav_id(&tab).to_string();
+    let title = if tab == "cpn-usage" {
+        "CPN usage"
+    } else {
+        "Top Processes"
+    };
+    html_blocking(move || {
+        panel_shell(
+            &user,
+            &nav,
+            title,
+            &system_processes_hub_page(&tab, show_kill),
+        )
+    })
+    .await
 }
 
 #[get("/server/cpn-usage")]
@@ -454,10 +475,10 @@ pub async fn server_cpn_usage_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
+    let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_blocking(move || panel_shell(&user, "server", "CPN usage", &cpn_usage_page())).await
+    redirect("/server/processes?tab=cpn-usage")
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -466,6 +487,8 @@ pub struct ProcessKillForm {
     pid: String,
     #[serde(default)]
     force: String,
+    #[serde(default)]
+    return_tab: String,
 }
 
 #[post("/server/processes/kill")]
@@ -489,7 +512,7 @@ pub async fn server_processes_kill(
             crate::panel_audit_types::AuditSeverity::Warning,
         );
         return redirect_notice(
-            "/server/processes",
+            kill_return_path(&form.return_tab),
             None,
             Some("Only the panel admin can kill processes."),
         );
@@ -517,7 +540,7 @@ pub async fn server_processes_kill(
                 crate::panel_audit_types::AuditCategory::Other,
                 crate::panel_audit_types::AuditSeverity::Warning,
             );
-            redirect_notice("/server/processes", Some(&msg), None)
+            redirect_notice(kill_return_path(&form.return_tab), Some(&msg), None)
         }
         Err(err) => {
             crate::panel_audit_http::audit_from_request(
@@ -530,8 +553,16 @@ pub async fn server_processes_kill(
                 crate::panel_audit_types::AuditCategory::Other,
                 crate::panel_audit_types::AuditSeverity::Warning,
             );
-            redirect_notice("/server/processes", None, Some(&err))
+            redirect_notice(kill_return_path(&form.return_tab), None, Some(&err))
         }
+    }
+}
+
+fn kill_return_path(return_tab: &str) -> &'static str {
+    if normalize_spm_tab(return_tab) == "cpn-usage" {
+        "/server/processes?tab=cpn-usage"
+    } else {
+        "/server/processes?tab=top"
     }
 }
 
