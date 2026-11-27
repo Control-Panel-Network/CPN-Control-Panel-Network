@@ -154,6 +154,7 @@ pub fn docker_images_page(
         q: String::new(),
         page: 1,
         per_page: 10,
+        check_updates: false,
     });
     let status = docker_status();
     if !status.installed {

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Docker list image update hints** (`/docker/list`): Active Containers shows an **Image update** column (Up to date / Update available / Unknown / Not checked). **Check for updates** compares local and registry digests (Docker Hub via CLI manifest inspect with HTTP fallback; other registries when the engine can reach them). Results cache under panel data for about three hours to limit Hub rate use. No auto-pull; use Manage Images or Compose Stacks to upgrade.
+
 - **System Processes Monitor tabs** (`/server/processes`): Top Processes and CPN usage share one page with pill tabs. Deep links: `/server/processes?tab=cpn-usage` and `/server/cpn-usage` (redirect). CPN usage tab includes admin Kill with confirmation via the same `/server/processes/kill` route. Host summary cards stay on a clean 3-column grid (no orphan teaser card).
 - **System Processes Monitor**: Server → Top Processes now shows host summary cards (CPU, process counts, load, memory, swap, CPU time), a searchable Running Processes table (PID, USER, STATE, CPU %, MEMORY %, VIRT, RES, TIME, COMMAND), admin-only Kill with confirmation and audit, and a manual Refresh control. Auto-refresh stays off by default (no 1s polling); work runs in `spawn_blocking`.
 - **Local storage destination**: `/backups/destinations` and `/backups/local` make local archives first-class with enable toggle and optional absolute path (default panel backups dir). Schedule Destination can target local.
