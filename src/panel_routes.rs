@@ -111,7 +111,7 @@ pub async fn websites_page(
             .append_header(("Location", loc))
             .finish();
     }
-    html_blocking_shell_fn(&http, user, "websites", "Websites", || websites_hub_main()).await
+    html_blocking_shell_fn(&http, user, "websites", "Websites", websites_hub_main).await
 }
 
 #[get("/websites/list")]
@@ -884,7 +884,7 @@ pub async fn email_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let _ = (status, notice, error);
-    html_blocking_shell_fn(&http, user, "email", "Email", || email_hub_html()).await
+    html_blocking_shell_fn(&http, user, "email", "Email", email_hub_html).await
 }
 
 #[get("/databases")]
@@ -899,10 +899,7 @@ pub async fn databases_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let _ = (notice, error);
-    html_blocking_shell_fn(&http, user, "databases", "Databases & FTP", || {
-        databases_hub_html()
-    })
-    .await
+    html_blocking_shell_fn(&http, user, "databases", "Databases & FTP", databases_hub_html).await
 }
 
 #[post("/databases/install-mariadb")]
