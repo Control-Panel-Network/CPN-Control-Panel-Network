@@ -1,9 +1,9 @@
-//! FTP and Dropbox backup destination forms (unlocked with backupDestinations).
+//! FTP, Dropbox, and OneDrive backup destination forms (unlocked with backupDestinations).
 
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_backup_extra::{
-    DropboxDest, FtpDest, load_destinations, save_destinations, set_dropbox_secrets,
-    set_ftp_password, test_dropbox, test_ftp,
+    DropboxDest, FtpDest, OneDriveDest, load_destinations, save_destinations, set_dropbox_secrets,
+    set_ftp_password, set_onedrive_secrets, test_dropbox, test_ftp, test_onedrive,
 };
 
 fn html_escape(value: &str) -> String {
@@ -164,10 +164,95 @@ pub fn save_dropbox_form(
     Ok("Dropbox destination saved.".into())
 }
 
+pub fn backups_onedrive_page(notice: Option<&str>, error: Option<&str>) -> String {
+    let d = load_destinations();
+    let o = &d.onedrive;
+    let secret = if o.client_secret_set {
+        "saved"
+    } else {
+        "not set"
+    };
+    let token = if o.refresh_token_set {
+        "saved"
+    } else {
+        "not set"
+    };
+    let body = format!(
+        r#"<form method="post" action="/backups/onedrive/save" class="stack-form" style="max-width:640px;display:grid;gap:10px;">
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{en}> Enable OneDrive destination</label>
+      <p class="muted" style="margin:0;">Use your own Microsoft Entra (Azure AD) app registration. CPN does not ship client secrets. Required Graph permission: <code>Files.ReadWrite</code> (delegated) with a refresh token.</p>
+      <label>Application (client) ID
+        <input type="text" name="client_id" value="{cid}" maxlength="200" autocomplete="off" style="width:100%;">
+      </label>
+      <label>Client secret <span class="muted">({secret}; leave blank to keep)</span>
+        <input type="password" name="client_secret" maxlength="400" autocomplete="new-password" style="width:100%;">
+      </label>
+      <label>Refresh token <span class="muted">({token}; leave blank to keep)</span>
+        <input type="password" name="refresh_token" maxlength="2000" autocomplete="new-password" style="width:100%;">
+      </label>
+      <label>Folder / drive item ID <span class="muted">(optional)</span>
+        <input type="text" name="folder_id" value="{folder}" maxlength="200" autocomplete="off" style="width:100%;">
+      </label>
+      <label>Operator note
+        <input type="text" name="note" value="{note}" maxlength="200" style="width:100%;">
+      </label>
+      <button type="submit" class="btn-primary">Save OneDrive</button>
+    </form>
+    <form method="post" action="/backups/onedrive/test" style="margin-top:12px;">
+      <button type="submit" class="btn-secondary">Test connection</button>
+    </form>
+    <p class="muted" style="margin-top:14px;"><a href="/backups/destinations">← Destinations</a></p>"#,
+        en = checked(o.enabled),
+        cid = html_escape(&o.client_id),
+        secret = secret,
+        token = token,
+        folder = html_escape(&o.folder_id),
+        note = html_escape(&o.note),
+    );
+    feature_shell(
+        &[
+            ("Dashboard", Some("/dashboard")),
+            ("Backups", Some("/backups")),
+            ("OneDrive", None),
+        ],
+        "OneDrive",
+        "Microsoft OneDrive backup destination via Graph OAuth refresh token.",
+        &body,
+        notice,
+        error,
+    )
+}
+
+pub fn save_onedrive_form(
+    enabled: bool,
+    client_id: &str,
+    client_secret: &str,
+    refresh_token: &str,
+    folder_id: &str,
+    note: &str,
+) -> Result<String, String> {
+    set_onedrive_secrets(client_secret, refresh_token)?;
+    let mut d = load_destinations();
+    d.onedrive = OneDriveDest {
+        enabled,
+        client_id: client_id.trim().to_string(),
+        client_secret_set: false,
+        refresh_token_set: false,
+        folder_id: folder_id.trim().to_string(),
+        note: note.trim().to_string(),
+    };
+    save_destinations(&d)?;
+    Ok("OneDrive destination saved.".into())
+}
+
 pub fn run_ftp_test() -> Result<String, String> {
     test_ftp()
 }
 
 pub fn run_dropbox_test() -> Result<String, String> {
     test_dropbox()
+}
+
+pub fn run_onedrive_test() -> Result<String, String> {
+    test_onedrive()
 }

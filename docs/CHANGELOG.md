@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **System Processes Monitor**: Server → Top Processes now shows host summary cards (CPU, process counts, load, memory, swap, CPU time), a searchable Running Processes table (PID, USER, STATE, CPU %, MEMORY %, VIRT, RES, TIME, COMMAND), admin-only Kill with confirmation and audit, and a manual Refresh control. Auto-refresh stays off by default (no 1s polling); work runs in `spawn_blocking`.
+- **Local storage destination**: `/backups/destinations` and `/backups/local` make local archives first-class with enable toggle and optional absolute path (default panel backups dir). Schedule Destination can target local.
+- **OneDrive backup destination**: Host plugin `backupDestinations` unlocks `/backups/onedrive` (Microsoft Graph OAuth client ID / secret / refresh token stored under panel data; no shipped secrets).
 - **Email backup contents on Create Backup**: Panel scope gains **Email stack** (mail inventory, DKIM, `/var/lib/cpn-webmail` data, mail DBs when present, and email Host plugins). Website/Subdomain scope gains **Email** (domain `e-mails/` Maildirs, domain DKIM, classic `vmail` when present, and email-related site plugins). Restore discovers `e-mails/`, `email-stack/`, and `email-plugins/` and can apply mailbox trees with confirmation.
 - **Delete local backup archives**: `/backups/restore` and `/backups/schedule` list archives with a Delete action, confirmation dialog, path-safe delete under known backup roots, and audit entries without secrets.
 - **FTP and Dropbox backup destinations**: Destinations (unlocked by Host plugin `backupDestinations`) add FTP and Dropbox configure pages alongside Google Drive, SFTP, and S3-compatible targets.

@@ -124,6 +124,7 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/settings/cpn-settings" => Some("settings.cpn_settings"),
         "/server/system-repair/heal" => Some("repair.heal"),
         "/api/system-repair/heal" => Some("repair.heal"),
+        "/server/processes/kill" => Some("server.process.kill"),
         "/settings/migrate" => Some("migrate.apply"),
         "/settings/version/upgrade" => Some("updates.upgrade"),
         "/api/panel/upgrade" => Some("updates.upgrade"),

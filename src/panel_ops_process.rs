@@ -1,4 +1,4 @@
-﻿//! Top processes snapshot for the Server hub.
+﻿//! Top processes snapshot and kill helpers for the Server hub.
 
 #[cfg(not(windows))]
 use std::process::Command;
@@ -7,13 +7,29 @@ use std::process::Command;
 pub struct ProcessRow {
     pub user: String,
     pub pid: String,
+    pub state: String,
     pub cpu: String,
     pub mem: String,
+    pub virt: String,
+    pub res: String,
+    pub time: String,
     pub command: String,
 }
 
+fn map_state(code: &str) -> String {
+    match code.chars().next().unwrap_or('?') {
+        'R' => "Running".into(),
+        'S' | 'I' => "Sleeping".into(),
+        'D' => "Disk sleep".into(),
+        'Z' => "Zombie".into(),
+        'T' | 't' => "Stopped".into(),
+        'X' | 'x' => "Dead".into(),
+        other => other.to_string(),
+    }
+}
+
 pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
-    let limit = limit.clamp(1, 100);
+    let limit = limit.clamp(1, 200);
     #[cfg(windows)]
     {
         let _ = limit;
@@ -22,7 +38,11 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
     #[cfg(not(windows))]
     {
         let out = Command::new("ps")
-            .args(["-eo", "user,pid,pcpu,pmem,args", "--sort=-pcpu"])
+            .args([
+                "-eo",
+                "user,pid,state,pcpu,pmem,vsz,rss,etime,args",
+                "--sort=-pcpu",
+            ])
             .output()
             .map_err(|e| format!("Failed to run ps: {e}"))?;
         if !out.status.success() {
@@ -41,18 +61,35 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
                 break;
             }
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() < 5 {
+            // user pid state pcpu pmem vsz rss etime args...
+            if parts.len() < 9 {
                 continue;
             }
             rows.push(ProcessRow {
                 user: parts[0].to_string(),
                 pid: parts[1].to_string(),
-                cpu: parts[2].to_string(),
-                mem: parts[3].to_string(),
-                command: parts[4..].join(" "),
+                state: map_state(parts[2]),
+                cpu: parts[3].to_string(),
+                mem: parts[4].to_string(),
+                virt: format_kb_field(parts[5]),
+                res: format_kb_field(parts[6]),
+                time: parts[7].to_string(),
+                command: parts[8..].join(" "),
             });
         }
         Ok(rows)
+    }
+}
+
+#[cfg(not(windows))]
+fn format_kb_field(raw: &str) -> String {
+    let kb: u64 = raw.trim().parse().unwrap_or(0);
+    if kb >= 1024 * 1024 {
+        format!("{:.1}G", kb as f64 / (1024.0 * 1024.0))
+    } else if kb >= 1024 {
+        format!("{:.1}M", kb as f64 / 1024.0)
+    } else {
+        format!("{kb}K")
     }
 }
 
@@ -85,6 +122,48 @@ pub fn truncate_command(cmd: &str, max_chars: usize) -> String {
     format!("{head}...")
 }
 
+/// Validate a PID string (digits only, not 1, within u32 range).
+pub fn parse_kill_pid(raw: &str) -> Result<u32, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return Err("PID must be a positive number.".into());
+    }
+    let pid: u32 = trimmed
+        .parse()
+        .map_err(|_| "PID is out of range.".to_string())?;
+    if pid <= 1 {
+        return Err("Refusing to signal PID 1 (init/systemd).".into());
+    }
+    Ok(pid)
+}
+
+/// Send SIGTERM (default) or SIGKILL to a PID. Admin gate belongs in the route.
+pub fn kill_process(pid: u32, force: bool) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let _ = (pid, force);
+        Err("Process kill is supported on Linux hosts only".into())
+    }
+    #[cfg(not(windows))]
+    {
+        let signal = if force { "KILL" } else { "TERM" };
+        let out = Command::new("kill")
+            .args([format!("-{signal}"), pid.to_string()])
+            .output()
+            .map_err(|e| format!("Failed to run kill: {e}"))?;
+        if out.status.success() {
+            return Ok(format!("Sent SIG{signal} to PID {pid}."));
+        }
+        let err = String::from_utf8_lossy(&out.stderr);
+        let safe: String = err.chars().take(160).collect();
+        Err(if safe.trim().is_empty() {
+            format!("kill failed for PID {pid}.")
+        } else {
+            format!("kill failed for PID {pid}: {}", safe.trim())
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,7 +171,13 @@ mod tests {
     #[test]
     fn snapshot_runs_or_explains() {
         match snapshot_top_processes(5) {
-            Ok(rows) => assert!(rows.len() <= 5),
+            Ok(rows) => {
+                assert!(rows.len() <= 5);
+                if let Some(row) = rows.first() {
+                    assert!(!row.pid.is_empty());
+                    assert!(!row.state.is_empty());
+                }
+            }
             Err(msg) => assert!(!msg.is_empty()),
         }
     }
@@ -112,5 +197,20 @@ mod tests {
         assert_eq!(cpu_heat_class("40.0"), "proc-warm");
         assert_eq!(cpu_heat_class("93.4"), "proc-hot");
         assert_eq!(cpu_heat_class("n/a"), "");
+    }
+
+    #[test]
+    fn parse_kill_pid_rejects_unsafe() {
+        assert!(parse_kill_pid("1").is_err());
+        assert!(parse_kill_pid("0").is_err());
+        assert!(parse_kill_pid("abc").is_err());
+        assert_eq!(parse_kill_pid("42").unwrap(), 42);
+    }
+
+    #[test]
+    fn map_state_labels() {
+        assert_eq!(map_state("R"), "Running");
+        assert_eq!(map_state("S"), "Sleeping");
+        assert_eq!(map_state("Z"), "Zombie");
     }
 }

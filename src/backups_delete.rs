@@ -39,6 +39,10 @@ fn is_safe_archive_name(name: &str) -> bool {
 fn allowed_backup_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     dirs.push(panel_backups_dir());
+    let custom = crate::panel_ops_backup_extra::effective_local_backup_dir();
+    if custom != panel_backups_dir() {
+        dirs.push(custom);
+    }
     let legacy = legacy_panel_backups_dir();
     if legacy.is_dir() {
         dirs.push(legacy);

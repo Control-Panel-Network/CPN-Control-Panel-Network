@@ -1,4 +1,4 @@
-//! FTP and Dropbox destination routes (requires backupDestinations Host plugin).
+//! FTP, Dropbox, and OneDrive destination routes (requires backupDestinations Host plugin).
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
@@ -6,8 +6,8 @@ use crate::panel_hub_http::{
 };
 use crate::panel_hub_pages_backups_dest::parse_flag;
 use crate::panel_hub_pages_backups_dest_more::{
-    FtpSaveInput, backups_dropbox_page, backups_ftp_page, run_dropbox_test, run_ftp_test,
-    save_dropbox_form, save_ftp_form,
+    FtpSaveInput, backups_dropbox_page, backups_ftp_page, backups_onedrive_page, run_dropbox_test,
+    run_ftp_test, run_onedrive_test, save_dropbox_form, save_ftp_form, save_onedrive_form,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -205,5 +205,101 @@ pub async fn backups_dropbox_test(
     match run_dropbox_test() {
         Ok(msg) => redirect_notice("/backups/dropbox", Some(&msg), None),
         Err(err) => redirect_notice("/backups/dropbox", None, Some(&err)),
+    }
+}
+
+#[get("/backups/onedrive")]
+pub async fn backups_onedrive_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return html_ok(authenticated_panel_shell(
+            &http,
+            &user,
+            "backups",
+            "OneDrive",
+            &crate::panel_feature_gate::backup_destinations_plugin_required_page("OneDrive"),
+        ));
+    }
+    html_ok(authenticated_panel_shell(
+        &http,
+        &user,
+        "backups",
+        "OneDrive",
+        &backups_onedrive_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct OneDriveSaveForm {
+    #[serde(default)]
+    enabled: String,
+    #[serde(default)]
+    client_id: String,
+    #[serde(default)]
+    client_secret: String,
+    #[serde(default)]
+    refresh_token: String,
+    #[serde(default)]
+    folder_id: String,
+    #[serde(default)]
+    note: String,
+}
+
+#[post("/backups/onedrive/save")]
+pub async fn backups_onedrive_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<OneDriveSaveForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/onedrive",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
+    match save_onedrive_form(
+        parse_flag(&form.enabled),
+        &form.client_id,
+        &form.client_secret,
+        &form.refresh_token,
+        &form.folder_id,
+        &form.note,
+    ) {
+        Ok(msg) => redirect_notice("/backups/onedrive", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/onedrive", None, Some(&err)),
+    }
+}
+
+#[post("/backups/onedrive/test")]
+pub async fn backups_onedrive_test(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/onedrive",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
+    match run_onedrive_test() {
+        Ok(msg) => redirect_notice("/backups/onedrive", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/onedrive", None, Some(&err)),
     }
 }

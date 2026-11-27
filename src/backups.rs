@@ -1,6 +1,6 @@
 //! Selective backup archives under `/home/.../backups/`.
 
-use crate::paths::panel_backups_dir;
+use crate::panel_ops_backup_extra::effective_local_backup_dir;
 use crate::sites::{load_site, site_backups_dir, site_home_from_record};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -96,7 +96,7 @@ pub fn is_subdomain_site(domain: &str) -> bool {
 pub fn resolve_archive_dir(scope: BackupScope, domain: &str) -> Result<(PathBuf, String), String> {
     match scope {
         BackupScope::Panel => {
-            let dir = panel_backups_dir();
+            let dir = effective_local_backup_dir();
             Ok((dir.clone(), dir.display().to_string()))
         }
         BackupScope::Site | BackupScope::Subdomain => {

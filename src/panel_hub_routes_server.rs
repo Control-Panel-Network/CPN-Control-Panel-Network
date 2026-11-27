@@ -444,12 +444,84 @@ pub async fn server_processes_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "Top Processes",
-        &processes_page(),
-    ))
+    let show_kill = is_panel_admin(&user);
+    html_blocking(move || panel_shell(&user, "server", "Top Processes", &processes_page(show_kill)))
+        .await
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ProcessKillForm {
+    #[serde(default)]
+    pid: String,
+    #[serde(default)]
+    force: String,
+}
+
+#[post("/server/processes/kill")]
+pub async fn server_processes_kill(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<ProcessKillForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        crate::panel_audit_http::audit_from_request(
+            &http,
+            &user,
+            "server.process.kill",
+            form.pid.trim(),
+            false,
+            "Denied: panel admin required.",
+            crate::panel_audit_types::AuditCategory::Other,
+            crate::panel_audit_types::AuditSeverity::Warning,
+        );
+        return redirect_notice(
+            "/server/processes",
+            None,
+            Some("Only the panel admin can kill processes."),
+        );
+    }
+    let force = matches!(
+        form.force.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "on" | "yes" | "kill"
+    );
+    let pid_raw = form.pid.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let pid = crate::panel_ops_process::parse_kill_pid(&pid_raw)?;
+        crate::panel_ops_process::kill_process(pid, force)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Kill task failed: {e}")));
+    match result {
+        Ok(msg) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &user,
+                "server.process.kill",
+                form.pid.trim(),
+                true,
+                &msg,
+                crate::panel_audit_types::AuditCategory::Other,
+                crate::panel_audit_types::AuditSeverity::Warning,
+            );
+            redirect_notice("/server/processes", Some(&msg), None)
+        }
+        Err(err) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &user,
+                "server.process.kill",
+                form.pid.trim(),
+                false,
+                &err,
+                crate::panel_audit_types::AuditCategory::Other,
+                crate::panel_audit_types::AuditSeverity::Warning,
+            );
+            redirect_notice("/server/processes", None, Some(&err))
+        }
+    }
 }
 
 #[get("/server/php/tuning")]
