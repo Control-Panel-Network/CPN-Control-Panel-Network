@@ -899,7 +899,14 @@ pub async fn databases_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let _ = (notice, error);
-    html_blocking_shell_fn(&http, user, "databases", "Databases & FTP", databases_hub_html).await
+    html_blocking_shell_fn(
+        &http,
+        user,
+        "databases",
+        "Databases & FTP",
+        databases_hub_html,
+    )
+    .await
 }
 
 #[post("/databases/install-mariadb")]
