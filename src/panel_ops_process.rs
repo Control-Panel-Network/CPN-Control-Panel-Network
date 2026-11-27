@@ -37,10 +37,11 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
     }
     #[cfg(not(windows))]
     {
+        // user:32 avoids the short default USER column that truncates as "newst39+".
         let out = Command::new("ps")
             .args([
                 "-eo",
-                "user,pid,state,pcpu,pmem,vsz,rss,etime,args",
+                "user:32,pid,state,pcpu,pmem,vsz,rss,etime,args",
                 "--sort=-pcpu",
             ])
             .output()
