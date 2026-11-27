@@ -94,7 +94,7 @@ use cpn_installer::panel_hub_routes::{
     security_ssl_issue_all, security_ssl_mail, security_ssl_mail_issue, security_ssl_manage,
     security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
     security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
-    server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
+    server_cpn_usage_page, server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
     server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
     server_dns_record_add, server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
     server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
@@ -1503,6 +1503,7 @@ async fn main() -> std::io::Result<()> {
             .service(server_litespeed_upgrade)
             .service(server_litespeed_downgrade)
             .service(server_processes_page)
+            .service(server_cpn_usage_page)
             .service(server_processes_kill)
             .service(server_php_overview)
             .service(server_php_extensions)

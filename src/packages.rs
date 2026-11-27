@@ -353,6 +353,7 @@ fn sanitize_sidebar_hidden(raw: &[String]) -> Result<Vec<String>, String> {
         "php",
         "services",
         "processes",
+        "cpn-usage",
         "logs",
         "package-manager",
         "litespeed",

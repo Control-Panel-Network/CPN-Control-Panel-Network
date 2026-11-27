@@ -270,6 +270,12 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "CPN usage",
+                    subtitle: "What the panel itself uses",
+                    href: "/server/cpn-usage",
+                    live: true,
+                },
+                HubTile {
                     title: "Change Port",
                     subtitle: "Panel listen port",
                     href: "/settings/port",

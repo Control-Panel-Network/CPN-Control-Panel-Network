@@ -582,6 +582,11 @@ pub(crate) const SERVER: &[NavEntry] = &[
         href: "/server/processes",
         label: "Top Processes",
     },
+    NavEntry::Link {
+        id: "cpn-usage",
+        href: "/server/cpn-usage",
+        label: "CPN usage",
+    },
     NavEntry::Group {
         id: "logs",
         href: "/server/logs",
