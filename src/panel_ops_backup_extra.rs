@@ -67,6 +67,42 @@ pub struct S3Dest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FtpDest {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub port: u16,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password_set: bool,
+    #[serde(default)]
+    pub remote_path: String,
+    #[serde(default)]
+    pub passive: bool,
+    #[serde(default)]
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DropboxDest {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub app_key: String,
+    #[serde(default)]
+    pub app_secret_set: bool,
+    #[serde(default)]
+    pub refresh_token_set: bool,
+    #[serde(default)]
+    pub folder_path: String,
+    #[serde(default)]
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BackupDestinations {
     #[serde(default)]
     pub local_enabled: bool,
@@ -76,6 +112,10 @@ pub struct BackupDestinations {
     pub remote: RemoteDest,
     #[serde(default)]
     pub s3: S3Dest,
+    #[serde(default)]
+    pub ftp: FtpDest,
+    #[serde(default)]
+    pub dropbox: DropboxDest,
     /// Legacy fields (older JSON). Prefer nested structs above.
     #[serde(default)]
     pub google_drive_note: String,
@@ -95,10 +135,6 @@ pub struct BackupSchedule {
 
 fn destinations_path() -> PathBuf {
     join_data("backup-destinations.json")
-}
-
-fn schedule_path() -> PathBuf {
-    join_data("backup-schedule.json")
 }
 
 fn secrets_dir() -> PathBuf {
@@ -161,6 +197,12 @@ fn normalize_destinations(mut d: BackupDestinations) -> BackupDestinations {
     d.remote.password_set = read_secret("remote_password").is_some();
     d.s3.access_key_set = read_secret("s3_access_key").is_some();
     d.s3.secret_key_set = read_secret("s3_secret_key").is_some();
+    if d.ftp.port == 0 {
+        d.ftp.port = 21;
+    }
+    d.ftp.password_set = read_secret("ftp_password").is_some();
+    d.dropbox.app_secret_set = read_secret("dropbox_app_secret").is_some();
+    d.dropbox.refresh_token_set = read_secret("dropbox_refresh_token").is_some();
     d
 }
 
@@ -183,6 +225,16 @@ pub fn load_destinations() -> BackupDestinations {
                 region: "auto".into(),
                 ..Default::default()
             },
+            ftp: FtpDest {
+                port: 21,
+                passive: true,
+                note: "Configure FTP host, user, and remote path.".into(),
+                ..Default::default()
+            },
+            dropbox: DropboxDest {
+                note: "Configure Dropbox app key, secret, and refresh token.".into(),
+                ..Default::default()
+            },
             google_drive_note: String::new(),
             remote_note: String::new(),
         };
@@ -202,6 +254,9 @@ pub fn save_destinations(dest: &BackupDestinations) -> Result<(), String> {
     out.remote.password_set = read_secret("remote_password").is_some();
     out.s3.access_key_set = read_secret("s3_access_key").is_some();
     out.s3.secret_key_set = read_secret("s3_secret_key").is_some();
+    out.ftp.password_set = read_secret("ftp_password").is_some();
+    out.dropbox.app_secret_set = read_secret("dropbox_app_secret").is_some();
+    out.dropbox.refresh_token_set = read_secret("dropbox_refresh_token").is_some();
     let raw = serde_json::to_string_pretty(&out).map_err(|e| e.to_string())?;
     fs::write(destinations_path(), raw).map_err(|e| format!("Cannot save destinations: {e}"))?;
     #[cfg(unix)]
@@ -352,42 +407,67 @@ pub fn test_s3() -> Result<String, String> {
     ))
 }
 
-pub use crate::panel_ops_backup_upload::upload_backup_artifact;
-
-pub fn load_schedule() -> BackupSchedule {
-    let Ok(raw) = fs::read_to_string(schedule_path()) else {
-        return BackupSchedule {
-            enabled: false,
-            cron: "0 2 * * *".into(),
-            scope: "panel".into(),
-            domain: String::new(),
-            destination: "local".into(),
-        };
-    };
-    serde_json::from_str(&raw).unwrap_or_default()
-}
-
-pub fn save_schedule(schedule: &BackupSchedule) -> Result<(), String> {
-    if let Some(parent) = schedule_path().parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Cannot create data dir: {e}"))?;
+pub fn set_ftp_password(password: &str) -> Result<(), String> {
+    if password.trim().is_empty() {
+        clear_secret("ftp_password");
+        return Ok(());
     }
-    let raw = serde_json::to_string_pretty(schedule).map_err(|e| e.to_string())?;
-    fs::write(schedule_path(), raw).map_err(|e| format!("Cannot save schedule: {e}"))
+    write_secret("ftp_password", password.trim())
 }
 
-pub fn list_restore_candidates(
-    scope: &str,
-    domain: &str,
-) -> Result<(String, Vec<(String, u64)>), String> {
-    let (preferred, hits) =
-        crate::backup_restore_scan::list_restore_archives_with_fallback(scope, domain)?;
-    let display = preferred.unwrap_or_else(|| "panel + fallback locations".into());
-    let files = hits
-        .into_iter()
-        .map(|h| (h.name, h.size))
-        .collect::<Vec<_>>();
-    Ok((display, files))
+pub fn set_dropbox_secrets(app_secret: &str, refresh_token: &str) -> Result<(), String> {
+    if !app_secret.trim().is_empty() {
+        write_secret("dropbox_app_secret", app_secret.trim())?;
+    }
+    if !refresh_token.trim().is_empty() {
+        write_secret("dropbox_refresh_token", refresh_token.trim())?;
+    }
+    Ok(())
 }
+
+pub fn test_ftp() -> Result<String, String> {
+    let d = load_destinations();
+    if d.ftp.host.trim().is_empty() {
+        return Err("FTP host is required.".into());
+    }
+    if d.ftp.username.trim().is_empty() {
+        return Err("FTP username is required.".into());
+    }
+    if d.ftp.remote_path.trim().is_empty() {
+        return Err("FTP remote path is required.".into());
+    }
+    if read_secret("ftp_password").is_none() {
+        return Err("FTP password is not saved.".into());
+    }
+    let port = if d.ftp.port == 0 { 21 } else { d.ftp.port };
+    Ok(format!(
+        "FTP destination configured for `{}@{}:{}` (passive={}). Upload runs on scheduled backup when enabled.",
+        d.ftp.username.trim(),
+        d.ftp.host.trim(),
+        port,
+        d.ftp.passive
+    ))
+}
+
+pub fn test_dropbox() -> Result<String, String> {
+    let d = load_destinations();
+    if d.dropbox.app_key.trim().is_empty() {
+        return Err("Dropbox app key is required.".into());
+    }
+    if read_secret("dropbox_app_secret").is_none() {
+        return Err("Dropbox app secret is not saved.".into());
+    }
+    if read_secret("dropbox_refresh_token").is_none() {
+        return Err("Dropbox refresh token is not saved.".into());
+    }
+    Ok(
+        "Dropbox OAuth credentials are present. Upload runs on the next scheduled backup when enabled."
+            .into(),
+    )
+}
+
+pub use crate::panel_ops_backup_schedule::{load_schedule, list_restore_candidates, save_schedule};
+pub use crate::panel_ops_backup_upload::upload_backup_artifact;
 
 #[cfg(test)]
 mod tests {

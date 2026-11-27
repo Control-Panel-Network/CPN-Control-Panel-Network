@@ -64,6 +64,29 @@ fn include_host_for_category(apps: &[AppStatus], category: &str) -> bool {
             .any(|c| store_categories_match(category, c))
 }
 
+fn force_host_backup_discovery(query: &str, category: &str) -> bool {
+    let cat = category.trim().to_ascii_lowercase();
+    if cat == "backup" || cat == "backups" {
+        return true;
+    }
+    let q = query.trim().to_ascii_lowercase();
+    if q.is_empty() {
+        return false;
+    }
+    q.contains("backupdest")
+        || q.contains("destination")
+        || q.contains("destinations")
+        || q.contains("sftp")
+        || q.contains("dropbox")
+        || q.contains("gdrive")
+        || q.contains("google drive")
+        || q.contains("google-drive")
+        || q == "s3"
+        || q.contains("restic")
+        || q == "ftp"
+        || q.starts_with("ftp ")
+}
+
 fn collect_unified<'a>(
     apps: &'a [AppStatus],
     entries: &'a [CatalogEntry],
@@ -76,10 +99,14 @@ fn collect_unified<'a>(
     let mut out: Vec<UnifiedItem<'a>> = Vec::new();
     let host_cat = if cat == "host" { "" } else { category };
     let want_host = matches!(target, "host" | "all");
+    // Backup Host packages (backupDestinations) must stay discoverable under Backup
+    // even when the Site target is selected; otherwise only site Backup plugins show.
+    let force_host_backup = force_host_backup_discovery(query, category);
+    let include_host = want_host || force_host_backup;
     let want_cpn = matches!(target, "cpn" | "all" | "user");
     let want_site = matches!(target, "site" | "all" | "user");
 
-    if want_host && include_host_for_category(apps, host_cat) {
+    if include_host && include_host_for_category(apps, host_cat) {
         for status in filter_host_packages(apps, query, host_cat) {
             out.push(UnifiedItem::Host(status));
         }
@@ -119,7 +146,7 @@ fn collect_unified<'a>(
         }
     }
 
-    if want_host {
+    if include_host {
         for entry in filter_store_entries(entries, query, if cat == "host" { "" } else { category })
         {
             if skip_catalog_duplicate(entry) {

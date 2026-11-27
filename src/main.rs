@@ -44,7 +44,9 @@ use cpn_installer::panel_hub_routes::{
     backups_incremental_run, backups_incremental_save, backups_remote_route, backups_remote_save,
     backups_remote_test, backups_restore_plan_route, backups_restore_route, backups_restore_run,
     backups_s3_route, backups_s3_save, backups_s3_test, backups_schedule_route,
-    backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
+    backups_schedule_save, backups_ftp_route, backups_ftp_save, backups_ftp_test,
+    backups_dropbox_route, backups_dropbox_save, backups_dropbox_test, cloudflare_add_post,
+    cloudflare_delete_post, cloudflare_dns_get,
     cloudflare_oauth_callback_get, cloudflare_oauth_client_post, cloudflare_oauth_connect_post,
     cloudflare_oauth_disconnect_post, cloudflare_proxy_post, cloudflare_settings_post,
     cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
@@ -157,7 +159,8 @@ use cpn_installer::panel_plugin_float::{plugins_float_asset, plugins_float_chat}
 use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{
     apps_activate, apps_deactivate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop,
-    apps_uninstall, backups_page, backups_run, databases_create, databases_ftp_create,
+    apps_uninstall, backups_delete, backups_page, backups_run, databases_create,
+    databases_ftp_create,
     databases_install_mariadb, databases_page, email_account_create, email_account_delete,
     email_account_disable, email_account_enable, email_account_modify, email_account_restore,
     email_page, plugins_activate_host, plugins_dashboard_page, plugins_deactivate_host,
@@ -1437,6 +1440,7 @@ async fn main() -> std::io::Result<()> {
             .service(apps_stop)
             .service(backups_page)
             .service(backups_run)
+            .service(backups_delete)
             .service(backups_create_route)
             .service(backups_restore_route)
             .service(backups_restore_plan_route)
@@ -1454,6 +1458,12 @@ async fn main() -> std::io::Result<()> {
             .service(backups_s3_route)
             .service(backups_s3_save)
             .service(backups_s3_test)
+            .service(backups_ftp_route)
+            .service(backups_ftp_save)
+            .service(backups_ftp_test)
+            .service(backups_dropbox_route)
+            .service(backups_dropbox_save)
+            .service(backups_dropbox_test)
             .service(backups_incremental_route)
             .service(backups_incremental_save)
             .service(backups_incremental_run)

@@ -198,7 +198,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
     };
     let content_checks = match scope {
         BackupScope::Panel => format!(
-            "{}{}",
+            "{}{}{}",
             checkbox(
                 "panel_config",
                 "Panel config",
@@ -217,12 +217,26 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
                     "No local MariaDB detected yet. Install MariaDB from Host packages."
                 }
             ),
+            checkbox(
+                "email_stack",
+                "Email stack (webmail + mail plugins)",
+                false,
+                false,
+                "Mail inventory, DKIM, webmail data under /var/lib/cpn-webmail, mail DBs when present, and email Host plugins (Tachyon data, Proton Mail, Roundcube, and similar)."
+            ),
         ),
         BackupScope::Site | BackupScope::Subdomain => format!(
-            "{}{}{}{}{}",
+            "{}{}{}{}{}{}",
             checkbox("website_files", "Website files (docroot)", true, false, ""),
             checkbox("backups_folder", "Backups folder", false, false, ""),
             checkbox("plugins_folder", "Plugins folder", false, false, ""),
+            checkbox(
+                "email",
+                "Email (mailboxes + email plugins)",
+                false,
+                false,
+                "Domain e-mails/ Maildirs, domain DKIM keys, classic vmail when present, and email-related site plugins."
+            ),
             checkbox(
                 "databases",
                 "Databases",
@@ -273,7 +287,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
         {path_blurb}
         {upload_hint}
         {migrate}
-        <form method="get" action="/backups" class="stack-form" style="max-width:560px;">
+        <form method="get" action="/backups/create" class="stack-form" style="max-width:560px;">
           <fieldset style="border:1px solid #eeeef0;border-radius:12px;padding:12px 14px;">
             <legend style="font-weight:700;padding:0 6px;">Scope</legend>
             <label style="display:block;margin:6px 0;"><input type="radio" name="scope" value="panel"{sp} onchange="this.form.submit()"> Panel config</label>

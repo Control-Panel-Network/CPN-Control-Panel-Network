@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Email backup contents on Create Backup**: Panel scope gains **Email stack** (mail inventory, DKIM, `/var/lib/cpn-webmail` data, mail DBs when present, and email Host plugins). Website/Subdomain scope gains **Email** (domain `e-mails/` Maildirs, domain DKIM, classic `vmail` when present, and email-related site plugins). Restore discovers `e-mails/`, `email-stack/`, and `email-plugins/` and can apply mailbox trees with confirmation.
+- **Delete local backup archives**: `/backups/restore` and `/backups/schedule` list archives with a Delete action, confirmation dialog, path-safe delete under known backup roots, and audit entries without secrets.
+- **FTP and Dropbox backup destinations**: Destinations (unlocked by Host plugin `backupDestinations`) add FTP and Dropbox configure pages alongside Google Drive, SFTP, and S3-compatible targets.
+
 ### Fixed
 
+- **Backup store hid Host destination plugins on Site target**: Browsing Plugin Store category Backup (or searching destination keywords) while Site was selected only showed site Backup plugins (for example Contabo auto snapshot). Host package `backupDestinations` is now included so Google Drive / SFTP / FTP / S3 / Dropbox unlock is discoverable.
 - **Tachyon Auth UI SPF/DMARC still `none` on EL10 (and EL hosts without rspamd in AppStream/EPEL)**: OpenDKIM alone writes `dkim=` Authentication-Results, so webmail correctly shows SPF/DMARC as `none` until rspamd's milter adds those results. `#714` already wired rspamd when active, but the package is missing from default EL10 repos, so heal never started it. CPN now writes the official rspamd.com `centos-<major>` DNF repo when needed, soft-ensures rspamd during OpenDKIM/mail Auth-Results heal (fail-soft), and re-wires `smtpd_milters` to include `:11332`. Email > Rspamd Enable uses the same path. Cloudflare DNS publish is unrelated to inbound Auth-Results icons.
 - **Blank `/tachyon/` after Tachyon version upgrade on SELinux hosts**: Upgrades stage the archive under `/var/tmp` and copy the new `tachyon/v/<version>` tree with `cp -a`, which can leave the tree labeled `tmp_t`. PHP-FPM (`httpd_t`) then cannot `include` the version files and the public mount returns HTTP 200 with an empty body. Install now prefers `cp -a --no-preserve=context`, always `restorecon`s `/opt/cpn-webmail` on webmail heal (not only the data tree, and not only once via the fcontext stamp), and the HTTP health check fails closed on an empty body with a clear hint.
 

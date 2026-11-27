@@ -70,6 +70,10 @@ pub struct BackupRunForm {
     databases: String,
     #[serde(default)]
     ftp: String,
+    #[serde(default)]
+    email: String,
+    #[serde(default)]
+    email_stack: String,
 }
 
 #[post("/backups/run")]
@@ -96,6 +100,8 @@ pub async fn backups_run(
         plugins_folder: form.plugins_folder.clone(),
         databases: form.databases.clone(),
         ftp: form.ftp.clone(),
+        email: form.email.clone(),
+        email_stack: form.email_stack.clone(),
     }) {
         Ok(name) => {
             let mut loc = format!(
@@ -119,6 +125,76 @@ pub async fn backups_run(
             if !domain.is_empty() {
                 loc.push_str(&format!("&domain={}", urlencoding_simple(domain)));
             }
+            HttpResponse::SeeOther()
+                .append_header(("Location", loc))
+                .finish()
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct BackupDeleteForm {
+    #[serde(default)]
+    scope: String,
+    #[serde(default)]
+    domain: String,
+    #[serde(default)]
+    dir: String,
+    #[serde(default)]
+    archive: String,
+    #[serde(default)]
+    return_to: String,
+}
+
+#[post("/backups/delete")]
+pub async fn backups_delete(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<BackupDeleteForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let return_to = form.return_to.trim();
+    let return_to = if return_to.starts_with("/backups/") {
+        return_to
+    } else {
+        "/backups/restore"
+    };
+    match crate::backups_delete::delete_backup_archive(&form.dir, &form.archive) {
+        Ok(msg) => {
+            let _ = crate::panel_audit::record(
+                &user,
+                "backups.delete",
+                &form.archive,
+                true,
+                &format!("Deleted backup archive from {}", form.dir.trim()),
+            );
+            let loc = format!(
+                "{}{}notice={}",
+                return_to,
+                if return_to.contains('?') { "&" } else { "?" },
+                urlencoding_simple(&msg)
+            );
+            let _ = (&form.scope, &form.domain);
+            HttpResponse::SeeOther()
+                .append_header(("Location", loc))
+                .finish()
+        }
+        Err(error) => {
+            let _ = crate::panel_audit::record(
+                &user,
+                "backups.delete",
+                &form.archive,
+                false,
+                "Backup archive delete failed",
+            );
+            let loc = format!(
+                "{}{}error={}",
+                return_to,
+                if return_to.contains('?') { "&" } else { "?" },
+                urlencoding_simple(&error)
+            );
             HttpResponse::SeeOther()
                 .append_header(("Location", loc))
                 .finish()
