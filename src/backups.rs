@@ -49,6 +49,7 @@ pub struct BackupContents {
 }
 
 impl BackupContents {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_flags(
         panel_config: bool,
         website_files: bool,

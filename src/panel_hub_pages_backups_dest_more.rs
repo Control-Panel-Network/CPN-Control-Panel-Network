@@ -113,27 +113,30 @@ pub fn backups_dropbox_page(notice: Option<&str>, error: Option<&str>) -> String
     )
 }
 
-pub fn save_ftp_form(
-    enabled: bool,
-    host: &str,
-    port: u16,
-    username: &str,
-    password: &str,
-    remote_path: &str,
-    passive: bool,
-    note: &str,
-) -> Result<String, String> {
-    set_ftp_password(password)?;
+/// Form fields for saving an FTP backup destination.
+pub struct FtpSaveInput<'a> {
+    pub enabled: bool,
+    pub host: &'a str,
+    pub port: u16,
+    pub username: &'a str,
+    pub password: &'a str,
+    pub remote_path: &'a str,
+    pub passive: bool,
+    pub note: &'a str,
+}
+
+pub fn save_ftp_form(input: FtpSaveInput<'_>) -> Result<String, String> {
+    set_ftp_password(input.password)?;
     let mut d = load_destinations();
     d.ftp = FtpDest {
-        enabled,
-        host: host.trim().to_string(),
-        port: if port == 0 { 21 } else { port },
-        username: username.trim().to_string(),
+        enabled: input.enabled,
+        host: input.host.trim().to_string(),
+        port: if input.port == 0 { 21 } else { input.port },
+        username: input.username.trim().to_string(),
         password_set: false,
-        remote_path: remote_path.trim().to_string(),
-        passive,
-        note: note.trim().to_string(),
+        remote_path: input.remote_path.trim().to_string(),
+        passive: input.passive,
+        note: input.note.trim().to_string(),
     };
     save_destinations(&d)?;
     Ok("FTP destination saved.".into())

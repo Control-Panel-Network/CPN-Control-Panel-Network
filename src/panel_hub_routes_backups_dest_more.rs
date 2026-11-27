@@ -6,8 +6,8 @@ use crate::panel_hub_http::{
 };
 use crate::panel_hub_pages_backups_dest::parse_flag;
 use crate::panel_hub_pages_backups_dest_more::{
-    backups_dropbox_page, backups_ftp_page, run_dropbox_test, run_ftp_test, save_dropbox_form,
-    save_ftp_form,
+    FtpSaveInput, backups_dropbox_page, backups_ftp_page, run_dropbox_test, run_ftp_test,
+    save_dropbox_form, save_ftp_form,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -79,16 +79,16 @@ pub async fn backups_ftp_save(
         );
     }
     let port = form.port.trim().parse::<u16>().unwrap_or(21);
-    match save_ftp_form(
-        parse_flag(&form.enabled),
-        &form.host,
+    match save_ftp_form(FtpSaveInput {
+        enabled: parse_flag(&form.enabled),
+        host: &form.host,
         port,
-        &form.username,
-        &form.password,
-        &form.remote_path,
-        parse_flag(&form.passive),
-        &form.note,
-    ) {
+        username: &form.username,
+        password: &form.password,
+        remote_path: &form.remote_path,
+        passive: parse_flag(&form.passive),
+        note: &form.note,
+    }) {
         Ok(msg) => redirect_notice("/backups/ftp", Some(&msg), None),
         Err(err) => redirect_notice("/backups/ftp", None, Some(&err)),
     }

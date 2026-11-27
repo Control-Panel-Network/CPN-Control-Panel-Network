@@ -10,7 +10,7 @@ use crate::plugin_activation::{host_plugin_installed, host_plugin_path, host_plu
 use crate::plugins_settings::is_webmail_plugin_id;
 use crate::sites::{SiteRecord, site_home_from_record, site_plugins_dir};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const WEBMAIL_DATA_ROOT: &str = "/var/lib/cpn-webmail";
@@ -188,7 +188,7 @@ fn stage_mail_database_dumps(dest: &Path) -> Result<(), String> {
         }
         let dump_path = dest.join(format!("{db}.sql"));
         let file = fs::File::create(&dump_path).map_err(|e| format!("dump file {db}: {e}"))?;
-        let status = Command::new(&dump_bin)
+        let status = Command::new(dump_bin)
             .args(["--single-transaction", "--routines", "--databases", db])
             .stdout(file)
             .status();
