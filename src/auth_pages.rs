@@ -447,6 +447,15 @@ const MFA_SESSION_WATCH_JS: &str = r#"
 (function(){
   var back=(document.getElementById('cpn-mfa-back')||{}).href||'/login';
   var leaving=false;
+  var passkeyAutoStarted=false;
+  function maybeAutoPasskey(){
+    if(passkeyAutoStarted||leaving||!document.getElementById('i18n-passkey')) return;
+    passkeyAutoStarted=true;
+    setTimeout(function(){
+      if(leaving) return;
+      if(typeof cpnMfaPasskey==='function') cpnMfaPasskey({auto:true});
+    },180);
+  }
   window.cpnMfaExpired=function(msg){
     if(leaving) return; leaving=true;
     window.__cpnMfaLeaving=true;
@@ -471,7 +480,10 @@ const MFA_SESSION_WATCH_JS: &str = r#"
     if(leaving) return;
     fetch('/login/2fa/session',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); })
-      .then(function(d){ if(d && d.valid===false) window.cpnMfaExpired(); })
+      .then(function(d){
+        if(d && d.valid===false) window.cpnMfaExpired();
+        else maybeAutoPasskey();
+      })
       .catch(function(){});
   }
   setInterval(check,15000);
@@ -544,11 +556,6 @@ pub fn panel_mfa_html(
     } else {
         String::new()
     };
-    let passkey_auto_script = if options.passkey_available {
-        MFA_PASSKEY_AUTO_START_JS
-    } else {
-        ""
-    };
     let passkey_script = if options.passkey_available {
         crate::panel_webauthn::passkey_client_script()
     } else {
@@ -579,7 +586,6 @@ pub fn panel_mfa_html(
     </section>
   </main>
   <script>{passkey_script}</script>
-  <script>{passkey_auto}</script>
   <script>{watch_script}</script>
   {script}
 </body>
@@ -599,28 +605,9 @@ pub fn panel_mfa_html(
             None => String::new(),
         },
         passkey_script = passkey_script,
-        passkey_auto = passkey_auto_script,
         script = PANEL_I18N_SCRIPT,
     )
 }
-
-/// Auto-start WebAuthn on MFA page load; button remains a manual fallback.
-const MFA_PASSKEY_AUTO_START_JS: &str = r#"
-(function(){
-  if(!document.getElementById('i18n-passkey')) return;
-  var started=false;
-  function go(){
-    if(started||window.__cpnMfaLeaving) return;
-    started=true;
-    if(typeof cpnMfaPasskey==='function') cpnMfaPasskey();
-  }
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',function(){ setTimeout(go,280); });
-  } else {
-    setTimeout(go,280);
-  }
-})();
-"#;
 
 pub fn forgot_password_html() -> String {
     let boot = load_bootstrap();
@@ -949,7 +936,8 @@ mod tests {
         assert!(html.contains("Sign in with passkey"));
         assert!(html.contains("Windows Hello"));
         assert!(html.contains("Authenticator code"));
-        assert!(html.contains("setTimeout(go,280)"));
+        assert!(html.contains("maybeAutoPasskey"));
+        assert!(html.contains("auto:true"));
         assert!(html.contains("id=\"i18n-login-error\""));
         assert!(!html.contains("sudo cpn mfa clear"));
     }

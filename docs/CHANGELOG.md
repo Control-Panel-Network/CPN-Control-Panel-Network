@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Login 2FA passkey after session expiry**: WebAuthn auto-start on `/login/2fa` now waits until the MFA pending session probe succeeds, so a dead page does not fire a passkey ceremony first. Browsers that block passkey without a user gesture no longer show a red failure banner on load; a gentle hint appears until you click **Sign in with passkey**. Manual passkey still shows clear errors. Panel session countdown redirects use `replace` with `?error=session_expired&next=...` instead of leaving a half-signed-in shell.
+- **Resizable sidebar**: On wide layouts, drag the right edge of the sidebar to change width (248–420px, stored in `localStorage` as `cpn-sidebar-width`). Collapsed and mobile drawer modes keep the existing behavior.
+
 ### Added
 
 - **System Processes Monitor tabs** (`/server/processes`): Top Processes and CPN usage share one page with pill tabs. Deep links: `/server/processes?tab=cpn-usage` and `/server/cpn-usage` (redirect). CPN usage tab includes admin Kill with confirmation via the same `/server/processes/kill` route. Host summary cards stay on a clean 3-column grid (no orphan teaser card).

@@ -50,6 +50,20 @@ html[data-color-mode="dark"] body.sidebar-collapsed .mobile-header .logout:hover
   color:#f2f4f7;
 }
 [data-color-mode="dark"] .sidebar-collapse-btn:hover { background:rgba(255,255,255,.08); }
+.sidebar-resize-handle {
+  position:absolute; top:0; right:0; width:7px; height:100%; cursor:col-resize;
+  z-index:120; touch-action:none; background:transparent;
+}
+.sidebar-resize-handle:hover,
+body.sidebar-resizing .sidebar-resize-handle {
+  background:rgba(0,102,204,.22);
+}
+body.sidebar-resizing { cursor:col-resize; user-select:none; }
+body.sidebar-resizing .panel-main { pointer-events:none; }
+body.sidebar-collapsed .sidebar-resize-handle,
+@media (max-width:1023.98px) {
+  .sidebar-resize-handle { display:none; }
+}
 "#
 }
 
@@ -169,6 +183,79 @@ pub fn panel_nav_script() -> &'static str {
 
   setCollapsed(readCollapsed());
   syncLayout();
+
+  var WIDTH_KEY = 'cpn-sidebar-width';
+  var WIDTH_MIN = 248;
+  var WIDTH_MAX = 420;
+  var WIDTH_DEFAULT = 292;
+  function clampWidth(value) {
+    if (!isFinite(value)) return WIDTH_DEFAULT;
+    return Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, Math.round(value)));
+  }
+  function readSidebarWidth() {
+    try {
+      var raw = parseInt(localStorage.getItem(WIDTH_KEY), 10);
+      return clampWidth(raw);
+    } catch (e) { return WIDTH_DEFAULT; }
+  }
+  function writeSidebarWidth(px) {
+    try { localStorage.setItem(WIDTH_KEY, String(px)); } catch (e) {}
+  }
+  function applySidebarWidth(px) {
+    var w = clampWidth(px);
+    document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+    return w;
+  }
+  applySidebarWidth(readSidebarWidth());
+
+  function sidebarResizeEnabled() {
+    return !body.classList.contains('sidebar-collapsed') && !isNarrow();
+  }
+  var resizeHandle = document.createElement('div');
+  resizeHandle.className = 'sidebar-resize-handle';
+  resizeHandle.setAttribute('aria-hidden', 'true');
+  resizeHandle.setAttribute('title', 'Drag to resize sidebar');
+  sidebar.appendChild(resizeHandle);
+
+  var dragActive = false;
+  var dragStartX = 0;
+  var dragStartWidth = WIDTH_DEFAULT;
+
+  function onDragMove(event) {
+    if (!dragActive) return;
+    var dx = event.clientX - dragStartX;
+    applySidebarWidth(dragStartWidth + dx);
+  }
+  function onDragEnd() {
+    if (!dragActive) return;
+    dragActive = false;
+    body.classList.remove('sidebar-resizing');
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    var applied = parseInt(
+      getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width'),
+      10
+    );
+    writeSidebarWidth(clampWidth(applied));
+  }
+  resizeHandle.addEventListener('mousedown', function (event) {
+    if (!sidebarResizeEnabled()) return;
+    event.preventDefault();
+    dragActive = true;
+    dragStartX = event.clientX;
+    var current = parseInt(
+      getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width'),
+      10
+    );
+    dragStartWidth = clampWidth(current);
+    body.classList.add('sidebar-resizing');
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+  });
+  window.addEventListener('resize', function () {
+    if (!sidebarResizeEnabled()) return;
+    applySidebarWidth(readSidebarWidth());
+  });
 })();
 </script>
 "#
@@ -200,5 +287,15 @@ mod tests {
         assert!(js.contains("cpn-sidebar-collapsed"));
         assert!(js.contains("sidebar-collapse-btn"));
         assert!(js.contains("localStorage"));
+    }
+
+    #[test]
+    fn nav_script_supports_sidebar_width_resize() {
+        let js = panel_nav_script();
+        let css = sidebar_collapse_styles();
+        assert!(js.contains("cpn-sidebar-width"));
+        assert!(js.contains("sidebar-resize-handle"));
+        assert!(css.contains("sidebar-resize-handle"));
+        assert!(js.contains("--sidebar-width"));
     }
 }

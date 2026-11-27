@@ -408,7 +408,9 @@ async function cpnLoginPasskey(){{
     cpnFinishPasskeyCeremony(cer.abort);
   }}
 }}
-async function cpnMfaPasskey(){{
+async function cpnMfaPasskey(opts){{
+  opts=opts||{{}};
+  const auto=!!opts.auto;
   const status=document.getElementById('cpn-passkey-login-status');
   const cer=cpnBeginPasskeyCeremony();
   try{{
@@ -437,6 +439,15 @@ async function cpnMfaPasskey(){{
     }}
     if(err&&err.code==='mfa_session_expired'&&typeof window.cpnMfaExpired==='function'){{
       window.cpnMfaExpired(err.message);
+      return;
+    }}
+    const name=String((err&&err.name)||'');
+    if(auto&&(name==='AbortError'||name==='NotAllowedError')){{
+      if(status){{
+        status.textContent='Click Sign in with passkey when you are ready (Windows Hello or your security key).';
+        status.style.color='';
+        status.style.fontWeight='';
+      }}
       return;
     }}
     cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
@@ -478,6 +489,14 @@ mod tests {
         assert!(
             script.contains("function cpnMfaPasskey"),
             "2FA page must offer passkey assertion"
+        );
+        assert!(
+            script.contains("const auto=!!opts.auto"),
+            "2FA passkey must support silent auto-start failures"
+        );
+        assert!(
+            script.contains("Click Sign in with passkey when you are ready"),
+            "auto passkey denial must not use the red failure banner"
         );
         assert!(
             script.contains("function cpnPreferLocalhostForPasskeys"),
