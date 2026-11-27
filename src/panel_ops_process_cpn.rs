@@ -194,14 +194,8 @@ mod tests {
             classify_cpn_role("root", "/usr/bin/cpn panel status"),
             Some("Panel CLI")
         );
-        assert_eq!(
-            classify_cpn_role("mysql", "/usr/sbin/mariadbd"),
-            None
-        );
-        assert_eq!(
-            classify_cpn_role("nobody", "openlitespeed"),
-            None
-        );
+        assert_eq!(classify_cpn_role("mysql", "/usr/sbin/mariadbd"), None);
+        assert_eq!(classify_cpn_role("nobody", "openlitespeed"), None);
     }
 
     #[test]

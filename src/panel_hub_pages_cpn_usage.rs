@@ -2,9 +2,7 @@
 
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_process::truncate_command;
-use crate::panel_ops_process_cpn::{
-    CpnUsageSnapshot, format_rss_kb, snapshot_cpn_usage,
-};
+use crate::panel_ops_process_cpn::{CpnUsageSnapshot, format_rss_kb, snapshot_cpn_usage};
 
 fn html_escape(value: &str) -> String {
     value
