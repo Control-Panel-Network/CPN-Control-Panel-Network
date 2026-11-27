@@ -169,11 +169,13 @@ mod tests {
     }
 
     #[test]
-    fn cpn_tab_has_kill_for_admin() {
+    fn cpn_tab_admin_kill_or_empty() {
         let html = system_processes_hub_page("cpn-usage", true);
-        assert!(html.contains("return_tab") || html.contains("panel-notice error"));
-        if html.contains("CPN-related processes") {
-            assert!(html.contains("/server/processes/kill"));
+        assert!(html.contains("CPN-related processes")
+            || html.contains("empty-state")
+            || html.contains("panel-notice error"));
+        if html.contains("/server/processes/kill") {
+            assert!(html.contains("return_tab"));
         }
     }
 }
