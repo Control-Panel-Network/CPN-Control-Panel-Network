@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Supersede in-flight runs on the same PR or branch ref so rapid pushes do not stack redundant jobs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     name: Rust
