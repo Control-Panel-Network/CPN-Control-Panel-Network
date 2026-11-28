@@ -320,9 +320,7 @@ pub fn panel_nav_script() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        panel_nav_script, sidebar_collapse_styles, sidebar_width_typography_styles,
-    };
+    use super::{panel_nav_script, sidebar_collapse_styles, sidebar_width_typography_styles};
 
     #[test]
     fn collapse_styles_cover_drawer_and_scroll_contract() {
