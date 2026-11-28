@@ -38,6 +38,7 @@ const VIEWPORT_PAD = 12;
 type NotificationsPopoverProps = {
   notices: PanelNotice[];
   onMarkAllRead: () => void;
+  onClearAll?: () => void;
   onDismiss?: (id: string) => void;
 };
 
@@ -135,6 +136,7 @@ function SeverityIcon({ severity }: { severity: NotifySeverity }) {
 export function NotificationsPopover({
   notices,
   onMarkAllRead,
+  onClearAll,
   onDismiss,
 }: NotificationsPopoverProps) {
   const [open, setOpen] = useState(false);
@@ -208,9 +210,25 @@ export function NotificationsPopover({
           >
             <header>
               <span>Notifications</span>
-              <button type="button" onClick={onMarkAllRead}>
-                Mark all as read
-              </button>
+              <div className="notify-popover-actions">
+                <button type="button" onClick={onMarkAllRead}>
+                  Mark all as read
+                </button>
+                <button
+                  type="button"
+                  className="notify-action-muted"
+                  onClick={() => {
+                    const msg =
+                      "Clear all dismissible notifications? Sticky announcements stay until you dismiss them.";
+                    if (typeof window !== "undefined" && !window.confirm(msg)) {
+                      return;
+                    }
+                    onClearAll?.();
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
             </header>
             {notices.length === 0 ? (
               <p className="notify-empty">No notifications yet.</p>

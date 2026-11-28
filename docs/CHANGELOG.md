@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Notification bell read styling**: Items marked as read now render with a muted grey toast (neutral background and icon tile) instead of keeping bright success green at reduced opacity only. Applies to the sidebar bell popover on classic panel chrome and the Panel UI package.
 - **Login 2FA passkey after session expiry**: WebAuthn auto-start on `/login/2fa` now waits until the MFA pending session probe succeeds, so a dead page does not fire a passkey ceremony first. Browsers that block passkey without a user gesture no longer show a red failure banner on load; a gentle hint appears until you click **Sign in with passkey**. Manual passkey still shows clear errors. Panel session countdown redirects use `replace` with `?error=session_expired&next=...` instead of leaving a half-signed-in shell.
 - **Resizable sidebar**: On wide layouts, drag the right edge of the sidebar to change width (248–420px, stored in `localStorage` as `cpn-sidebar-width`). Collapsed and mobile drawer modes keep the existing behavior.
 
 ### Added
+
+- **Notification bell Clear all**: The notifications popover adds **Clear all** next to **Mark all as read**, with a confirmation step. Clear all removes every non-sticky notification via `POST /api/panel/notifications/mark-read` with `clear_all: true`; sticky items (`sticky: true`, `announcement`, `warning_long`) stay until dismissed with the per-item X.
 
 - **Docker list image update hints** (`/docker/list`): Active Containers shows an **Image update** column (Up to date / Update available / Unknown / Not checked). **Check for updates** compares local and registry digests (Docker Hub via CLI manifest inspect with HTTP fallback; other registries when the engine can reach them). Results cache under panel data for about three hours to limit Hub rate use. No auto-pull; use Manage Images or Compose Stacks to upgrade.
 
