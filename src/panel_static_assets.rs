@@ -120,7 +120,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn asset_version_includes_pkg_or_sha_suffix() {
         let ver = asset_version();
         assert!(!ver.is_empty());
