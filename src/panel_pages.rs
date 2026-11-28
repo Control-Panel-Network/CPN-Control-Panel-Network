@@ -14,6 +14,13 @@ pub(crate) fn panel_styles() -> &'static str {
   --canvas:#fff; --surface:#f5f5f7; --surface-soft:#fafafc; --ink:#1d1d1f;
   --muted:#6e6e73; --hairline:#e0e0e0; --blue:#0066cc; --blue-focus:#0071e3; --green:#18864b;
   --sidebar-width:292px;
+  --sidebar-w:292;
+  --sidebar-nav-font:clamp(14px,calc(14px + (var(--sidebar-w) - 248) * 0.032px),22px);
+  --sidebar-nav-icon-box:clamp(28px,calc(28px + (var(--sidebar-w) - 248) * 0.06px),40px);
+  --sidebar-nav-icon-svg:clamp(16px,calc(16px + (var(--sidebar-w) - 248) * 0.035px),22px);
+  --sidebar-brand-font:clamp(17px,calc(17px + (var(--sidebar-w) - 248) * 0.028px),22px);
+  --sidebar-meta-font:clamp(12px,calc(12px + (var(--sidebar-w) - 248) * 0.022px),16px);
+  --sidebar-nav-pad-x:clamp(12px,calc(12px + (var(--sidebar-w) - 248) * 0.038px),20px);
 }
 * { box-sizing:border-box; }
 /* Fixed shell: sidebar stays put; main column scrolls. Avoid overflow-x on html/body (breaks sticky). */
@@ -25,6 +32,7 @@ button { font:inherit; cursor:pointer; }
 .eyebrow { margin:0 0 8px; color:var(--blue); font-size:12px; font-weight:600; letter-spacing:.1em; }
 .panel-layout {
   height:100vh; height:100dvh; max-height:100vh; max-height:100dvh;
+  min-height:0;
   display:flex; background:var(--surface); position:relative; overflow:hidden;
 }
 .sidebar-backdrop {
@@ -50,7 +58,7 @@ button { font:inherit; cursor:pointer; }
 .server-summary strong { overflow:hidden; text-overflow:ellipsis; font-size:13px; }
 .server-summary span { color:var(--muted); font-size:12px; }
 .sidebar nav {
-  flex:1 1 auto; min-height:0; display:block;
+  flex:1 1 0%; min-height:0; max-height:100%; display:block;
   overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin;
   scrollbar-color:rgba(110,110,115,.55) transparent;
@@ -76,7 +84,7 @@ button { font:inherit; cursor:pointer; }
   min-height:44px; min-width:44px; padding:0 12px; color:var(--muted); font-size:13px;
 }
 .panel-main {
-  min-width:0; flex:1; height:100%; max-height:100%;
+  min-width:0; min-height:0; flex:1 1 0%; height:100%; max-height:100%;
   overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
   padding:76px clamp(24px,8vw,192px) 48px;
@@ -403,7 +411,7 @@ code { font-size:.9em; word-break:break-word; }
     z-index:100; pointer-events:auto;
   }
   body.nav-open .sidebar { transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); z-index:100; }
-  .panel-main { padding:0 16px 64px; width:100%; height:100%; overflow-y:auto; }
+  .panel-main { padding:0 16px 64px; width:100%; min-height:0; flex:1 1 0%; overflow-y:auto; }
   .mobile-header {
     display:flex; height:58px; margin:0 -16px 28px; padding:0 12px 0 8px; align-items:center;
     justify-content:space-between; gap:12px; position:sticky; top:0; z-index:30;
@@ -590,6 +598,14 @@ mod tests {
         assert!(
             css.contains("min-width:0"),
             "cards need min-width:0 so flex children do not blow out the page"
+        );
+        assert!(
+            css.contains(".panel-main") && css.contains("min-height:0"),
+            "main column must shrink inside the flex shell so overflow-y scroll works"
+        );
+        assert!(
+            css.contains(".sidebar nav") && css.contains("flex:1 1 0%"),
+            "sidebar nav must flex-shrink so it scrolls independently of the footer"
         );
         assert!(
             css.contains(".docker-list-wrap") && css.contains("overflow-x:hidden"),
