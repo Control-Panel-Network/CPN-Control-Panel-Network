@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.14] - 28/11/2026
+
+Patch release after v1.4.13. Package host limits and panel resource reserve, tabbed System Processes Monitor with CPN usage, backup destinations (local, OneDrive, FTP, Dropbox) and email-aware backups, Docker list update checks, faster hub SPA navigation, passkey/session/sidebar UX, notifications Clear all and grey read styling, Version Management prerelease help, site Unix ownership and File Manager Fix permissions, plus webmail SELinux, rspamd Auth-Results, and MFA enroll-cli fixes.
+
 ### Fixed
 
 - **Notification bell Clear all appeared broken after tip upgrade**: Sidebar HTML included the new **Clear all** control, but `/cpn-panel.js` could stay cached for up to an hour because the `?v=` query used only the package version (not the commit SHA). Browsers then kept older JS without the Clear all handler. Asset URLs now bust cache with `{version}-{shortSha}`; the notification loader also clears the list while a fresh feed request is in flight so stale rows do not linger after abort/reload races.
@@ -17,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Notification bell Clear all**: The notifications popover adds **Clear all** next to **Mark all as read**, with a confirmation step. Clear all removes every non-sticky notification via `POST /api/panel/notifications/mark-read` with `clear_all: true`; sticky items (`sticky: true`, `announcement`, `warning_long`) stay until dismissed with the per-item X.
+
+- **Package host CPU/memory limits and panel reserve**: Host packages expose Host CPU (%) and Host memory (MB); sites inherit package limits. Install and upgrade reserve CPU/memory for the panel process so the UI stays responsive as sites are added.
+- **CPN usage on System Processes Monitor**: Panel RSS and CPU in a dedicated tab with Kill confirmation and audit, sharing summary cards with Top Processes.
 
 - **Docker list image update hints** (`/docker/list`): Active Containers shows an **Image update** column (Up to date / Update available / Unknown / Not checked). **Check for updates** compares local and registry digests (Docker Hub via CLI manifest inspect with HTTP fallback; other registries when the engine can reach them). Results cache under panel data for about three hours to limit Hub rate use. No auto-pull; use Manage Images or Compose Stacks to upgrade.
 
@@ -30,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Version Management prerelease help**: The **Include GitHub prerelease tags** control documents GitHub Releases marked prerelease (beta/RC/alpha), not the `dev` branch. **Latest available** shows a Released date alongside the tag.
+- **Top Processes storage units**: Virt/Res and related size labels honor the profile **Storage display unit** preference with a space before KB/MB/GB/TB.
+- **MFA enroll-cli POST**: Registers the enroll-cli Continue POST route so CLI MFA enrollment works after tip upgrades.
+- **File Manager Fix permissions batch**: Mixed `/home` Fix skips unregistered non-site paths with an N fixed / M skipped summary instead of aborting the whole batch.
+- **Site home resolution for Fix permissions**: Prefer on-disk docroot trees over stale registry paths when matching site homes.
 - **Panel hub navigation latency**: Websites, Email, Databases, Packages, Server, Settings, and Dashboard hub routes render on the blocking pool with SPA fragments (smaller HTML on in-panel clicks). Member Packages view uses dashboard-style usage collection (no deep disk walk). Startup warms host sidebar, gauges, and service health caches; package usage TTL extended to 90s.
 - **Backup store hid Host destination plugins on Site target**: Browsing Plugin Store category Backup (or searching destination keywords) while Site was selected only showed site Backup plugins (for example Contabo auto snapshot). Host package `backupDestinations` is now included so Google Drive / SFTP / FTP / S3 / Dropbox unlock is discoverable.
 - **Tachyon Auth UI SPF/DMARC still `none` on EL10 (and EL hosts without rspamd in AppStream/EPEL)**: OpenDKIM alone writes `dkim=` Authentication-Results, so webmail correctly shows SPF/DMARC as `none` until rspamd's milter adds those results. `#714` already wired rspamd when active, but the package is missing from default EL10 repos, so heal never started it. CPN now writes the official rspamd.com `centos-<major>` DNF repo when needed, soft-ensures rspamd during OpenDKIM/mail Auth-Results heal (fail-soft), and re-wires `smtpd_milters` to include `:11332`. Email > Rspamd Enable uses the same path. Cloudflare DNS publish is unrelated to inbound Auth-Results icons.
