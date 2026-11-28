@@ -124,6 +124,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/server/php/tuning", "gauge", IconTone::Amber),
         ("/server/php", "plug", IconTone::Violet),
         ("/server/processes", "activity", IconTone::Rose),
+        ("/server/cpn-usage", "gauge", IconTone::Rose),
         ("/server/packages", "package", IconTone::Blue),
         ("/server/docker/apps", "boxes", IconTone::Cyan),
         ("/server/docker/containers", "container", IconTone::Blue),
@@ -199,9 +200,8 @@ pub fn resolve_nav(id: &str) -> (&'static str, IconTone) {
         "ssl" => ("lock", IconTone::Green),
         "apps" | "docker" => ("boxes", IconTone::Cyan),
         "users" | "packages" => ("users", IconTone::Blue),
-        "server" | "services" | "processes" | "logs" | "package-manager" | "system-repair" => {
-            ("server", IconTone::Slate)
-        }
+        "server" | "services" | "processes" | "cpn-usage" | "logs" | "package-manager"
+        | "system-repair" => ("server", IconTone::Slate),
         "root-files" => ("folder", IconTone::Amber),
         "php" => ("plug", IconTone::Violet),
         "litespeed" => ("rocket", IconTone::Amber),

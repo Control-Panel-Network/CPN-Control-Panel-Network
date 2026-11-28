@@ -303,7 +303,7 @@ pub fn activity_board_html(username: &str) -> String {
         panel("ssh-logins", false, &ssh_logins_panel()),
         panel("ssh-logs", true, &ssh_logs_panel(username, &analysis)),
         panel("panel-actions", true, &panel_actions_panel(username)),
-        panel("top-process", true, &top_process_panel()),
+        panel("top-process", true, &top_process_panel(username)),
         panel("traffic", true, &traffic_panel(minimalist)),
         panel("disk-io", true, &disk_io_panel(minimalist)),
         panel("cpu", true, &cpu_panel()),

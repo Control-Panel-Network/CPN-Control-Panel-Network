@@ -3,7 +3,8 @@
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::panel_notifications::{
-    dismiss, load_notifications, mark_read, notifications_public_json, push_notification_full,
+    clear_dismissible, dismiss, load_notifications, mark_read, notifications_public_json,
+    push_notification_full,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -53,6 +54,9 @@ pub struct MarkReadBody {
     /// When true, remove the listed ids instead of marking them read (per-item X).
     #[serde(default)]
     dismiss: bool,
+    /// When true, remove every non-sticky notification (Clear all). Must be used alone.
+    #[serde(default)]
+    clear_all: bool,
 }
 
 #[post("/api/panel/notifications/mark-read")]
@@ -64,13 +68,20 @@ pub async fn panel_notifications_mark_read(
     let Some(user) = require_panel_user(&state, &http) else {
         return json_err(401, "Login required");
     };
-    if !body.all && body.ids.is_empty() {
+    if body.clear_all {
+        if body.dismiss || body.all || !body.ids.is_empty() {
+            return json_err(400, "clear_all must be used alone");
+        }
+    } else if body.dismiss {
+        if body.ids.is_empty() {
+            return json_err(400, "dismiss requires ids");
+        }
+    } else if !body.all && body.ids.is_empty() {
         return json_err(400, "Provide ids or set all=true");
     }
-    if body.dismiss && body.ids.is_empty() {
-        return json_err(400, "dismiss requires ids");
-    }
-    let result = if body.dismiss {
+    let result = if body.clear_all {
+        clear_dismissible(&user)
+    } else if body.dismiss {
         dismiss(&user, &body.ids)
     } else {
         mark_read(&user, &body.ids, body.all)

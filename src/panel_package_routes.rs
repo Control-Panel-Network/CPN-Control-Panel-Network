@@ -7,7 +7,7 @@ use crate::packages::{
     PackageInput, assign_package, create_package_for, delete_package, ensure_default_package,
     get_package, is_panel_admin, update_package_for,
 };
-use crate::panel_hub_http::authenticated_panel_shell;
+use crate::panel_hub_http::{authenticated_panel_shell, html_blocking_shell_fn};
 use crate::panel_packages::{packages_edit_main, packages_main, packages_new_main};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -97,6 +97,10 @@ pub struct PackageForm {
     #[serde(default)]
     subdomains: String,
     #[serde(default)]
+    host_cpu_percent: String,
+    #[serde(default)]
+    host_memory_mb: String,
+    #[serde(default)]
     fqdn_enabled: String,
     #[serde(default)]
     notes: String,
@@ -146,6 +150,8 @@ fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, Packa
         email_filters: collect_form_value(pairs, "email_filters"),
         alias_domains: collect_form_value(pairs, "alias_domains"),
         subdomains: collect_form_value(pairs, "subdomains"),
+        host_cpu_percent: collect_form_value(pairs, "host_cpu_percent"),
+        host_memory_mb: collect_form_value(pairs, "host_memory_mb"),
         fqdn_enabled: collect_form_value(pairs, "fqdn_enabled"),
         notes: collect_form_value(pairs, "notes"),
     };
@@ -170,6 +176,8 @@ impl PackageForm {
             email_filters: parse_limit_or_default(&self.email_filters, "email_filters")?,
             alias_domains: parse_limit_or_default(&self.alias_domains, "alias_domains")?,
             subdomains: parse_limit_or_default(&self.subdomains, "subdomains")?,
+            host_cpu_percent: parse_limit_or_default(&self.host_cpu_percent, "host_cpu_percent")?,
+            host_memory_mb: parse_limit_or_default(&self.host_memory_mb, "host_memory_mb")?,
             fqdn_enabled: parse_bool_flag(&self.fqdn_enabled),
             notes: self.notes.clone(),
             sidebar_hidden_nav_ids,
@@ -218,13 +226,17 @@ pub async fn packages_page(
     let _ = ensure_default_package();
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    html_ok(authenticated_panel_shell(
-        &http,
-        &user,
-        "packages",
-        "Packages",
-        &packages_main(&user, notice, error),
-    ))
+    let notice_owned = notice.map(str::to_owned);
+    let error_owned = error.map(str::to_owned);
+    let user_for_main = user.clone();
+    html_blocking_shell_fn(&http, user, "packages", "Packages", move || {
+        packages_main(
+            &user_for_main,
+            notice_owned.as_deref(),
+            error_owned.as_deref(),
+        )
+    })
+    .await
 }
 
 #[get("/packages/new")]

@@ -29,6 +29,7 @@ pub struct DockerListQuery {
     pub q: String,
     pub page: usize,
     pub per_page: usize,
+    pub check_updates: bool,
 }
 
 impl DockerListQuery {
@@ -37,6 +38,10 @@ impl DockerListQuery {
             q: query.get("q").cloned().unwrap_or_default(),
             page: docker_list_page(query.get("page").map(String::as_str).unwrap_or("")),
             per_page: docker_list_per_page(query.get("per_page").map(String::as_str).unwrap_or("")),
+            check_updates: query
+                .get("check_updates")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         }
     }
 
@@ -49,6 +54,7 @@ impl DockerListQuery {
                 .unwrap_or_default(),
             page: docker_list_page(query.get("page").map(String::as_str).unwrap_or("")),
             per_page: docker_list_per_page(query.get("per_page").map(String::as_str).unwrap_or("")),
+            check_updates: false,
         }
     }
 }

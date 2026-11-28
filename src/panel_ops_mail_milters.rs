@@ -6,6 +6,9 @@ pub const OPENDKIM_POSTFIX_MILTER: &str = "inet:127.0.0.1:8891";
 pub const RSPAMD_POSTFIX_MILTER: &str = "inet:127.0.0.1:11332";
 
 /// Build smtpd_milters value: OpenDKIM first, then rspamd when requested.
+///
+/// Without rspamd, OpenDKIM alone writes `dkim=` Auth-Results; Tachyon then shows
+/// SPF/DMARC as `none` even when the sender domain publishes valid DNS records.
 pub fn compose_smtpd_milters(opendkim: &str, include_rspamd: bool) -> String {
     if include_rspamd {
         format!("{opendkim},{RSPAMD_POSTFIX_MILTER}")
@@ -28,5 +31,12 @@ mod tests {
             compose_smtpd_milters(OPENDKIM_POSTFIX_MILTER, true),
             format!("{OPENDKIM_POSTFIX_MILTER},{RSPAMD_POSTFIX_MILTER}")
         );
+    }
+
+    #[test]
+    fn without_rspamd_only_opendkim() {
+        let v = compose_smtpd_milters(OPENDKIM_POSTFIX_MILTER, false);
+        assert!(!v.contains("11332"));
+        assert!(v.contains("8891"));
     }
 }

@@ -1,0 +1,21 @@
+Package host resource limits (CPN stable feature)
+
+Panel reserve (all installs):
+  slice: cpn-panel.slice (CPUWeight=200, MemoryMin=256M)
+  service drop-in: cpn-installer.service.d/20-panel-resource-reserve.conf
+
+Package fields:
+  host_cpu_percent (-1 unlimited, else systemd CPUQuota percent; 100 = one core)
+  host_memory_mb (-1 unlimited, else systemd MemoryMax in MB)
+
+Enforcement:
+  user-<uid>.slice.d/cpn-host-resources.conf per website Unix user
+  CPN thin LiteSpeed vhconf templates: memSoftLimit + extUser
+
+Heal IDs:
+  panel.resource_reserve
+  host.package_resources
+
+Operator:
+  Packages edit/create Host CPU / Host memory; assign package to account.
+  System Repair or panel start / upgrade re-applies idempotently.

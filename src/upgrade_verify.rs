@@ -638,6 +638,8 @@ pub fn verify_after_upgrade(
         }
     }
 
+    let _ = crate::host_resource_limits::heal_host_resources();
+
     // Docker: default leave stacks alone; verify previously running CPN-managed ones.
     let docker = panel_ops_docker::docker_status();
     if !docker.installed {

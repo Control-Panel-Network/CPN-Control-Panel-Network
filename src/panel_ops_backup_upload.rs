@@ -31,8 +31,31 @@ pub fn upload_backup_artifact(local_path: &str) -> Vec<String> {
                 .into(),
         );
     }
+    if d.dropbox.enabled {
+        notes.push(
+            "Dropbox upload queued when OAuth tokens are present; use Test connection after rotating secrets."
+                .into(),
+        );
+    }
+    if d.onedrive.enabled {
+        notes.push(
+            "OneDrive upload queued when Microsoft Graph OAuth tokens are present; use Test connection after rotating secrets."
+                .into(),
+        );
+    }
+    if d.ftp.enabled {
+        notes.push(
+            "FTP upload is configured; use Test connection after rotating the password.".into(),
+        );
+    }
+    if d.local_enabled {
+        notes.push(format!(
+            "Local storage remains at `{}`.",
+            crate::panel_ops_backup_extra::effective_local_backup_dir().display()
+        ));
+    }
     if notes.is_empty() {
-        notes.push("No remote destinations enabled for upload.".into());
+        notes.push("No destinations enabled for upload.".into());
     }
     notes
 }

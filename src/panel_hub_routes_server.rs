@@ -3,8 +3,9 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice,
-    require_panel_user, urlencoding_simple,
+    captured_session_exp, html_blocking, html_ok, login_redirect, owner_only_html,
+    panel_shell_blocking, redirect, redirect_flash, redirect_notice, require_panel_user,
+    urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_docker_apps::docker_apps_page;
@@ -18,8 +19,8 @@ use crate::panel_hub_pages_litespeed::{
     run_upgrade,
 };
 use crate::panel_hub_pages_server::{
-    package_manager_page, php_tuning_page, processes_page, run_service_control, server_hub_main,
-    services_page,
+    normalize_spm_tab, package_manager_page, php_tuning_page, run_service_control, server_hub_main,
+    services_page, spm_nav_id, system_processes_hub_page,
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
@@ -44,7 +45,14 @@ pub async fn server_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> 
     };
     // Host probes behind the sidebar and hub tiles run on the blocking pool with a bounded
     // wait, so a slow probe can no longer pin a worker and surface as `408 Request Timeout`.
-    html_blocking(move || panel_shell(&user, "server", "Server", &server_hub_main())).await
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
+    html_blocking(move || {
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            panel_shell_blocking(&user, "server", "Server", &server_hub_main(), session_exp)
+        })
+    })
+    .await
 }
 
 #[get("/server/services")]
@@ -436,20 +444,134 @@ pub async fn server_services_control(
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct SpmTabQuery {
+    #[serde(default)]
+    tab: String,
+}
+
 #[get("/server/processes")]
 pub async fn server_processes_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<SpmTabQuery>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "Top Processes",
-        &processes_page(),
-    ))
+    let tab = normalize_spm_tab(&query.tab).to_string();
+    let show_kill = is_panel_admin(&user);
+    let nav = spm_nav_id(&tab).to_string();
+    let title = if tab == "cpn-usage" {
+        "CPN usage"
+    } else {
+        "Top Processes"
+    };
+    html_blocking(move || {
+        panel_shell(
+            &user,
+            &nav,
+            title,
+            &system_processes_hub_page(&tab, &user, show_kill),
+        )
+    })
+    .await
+}
+
+#[get("/server/cpn-usage")]
+pub async fn server_cpn_usage_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    redirect("/server/processes?tab=cpn-usage")
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ProcessKillForm {
+    #[serde(default)]
+    pid: String,
+    #[serde(default)]
+    force: String,
+    #[serde(default)]
+    return_tab: String,
+}
+
+#[post("/server/processes/kill")]
+pub async fn server_processes_kill(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<ProcessKillForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        crate::panel_audit_http::audit_from_request(
+            &http,
+            &user,
+            "server.process.kill",
+            form.pid.trim(),
+            false,
+            "Denied: panel admin required.",
+            crate::panel_audit_types::AuditCategory::Other,
+            crate::panel_audit_types::AuditSeverity::Warning,
+        );
+        return redirect_notice(
+            kill_return_path(&form.return_tab),
+            None,
+            Some("Only the panel admin can kill processes."),
+        );
+    }
+    let force = matches!(
+        form.force.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "on" | "yes" | "kill"
+    );
+    let pid_raw = form.pid.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let pid = crate::panel_ops_process::parse_kill_pid(&pid_raw)?;
+        crate::panel_ops_process::kill_process(pid, force)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Kill task failed: {e}")));
+    match result {
+        Ok(msg) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &user,
+                "server.process.kill",
+                form.pid.trim(),
+                true,
+                &msg,
+                crate::panel_audit_types::AuditCategory::Other,
+                crate::panel_audit_types::AuditSeverity::Warning,
+            );
+            redirect_notice(kill_return_path(&form.return_tab), Some(&msg), None)
+        }
+        Err(err) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &user,
+                "server.process.kill",
+                form.pid.trim(),
+                false,
+                &err,
+                crate::panel_audit_types::AuditCategory::Other,
+                crate::panel_audit_types::AuditSeverity::Warning,
+            );
+            redirect_notice(kill_return_path(&form.return_tab), None, Some(&err))
+        }
+    }
+}
+
+fn kill_return_path(return_tab: &str) -> &'static str {
+    if normalize_spm_tab(return_tab) == "cpn-usage" {
+        "/server/processes?tab=cpn-usage"
+    } else {
+        "/server/processes?tab=top"
+    }
 }
 
 #[get("/server/php/tuning")]
@@ -1265,14 +1387,15 @@ pub async fn settings_page(
     };
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
+    let session_exp = captured_session_exp(&http);
+    let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
     html_blocking(move || {
-        let owner = is_panel_admin(&user);
-        panel_shell(
-            &user,
-            "settings",
-            "Settings",
-            &settings_hub_main_for(Some(&user), owner, notice.as_deref(), error.as_deref()),
-        )
+        crate::panel_spa_nav::with_spa_fragment(spa, || {
+            let owner = is_panel_admin(&user);
+            let main =
+                settings_hub_main_for(Some(&user), owner, notice.as_deref(), error.as_deref());
+            panel_shell_blocking(&user, "settings", "Settings", &main, session_exp)
+        })
     })
     .await
 }

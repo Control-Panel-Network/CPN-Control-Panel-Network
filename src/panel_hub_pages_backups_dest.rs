@@ -2,10 +2,11 @@
 
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_backup_extra::{
-    BackupDestinations, GoogleDriveDest, RemoteDest, S3Dest, load_destinations, save_destinations,
-    set_gdrive_secrets, set_remote_password, set_s3_secrets, test_google_drive, test_remote,
-    test_s3,
+    BackupDestinations, GoogleDriveDest, RemoteDest, S3Dest, effective_local_backup_dir,
+    load_destinations, save_destinations, set_gdrive_secrets, set_remote_password, set_s3_secrets,
+    test_google_drive, test_remote, test_s3, validate_local_backup_path,
 };
+use crate::paths::panel_backups_dir;
 
 fn html_escape(value: &str) -> String {
     value
@@ -22,40 +23,97 @@ fn checked(on: bool) -> &'static str {
 pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> String {
     let d = load_destinations();
     let unlocked = crate::panel_feature_gate::backup_destinations_unlocked();
-    let body = if unlocked {
+    let default_path = panel_backups_dir().display().to_string();
+    let effective = effective_local_backup_dir().display().to_string();
+    let local_path_value = if d.local_path.trim().is_empty() {
+        String::new()
+    } else {
+        d.local_path.clone()
+    };
+    let remote_links = if unlocked {
+        r#"<p style="margin:0 0 14px;">
+      <a href="/backups/local">Local storage</a> ·
+      <a href="/backups/google-drive">Google Drive</a> ·
+      <a href="/backups/onedrive">OneDrive</a> ·
+      <a href="/backups/remote">Remote SFTP</a> ·
+      <a href="/backups/ftp">FTP</a> ·
+      <a href="/backups/s3">S3-compatible</a> ·
+      <a href="/backups/dropbox">Dropbox</a>
+    </p>"#
+    } else {
+        r#"<p style="margin:0 0 14px;">
+      <a href="/backups/local">Local storage</a>
+      <span class="muted">(remote destinations unlock with the Host plugin)</span>
+    </p>"#
+    };
+    let toggles = if unlocked {
         format!(
-            r#"<p class="muted" style="margin:0 0 14px;">Secrets are stored under the CPN data directory (mode 600) and never written into destination JSON or logs. <a href="/backups/google-drive">Google Drive</a> · <a href="/backups/remote">Remote SFTP</a> · <a href="/backups/s3">S3-compatible</a></p>
-    <form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
-      <label><input type="checkbox" class="cpn-switch" role="switch" name="local_enabled" value="1"{local}> Local archives enabled</label>
-      <label><input type="checkbox" class="cpn-switch" role="switch" name="gdrive_enabled" value="1"{gdrive}> Google Drive enabled</label>
+            r#"<form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="local_enabled" value="1"{local}> Local storage enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="gdrive_enabled" value="1"{gdrive}> Google Drive (Disk) enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="onedrive_enabled" value="1"{onedrive}> OneDrive enabled</label>
       <label><input type="checkbox" class="cpn-switch" role="switch" name="remote_enabled" value="1"{remote}> Remote SFTP/SCP enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="ftp_enabled" value="1"{ftp}> FTP enabled</label>
       <label><input type="checkbox" class="cpn-switch" role="switch" name="s3_enabled" value="1"{s3}> S3-compatible enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="dropbox_enabled" value="1"{dropbox}> Dropbox enabled</label>
       <button type="submit" class="btn-primary">Save destination toggles</button>
     </form>"#,
             local = checked(d.local_enabled),
             gdrive = checked(d.google_drive.enabled),
+            onedrive = checked(d.onedrive.enabled),
             remote = checked(d.remote.enabled),
+            ftp = checked(d.ftp.enabled),
             s3 = checked(d.s3.enabled),
+            dropbox = checked(d.dropbox.enabled),
         )
     } else {
         format!(
-            r#"<p class="muted" style="margin:0 0 14px;">Local archives stay available in core. Remote destinations (Google Drive, SFTP/SCP, S3-compatible) and Incremental jobs unlock with the free Host plugin <code>backupDestinations</code> from the Plugin Store.</p>
+            r#"<ul style="margin:0 0 14px;padding-left:1.2rem;">
+      <li>Google Drive (Disk)</li>
+      <li>OneDrive (Microsoft Graph)</li>
+      <li>Remote SFTP/SCP</li>
+      <li>FTP</li>
+      <li>S3-compatible object storage</li>
+      <li>Dropbox</li>
+    </ul>
     <p style="margin:0 0 14px;">
-      <a class="btn primary" href="/plugins?view=store&amp;q=backupDestinations">Install Backup Destinations</a>
-      <a class="btn" href="/plugins?view=store&amp;target=host" style="margin-left:8px;">Open Plugin Store</a>
+      <a class="btn primary" href="/plugins?view=store&amp;target=host&amp;category=Backup&amp;q=backupDestinations">Install Backup Destinations</a>
+      <a class="btn" href="/plugins?view=store&amp;target=host&amp;category=Backup" style="margin-left:8px;">Open Backup store (Host)</a>
     </p>
     <form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
-      <label><input type="checkbox" class="cpn-switch" role="switch" name="local_enabled" value="1"{local}> Local archives enabled</label>
-      <p class="muted" style="margin:0;">Google Drive, Remote SFTP/SCP, and S3 toggles appear after the Host plugin is installed.</p>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="local_enabled" value="1"{local}> Local storage enabled</label>
+      <p class="muted" style="margin:0;">Remote destination toggles appear after the Host plugin is installed.</p>
       <button type="submit" class="btn-primary">Save destination toggles</button>
     </form>"#,
             local = checked(d.local_enabled),
         )
     };
+    let body = format!(
+        r#"<article class="section-card" style="margin:0 0 18px;">
+      <h2 style="margin-top:0;">Local storage</h2>
+      <p class="muted" style="margin:0 0 10px;">Core destination. Panel-scope archives use the path below (site backups stay under each site home). Default: <code>{default}</code>. Active path: <code>{effective}</code>.</p>
+      <form method="post" action="/backups/local/save" class="stack-form" style="max-width:640px;display:grid;gap:10px;">
+        <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{local_en}> Enable local storage destination</label>
+        <label>Custom path <span class="muted">(optional absolute path; leave blank for default)</span>
+          <input type="text" name="local_path" value="{path}" maxlength="400" autocomplete="off" style="width:100%;" placeholder="{default}">
+        </label>
+        <button type="submit" class="btn-primary">Save local storage</button>
+      </form>
+    </article>
+    <p class="muted" style="margin:0 0 14px;">Secrets are stored under the CPN data directory (mode 600) and never written into destination JSON or logs.</p>
+    {remote_links}
+    {toggles}"#,
+        default = html_escape(&default_path),
+        effective = html_escape(&effective),
+        local_en = checked(d.local_enabled),
+        path = html_escape(&local_path_value),
+        remote_links = remote_links,
+        toggles = toggles,
+    );
     let subtitle = if unlocked {
-        "Local, Google Drive, remote SFTP, and S3-compatible backup targets."
+        "Local, Google Drive, OneDrive, SFTP, FTP, S3-compatible, and Dropbox backup targets."
     } else {
-        "Local archives (core). Install backupDestinations for remote targets."
+        "Local storage (core). Install backupDestinations for remote targets."
     };
     feature_shell(
         &[
@@ -69,6 +127,60 @@ pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> S
         notice,
         error,
     )
+}
+
+pub fn backups_local_page(notice: Option<&str>, error: Option<&str>) -> String {
+    let d = load_destinations();
+    let default_path = panel_backups_dir().display().to_string();
+    let effective = effective_local_backup_dir().display().to_string();
+    let path_value = if d.local_path.trim().is_empty() {
+        String::new()
+    } else {
+        d.local_path.clone()
+    };
+    let body = format!(
+        r#"<form method="post" action="/backups/local/save" class="stack-form" style="max-width:640px;display:grid;gap:10px;">
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{en}> Enable local storage destination</label>
+      <p class="muted" style="margin:0;">Default panel backups directory: <code>{default}</code><br>Active path: <code>{effective}</code></p>
+      <label>Custom path <span class="muted">(optional; blank uses the default)</span>
+        <input type="text" name="local_path" value="{path}" maxlength="400" autocomplete="off" style="width:100%;" placeholder="{default}">
+      </label>
+      <button type="submit" class="btn-primary">Save local storage</button>
+    </form>
+    <p class="muted" style="margin-top:14px;"><a href="/backups/destinations">← Destinations</a></p>"#,
+        en = checked(d.local_enabled),
+        default = html_escape(&default_path),
+        effective = html_escape(&effective),
+        path = html_escape(&path_value),
+    );
+    feature_shell(
+        &[
+            ("Dashboard", Some("/dashboard")),
+            ("Backups", Some("/backups")),
+            ("Local storage", None),
+        ],
+        "Local storage",
+        "On-server archive path for panel-scope backups and schedules that target local.",
+        &body,
+        notice,
+        error,
+    )
+}
+
+pub fn save_local_storage(enabled: bool, local_path: &str) -> Result<String, String> {
+    let path = validate_local_backup_path(local_path)?;
+    let mut d = load_destinations();
+    d.local_enabled = enabled;
+    d.local_path = path;
+    if !d.local_path.is_empty() {
+        std::fs::create_dir_all(&d.local_path)
+            .map_err(|e| format!("Cannot create local storage directory: {e}"))?;
+    }
+    save_destinations(&d)?;
+    Ok(format!(
+        "Local storage saved. Active path: {}.",
+        effective_local_backup_dir().display()
+    ))
 }
 
 pub fn backups_gdrive_page(notice: Option<&str>, error: Option<&str>) -> String {
@@ -283,12 +395,18 @@ pub fn save_backup_destinations_toggles(
     gdrive_enabled: bool,
     remote_enabled: bool,
     s3_enabled: bool,
+    ftp_enabled: bool,
+    dropbox_enabled: bool,
+    onedrive_enabled: bool,
 ) -> Result<String, String> {
     let mut d = load_destinations();
     d.local_enabled = local_enabled;
     d.google_drive.enabled = gdrive_enabled;
     d.remote.enabled = remote_enabled;
     d.s3.enabled = s3_enabled;
+    d.ftp.enabled = ftp_enabled;
+    d.dropbox.enabled = dropbox_enabled;
+    d.onedrive.enabled = onedrive_enabled;
     save_destinations(&d)?;
     Ok("Destination toggles saved.".into())
 }

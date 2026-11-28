@@ -57,6 +57,8 @@ pub(crate) fn package_form(
         email_filters,
         alias_domains,
         subdomains,
+        host_cpu,
+        host_mem,
         fqdn,
         notes,
     ) = match pkg {
@@ -80,6 +82,8 @@ pub(crate) fn package_form(
             p.email_filters.to_string(),
             p.alias_domains.to_string(),
             p.subdomains.to_string(),
+            p.host_cpu_percent.to_string(),
+            p.host_memory_mb.to_string(),
             p.fqdn_enabled,
             p.notes.as_str(),
         ),
@@ -99,6 +103,8 @@ pub(crate) fn package_form(
             "1000".into(),
             "-1".into(),
             "20".into(),
+            "-1".into(),
+            "-1".into(),
             true,
             "",
         ),
@@ -181,7 +187,7 @@ pub(crate) fn package_form(
       </label>
       <fieldset class="cpn-check-fieldset" style="margin:0;padding:12px;border:1px solid var(--border,#d0d5dd);border-radius:8px;">
         <legend>Package limits</legend>
-        <p class="muted" style="margin:0 0 10px;">Same meters as Account Statistics: Websites, Mailboxes, Databases, Database disk, FTP accounts, Storage, Bandwidth, Alias domains, Sub-domains, mailing lists, autoresponders, forwarders, and email filters. Storage, Bandwidth, and Database disk are entered in MB. Saving this package updates dashboard meters for accounts assigned to it.</p>
+        <p class="muted" style="margin:0 0 10px;">Same meters as Account Statistics: Websites, Mailboxes, Databases, Database disk, FTP accounts, Storage, Bandwidth, Alias domains, Sub-domains, mailing lists, autoresponders, forwarders, and email filters. Storage, Bandwidth, and Database disk are entered in MB. Host CPU and Host memory enforce fair limits on the website Unix account (systemd) and PHP workers on CPN vhost templates. Top Processes CPU% can still exceed 100% on multi-core hosts; package CPU uses systemd percent where 100 = one core. Saving this package updates dashboard meters and host limits for accounts assigned to it.</p>
         <div style="display:grid;gap:12px;">
           {websites_field}
           {mailboxes_field}
@@ -196,6 +202,8 @@ pub(crate) fn package_form(
           {autoresponders_field}
           {forwarders_field}
           {email_filters_field}
+          {host_cpu_field}
+          {host_mem_field}
         </div>
       </fieldset>
       <label style="display:flex;align-items:center;gap:8px;">
@@ -252,6 +260,18 @@ pub(crate) fn package_form(
             "Email filters",
             &email_filters,
             unlimited_hint
+        ),
+        host_cpu_field = limit_field(
+            "host_cpu_percent",
+            "Host CPU (%)",
+            &host_cpu,
+            "Systemd CPUQuota percent (100 = one core). -1 = unlimited.",
+        ),
+        host_mem_field = limit_field(
+            "host_memory_mb",
+            "Host memory (MB)",
+            &host_mem,
+            "Systemd MemoryMax for the website Unix account. -1 = unlimited.",
         ),
         fqdn_checked = fqdn_checked,
         notes = html_escape(notes),

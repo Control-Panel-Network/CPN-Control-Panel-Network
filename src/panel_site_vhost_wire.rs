@@ -22,7 +22,29 @@ fn safe_vhost_name(domain: &str) -> String {
         .collect()
 }
 
-fn ols_vhconf(docroot: &str, access_log: &str, error_log: &str) -> String {
+use crate::package_limits::{UNLIMITED, is_unlimited};
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PhpResourceCaps {
+    pub cpu_percent: i64,
+    pub memory_mb: i64,
+}
+
+fn mem_limit_m(memory_mb: i64) -> String {
+    if is_unlimited(memory_mb) || memory_mb <= 0 {
+        "2047M".to_string()
+    } else {
+        format!("{memory_mb}M")
+    }
+}
+
+fn ols_vhconf(
+    docroot: &str,
+    access_log: &str,
+    error_log: &str,
+    unix_user: Option<&str>,
+    caps: PhpResourceCaps,
+) -> String {
     // Include a default lsphp handler so brand-new sites are not HTML-only.
     // Migrated CyberPanel hosts keep their rich vhost.conf (extUser/socket/proxies).
     let lsphp = [
@@ -34,6 +56,10 @@ fn ols_vhconf(docroot: &str, access_log: &str, error_log: &str) -> String {
     .into_iter()
     .find(|p| Path::new(p).is_file())
     .unwrap_or("/usr/local/lsws/lsphp85/bin/lsphp");
+    let mem = mem_limit_m(caps.memory_mb);
+    let ext_user = unix_user
+        .map(|u| format!("  extUser                   {u}\n"))
+        .unwrap_or_default();
     format!(
         "docRoot                   {docroot}/\n\
          enableGzip                1\n\
@@ -68,8 +94,9 @@ fn ols_vhconf(docroot: &str, access_log: &str, error_log: &str) -> String {
            backlog                 100\n\
            instances               1\n\
            priority                0\n\
-           memSoftLimit            2047M\n\
-           memHardLimit            2047M\n\
+           memSoftLimit            {mem}\n\
+           memHardLimit            {mem}\n\
+           {ext_user}\
            procSoftLimit           1400\n\
            procHardLimit           1500\n\
          }}\n\
@@ -83,8 +110,52 @@ fn ols_vhconf(docroot: &str, access_log: &str, error_log: &str) -> String {
              enable                1\n\
              RewriteFile           .htaccess\n\
            }}\n\
-         }}\n"
+         }}\n",
+        mem = mem,
+        ext_user = ext_user,
     )
+}
+
+/// Best-effort LiteSpeed template limits after package changes.
+pub fn refresh_site_php_resource_limits(
+    site: &SiteRecord,
+    cpu: i64,
+    mem: i64,
+) -> Result<(), String> {
+    if !any_litespeed_installed() {
+        return Ok(());
+    }
+    let vh_name = safe_vhost_name(&site.domain);
+    let vhconf = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{vh_name}/vhconf.conf"));
+    if !vhconf.is_file() {
+        return Ok(());
+    }
+    let access = site_access_log_path(site);
+    let error = site_error_log_path(site);
+    let unix_user = site.unix_user.as_deref();
+    let body = ols_vhconf(
+        &site.docroot,
+        &access.display().to_string(),
+        &error.display().to_string(),
+        unix_user,
+        PhpResourceCaps {
+            cpu_percent: cpu,
+            memory_mb: mem,
+        },
+    );
+    let prev = fs::read_to_string(&vhconf).unwrap_or_default();
+    if prev == body {
+        return Ok(());
+    }
+    let looks_custom = prev.contains("scriptHandler")
+        || prev.contains("vhssl")
+        || prev.len() > body.len().saturating_mul(2);
+    if looks_custom {
+        return Ok(());
+    }
+    fs::write(&vhconf, body).map_err(|e| format!("Could not refresh vhconf limits: {e}"))?;
+    reload_litespeed_async();
+    Ok(())
 }
 
 fn insert_map_before_catchall(conf: &str, listener: &str, map_line: &str) -> Option<String> {
@@ -145,10 +216,17 @@ fn ensure_ols_site_vhost(site: &SiteRecord) -> Result<bool, String> {
         format!("$SERVER_ROOT/conf/vhosts/{vh_name}/vhost.conf")
     } else {
         let vhconf = vh_dir.join("vhconf.conf");
+        let (cpu, mem) = crate::host_resource_limits::host_limits_for_account(&site.owner)
+            .unwrap_or((UNLIMITED, UNLIMITED));
         let body = ols_vhconf(
             &site.docroot,
             &access.display().to_string(),
             &error.display().to_string(),
+            site.unix_user.as_deref(),
+            PhpResourceCaps {
+                cpu_percent: cpu,
+                memory_mb: mem,
+            },
         );
         let prev = fs::read_to_string(&vhconf).unwrap_or_default();
         if prev != body {

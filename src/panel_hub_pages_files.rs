@@ -108,6 +108,7 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
     <button type="button" class="fm-tool" data-op="edit">Edit</button>
     <button type="button" class="fm-tool" data-op="compress">Compress</button>
     <button type="button" class="fm-tool" data-op="extract">Extract</button>
+    <button type="button" class="fm-tool" data-op="fix_permissions">Fix permissions</button>
   </div>
   <div class="fm-navrow">
     <a class="fm-navbtn" href="{home_href}">Home</a>

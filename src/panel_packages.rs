@@ -4,7 +4,6 @@ use crate::account_mgmt::list_accounts;
 use crate::packages::{
     Package, PackageUsage, accounts_assigned_to, format_limit_display, is_panel_admin,
     is_unlimited, list_packages, package_custom_name_for_edit, package_for_account,
-    usage_for_account,
 };
 use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 use crate::panel_package_form::package_form;
@@ -390,7 +389,11 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         notice_block("error", error)
     );
     if !is_panel_admin(username) {
-        let usage = usage_for_account(username).ok();
+        let usage = crate::package_quota::usage_for_account_opts(
+            username,
+            crate::package_quota::UsageCollectOpts::dashboard(),
+        )
+        .ok();
         let card = usage
             .as_ref()
             .map(|u| usage_card(username, u))

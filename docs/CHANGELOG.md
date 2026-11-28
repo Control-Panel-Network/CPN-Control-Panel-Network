@@ -7,9 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.14] - 28/11/2026
+
+Patch release after v1.4.13. Package host limits and panel resource reserve, tabbed System Processes Monitor with CPN usage, backup destinations (local, OneDrive, FTP, Dropbox) and email-aware backups, Docker list update checks, faster hub SPA navigation, passkey/session/sidebar UX, notifications Clear all and grey read styling, Version Management prerelease help, site Unix ownership and File Manager Fix permissions, plus webmail SELinux, rspamd Auth-Results, and MFA enroll-cli fixes.
+
+### Fixed
+
+- **Notification bell Clear all appeared broken after tip upgrade**: Sidebar HTML included the new **Clear all** control, but `/cpn-panel.js` could stay cached for up to an hour because the `?v=` query used only the package version (not the commit SHA). Browsers then kept older JS without the Clear all handler. Asset URLs now bust cache with `{version}-{shortSha}`; the notification loader also clears the list while a fresh feed request is in flight so stale rows do not linger after abort/reload races.
+- **Notification bell read styling**: Items marked as read now render with a muted grey toast (neutral background and icon tile) instead of keeping bright success green at reduced opacity only. Applies to the sidebar bell popover on classic panel chrome and the Panel UI package.
+- **Login 2FA passkey after session expiry**: WebAuthn auto-start on `/login/2fa` now waits until the MFA pending session probe succeeds, so a dead page does not fire a passkey ceremony first. Browsers that block passkey without a user gesture no longer show a red failure banner on load; a gentle hint appears until you click **Sign in with passkey**. Manual passkey still shows clear errors. Panel session countdown redirects use `replace` with `?error=session_expired&next=...` instead of leaving a half-signed-in shell.
+- **Resizable sidebar**: On wide layouts, drag the right edge of the sidebar to change width (248–420px, stored in `localStorage` as `cpn-sidebar-width`). Collapsed and mobile drawer modes keep the existing behavior.
+
 ### Added
 
-- **Tachyon VirusTotal enabled by default**: When Tachyon webmail is installed or healed (including tip-upgrade), CPN installs the bundled `virustotal` extension under the Tachyon data plugins tree and adds it to `application.ini` `[plugins] enabled_list`. Works without an API key (GUI links); optional free public key for inline results. No VirusTotal secrets are written by CPN.
+- **Notification bell Clear all**: The notifications popover adds **Clear all** next to **Mark all as read**, with a confirmation step. Clear all removes every non-sticky notification via `POST /api/panel/notifications/mark-read` with `clear_all: true`; sticky items (`sticky: true`, `announcement`, `warning_long`) stay until dismissed with the per-item X.
+
+- **Package host CPU/memory limits and panel reserve**: Host packages expose Host CPU (%) and Host memory (MB); sites inherit package limits. Install and upgrade reserve CPU/memory for the panel process so the UI stays responsive as sites are added.
+- **CPN usage on System Processes Monitor**: Panel RSS and CPU in a dedicated tab with Kill confirmation and audit, sharing summary cards with Top Processes.
+
+- **Docker list image update hints** (`/docker/list`): Active Containers shows an **Image update** column (Up to date / Update available / Unknown / Not checked). **Check for updates** compares local and registry digests (Docker Hub via CLI manifest inspect with HTTP fallback; other registries when the engine can reach them). Results cache under panel data for about three hours to limit Hub rate use. No auto-pull; use Manage Images or Compose Stacks to upgrade.
+
+- **System Processes Monitor tabs** (`/server/processes`): Top Processes and CPN usage share one page with pill tabs. Deep links: `/server/processes?tab=cpn-usage` and `/server/cpn-usage` (redirect). CPN usage tab includes admin Kill with confirmation via the same `/server/processes/kill` route. Host summary cards stay on a clean 3-column grid (no orphan teaser card).
+- **System Processes Monitor**: Server → Top Processes now shows host summary cards (CPU, process counts, load, memory, swap, CPU time), a searchable Running Processes table (PID, USER, STATE, CPU %, MEMORY %, VIRT, RES, TIME, COMMAND), admin-only Kill with confirmation and audit, and a manual Refresh control. Auto-refresh stays off by default (no 1s polling); work runs in `spawn_blocking`.
+- **Local storage destination**: `/backups/destinations` and `/backups/local` make local archives first-class with enable toggle and optional absolute path (default panel backups dir). Schedule Destination can target local.
+- **OneDrive backup destination**: Host plugin `backupDestinations` unlocks `/backups/onedrive` (Microsoft Graph OAuth client ID / secret / refresh token stored under panel data; no shipped secrets).
+- **Email backup contents on Create Backup**: Panel scope gains **Email stack** (mail inventory, DKIM, `/var/lib/cpn-webmail` data, mail DBs when present, and email Host plugins). Website/Subdomain scope gains **Email** (domain `e-mails/` Maildirs, domain DKIM, classic `vmail` when present, and email-related site plugins). Restore discovers `e-mails/`, `email-stack/`, and `email-plugins/` and can apply mailbox trees with confirmation.
+- **Delete local backup archives**: `/backups/restore` and `/backups/schedule` list archives with a Delete action, confirmation dialog, path-safe delete under known backup roots, and audit entries without secrets.
+- **FTP and Dropbox backup destinations**: Destinations (unlocked by Host plugin `backupDestinations`) add FTP and Dropbox configure pages alongside Google Drive, SFTP, and S3-compatible targets.
+
+### Fixed
+
+- **Version Management prerelease help**: The **Include GitHub prerelease tags** control documents GitHub Releases marked prerelease (beta/RC/alpha), not the `dev` branch. **Latest available** shows a Released date alongside the tag.
+- **Top Processes storage units**: Virt/Res and related size labels honor the profile **Storage display unit** preference with a space before KB/MB/GB/TB.
+- **MFA enroll-cli POST**: Registers the enroll-cli Continue POST route so CLI MFA enrollment works after tip upgrades.
+- **File Manager Fix permissions batch**: Mixed `/home` Fix skips unregistered non-site paths with an N fixed / M skipped summary instead of aborting the whole batch.
+- **Site home resolution for Fix permissions**: Prefer on-disk docroot trees over stale registry paths when matching site homes.
+- **Panel hub navigation latency**: Websites, Email, Databases, Packages, Server, Settings, and Dashboard hub routes render on the blocking pool with SPA fragments (smaller HTML on in-panel clicks). Member Packages view uses dashboard-style usage collection (no deep disk walk). Startup warms host sidebar, gauges, and service health caches; package usage TTL extended to 90s.
+- **Backup store hid Host destination plugins on Site target**: Browsing Plugin Store category Backup (or searching destination keywords) while Site was selected only showed site Backup plugins (for example Contabo auto snapshot). Host package `backupDestinations` is now included so Google Drive / SFTP / FTP / S3 / Dropbox unlock is discoverable.
+- **Tachyon Auth UI SPF/DMARC still `none` on EL10 (and EL hosts without rspamd in AppStream/EPEL)**: OpenDKIM alone writes `dkim=` Authentication-Results, so webmail correctly shows SPF/DMARC as `none` until rspamd's milter adds those results. `#714` already wired rspamd when active, but the package is missing from default EL10 repos, so heal never started it. CPN now writes the official rspamd.com `centos-<major>` DNF repo when needed, soft-ensures rspamd during OpenDKIM/mail Auth-Results heal (fail-soft), and re-wires `smtpd_milters` to include `:11332`. Email > Rspamd Enable uses the same path. Cloudflare DNS publish is unrelated to inbound Auth-Results icons.
+- **Blank `/tachyon/` after Tachyon version upgrade on SELinux hosts**: Upgrades stage the archive under `/var/tmp` and copy the new `tachyon/v/<version>` tree with `cp -a`, which can leave the tree labeled `tmp_t`. PHP-FPM (`httpd_t`) then cannot `include` the version files and the public mount returns HTTP 200 with an empty body. Install now prefers `cp -a --no-preserve=context`, always `restorecon`s `/opt/cpn-webmail` on webmail heal (not only the data tree, and not only once via the fcontext stamp), and the HTTP health check fails closed on an empty body with a clear hint.
+
+### Added
+
+- **File Manager Fix permissions**: Root and Site File Manager gain a **Fix permissions** toolbar action that uses the same selection checkmarks as Copy / Delete. Website paths under the hosting home are set to the CPN site Unix account `user:user` (mailbox homes under `e-mails/<local>` prefer the mailbox account when present) with dirs `0755` and files `0644`. Folders are fixed recursively. Non-site paths keep an existing non-root owner and only normalize modes; root-owned non-site paths, protected system paths, jail escapes, and symlinks are refused. See `to-do/SITE-UNIX-OWNERSHIP.md`.
+- **Tachyon VirusTotal enabled by default**: When Tachyon webmail is installed or healed (including tip-upgrade), CPN installs the bundled `virustotal` extension under the Tachyon data plugins tree, sets `[plugins] enable = On`, and adds `virustotal` to `enabled_list`. INI key matching uses an exact assignment boundary so `enable` never collides with `enabled_list`. Works without an API key (GUI links); optional free public key for inline results. No VirusTotal secrets are written by CPN.
+- **Website Unix ownership on create**: New websites and sub-domains get a CPN website Unix account as both user and group (`siteuser:siteuser`) for the site home and `public_html`. Create runs a security check (owner/group/mode) and fails closed if chown/chmod verification fails. System Repair `sites.ownership` detects root-owned registered homes; `cpn doctor heal --id sites.ownership` heals them to the existing website Unix account when present. Jailed SFTP uses `/var/lib/cpn/sftp-jails/` so OpenSSH chroot no longer forces website homes back to `root:root`. See `to-do/SITE-UNIX-OWNERSHIP.md`.
 
 ## [1.4.13] - 25/11/2026
 
