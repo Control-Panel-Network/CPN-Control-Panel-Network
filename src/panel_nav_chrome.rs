@@ -67,6 +67,56 @@ body.sidebar-collapsed .sidebar-resize-handle,
 "#
 }
 
+/// Typography and nav chrome that tracks `--sidebar-w` (set by resize script).
+pub fn sidebar_width_typography_styles() -> &'static str {
+    r#"
+.sidebar .panel-brand { font-size:var(--sidebar-brand-font); }
+.sidebar .panel-brand .cpn-brand-mark { width:calc(var(--sidebar-nav-icon-box) + 2px); height:calc(var(--sidebar-nav-icon-box) + 2px); }
+.sidebar-search-field input { font-size:var(--sidebar-meta-font); }
+.host-status-row,
+.server-summary span,
+.server-summary strong,
+.cpn-ip-blur__toggle { font-size:var(--sidebar-meta-font); }
+.sidebar nav a.nav-tile,
+.sidebar .nav-parent.nav-tile {
+  font-size:var(--sidebar-nav-font);
+  padding-left:var(--sidebar-nav-pad-x);
+  padding-right:var(--sidebar-nav-pad-x);
+  min-height:clamp(44px,calc(44px + (var(--sidebar-w) - 248) * 0.05px),54px);
+}
+.nav-section-label {
+  font-size:clamp(11px,calc(11px + (var(--sidebar-w) - 248) * 0.018px),14px);
+  padding-left:var(--sidebar-nav-pad-x);
+  padding-right:var(--sidebar-nav-pad-x);
+}
+.sidebar nav .nav-child-btn {
+  font-size:clamp(13px,calc(13px + (var(--sidebar-w) - 248) * 0.026px),18px);
+  padding-left:var(--sidebar-nav-pad-x);
+  padding-right:var(--sidebar-nav-pad-x);
+}
+.sidebar .nav-icon {
+  width:var(--sidebar-nav-icon-box);
+  height:var(--sidebar-nav-icon-box);
+  border-radius:clamp(8px,calc(8px + (var(--sidebar-w) - 248) * 0.02px),12px);
+}
+.sidebar .nav-icon svg {
+  width:var(--sidebar-nav-icon-svg);
+  height:var(--sidebar-nav-icon-svg);
+}
+.sidebar-footer .logout { font-size:var(--sidebar-meta-font); }
+@media (max-width:1023.98px) {
+  :root {
+    --sidebar-nav-font:15px;
+    --sidebar-nav-icon-box:28px;
+    --sidebar-nav-icon-svg:16px;
+    --sidebar-brand-font:17px;
+    --sidebar-meta-font:12px;
+    --sidebar-nav-pad-x:12px;
+  }
+}
+"#
+}
+
 /// Hamburger open/close + persist sidebar collapsed preference (`cpn-sidebar-collapsed`).
 pub fn panel_nav_script() -> &'static str {
     r#"
@@ -186,11 +236,18 @@ pub fn panel_nav_script() -> &'static str {
 
   var WIDTH_KEY = 'cpn-sidebar-width';
   var WIDTH_MIN = 248;
-  var WIDTH_MAX = 420;
+  var WIDTH_MAX_WIDE = 520;
+  var WIDTH_MAX_DEFAULT = 420;
   var WIDTH_DEFAULT = 292;
+  function widthMaxPx() {
+    try {
+      if (window.matchMedia('(min-width: 1400px)').matches) return WIDTH_MAX_WIDE;
+    } catch (e) {}
+    return WIDTH_MAX_DEFAULT;
+  }
   function clampWidth(value) {
     if (!isFinite(value)) return WIDTH_DEFAULT;
-    return Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, Math.round(value)));
+    return Math.max(WIDTH_MIN, Math.min(widthMaxPx(), Math.round(value)));
   }
   function readSidebarWidth() {
     try {
@@ -204,6 +261,7 @@ pub fn panel_nav_script() -> &'static str {
   function applySidebarWidth(px) {
     var w = clampWidth(px);
     document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+    document.documentElement.style.setProperty('--sidebar-w', String(w));
     return w;
   }
   applySidebarWidth(readSidebarWidth());
@@ -253,8 +311,7 @@ pub fn panel_nav_script() -> &'static str {
     document.addEventListener('mouseup', onDragEnd);
   });
   window.addEventListener('resize', function () {
-    if (!sidebarResizeEnabled()) return;
-    applySidebarWidth(readSidebarWidth());
+  applySidebarWidth(readSidebarWidth());
   });
 })();
 </script>
@@ -263,7 +320,9 @@ pub fn panel_nav_script() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{panel_nav_script, sidebar_collapse_styles};
+    use super::{
+        panel_nav_script, sidebar_collapse_styles, sidebar_width_typography_styles,
+    };
 
     #[test]
     fn collapse_styles_cover_drawer_and_scroll_contract() {
@@ -297,5 +356,15 @@ mod tests {
         assert!(js.contains("sidebar-resize-handle"));
         assert!(css.contains("sidebar-resize-handle"));
         assert!(js.contains("--sidebar-width"));
+        assert!(js.contains("--sidebar-w"));
+        assert!(js.contains("WIDTH_MAX_WIDE"));
+    }
+
+    #[test]
+    fn sidebar_width_typography_tracks_css_tokens() {
+        let css = sidebar_width_typography_styles();
+        assert!(css.contains("var(--sidebar-nav-font)"));
+        assert!(css.contains("var(--sidebar-nav-icon-box)"));
+        assert!(css.contains(".sidebar .nav-icon"));
     }
 }
