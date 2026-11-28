@@ -291,6 +291,8 @@ pub struct ScheduleForm {
     scope: String,
     #[serde(default)]
     domain: String,
+    #[serde(default)]
+    destination: String,
 }
 
 #[post("/backups/schedule/save")]
@@ -303,7 +305,13 @@ pub async fn backups_schedule_save(
         return login_redirect(&http);
     };
     let enabled = matches!(form.enabled.trim(), "1" | "true" | "on" | "yes");
-    match save_backup_schedule(enabled, &form.cron, &form.scope, &form.domain) {
+    match save_backup_schedule(
+        enabled,
+        &form.cron,
+        &form.scope,
+        &form.domain,
+        &form.destination,
+    ) {
         Ok(msg) => redirect_notice("/backups/schedule", Some(&msg), None),
         Err(err) => redirect_notice("/backups/schedule", None, Some(&err)),
     }
@@ -337,9 +345,15 @@ pub struct DestinationsForm {
     #[serde(default)]
     gdrive_enabled: String,
     #[serde(default)]
+    onedrive_enabled: String,
+    #[serde(default)]
     remote_enabled: String,
     #[serde(default)]
     s3_enabled: String,
+    #[serde(default)]
+    ftp_enabled: String,
+    #[serde(default)]
+    dropbox_enabled: String,
 }
 
 #[post("/backups/destinations/save")]
@@ -352,18 +366,76 @@ pub async fn backups_destinations_save(
         return login_redirect(&http);
     };
     let unlocked = crate::panel_feature_gate::backup_destinations_unlocked();
-    let (gdrive, remote, s3) = if unlocked {
+    let (gdrive, onedrive, remote, s3, ftp, dropbox) = if unlocked {
         (
             parse_flag(&form.gdrive_enabled),
+            parse_flag(&form.onedrive_enabled),
             parse_flag(&form.remote_enabled),
             parse_flag(&form.s3_enabled),
+            parse_flag(&form.ftp_enabled),
+            parse_flag(&form.dropbox_enabled),
         )
     } else {
-        (false, false, false)
+        (false, false, false, false, false, false)
     };
-    match save_backup_destinations_toggles(parse_flag(&form.local_enabled), gdrive, remote, s3) {
+    match save_backup_destinations_toggles(
+        parse_flag(&form.local_enabled),
+        gdrive,
+        remote,
+        s3,
+        ftp,
+        dropbox,
+        onedrive,
+    ) {
         Ok(msg) => redirect_notice("/backups/destinations", Some(&msg), None),
         Err(err) => redirect_notice("/backups/destinations", None, Some(&err)),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct LocalStorageForm {
+    #[serde(default)]
+    enabled: String,
+    #[serde(default)]
+    local_path: String,
+}
+
+#[get("/backups/local")]
+pub async fn backups_local_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(authenticated_panel_shell(
+        &http,
+        &user,
+        "backups",
+        "Local storage",
+        &crate::panel_hub_pages_backups_dest::backups_local_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[post("/backups/local/save")]
+pub async fn backups_local_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<LocalStorageForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match crate::panel_hub_pages_backups_dest::save_local_storage(
+        parse_flag(&form.enabled),
+        &form.local_path,
+    ) {
+        Ok(msg) => redirect_notice("/backups/local", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/local", None, Some(&err)),
     }
 }
 

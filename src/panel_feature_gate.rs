@@ -157,7 +157,10 @@ impl InstalledOptionalFeatures {
             "/email/bimi" => self.bimi,
             "/email/proton" => self.proton_mail,
             "/backups/google-drive" => self.backup_destinations,
+            "/backups/onedrive" => self.backup_destinations,
             "/backups/remote" => self.backup_destinations,
+            "/backups/ftp" => self.backup_destinations,
+            "/backups/dropbox" => self.backup_destinations,
             "/backups/s3" => self.backup_destinations,
             "/backups/incremental" => self.backup_destinations,
             "/server/openlitespeed" => self.openlitespeed,
@@ -297,7 +300,24 @@ pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> 
 
 /// Soft-gate body when Backup Destinations Host plugin is not installed.
 pub fn backup_destinations_plugin_required_page(feature_label: &str) -> String {
-    plugin_required_page("Backups", "/backups", feature_label, "backupDestinations")
+    let body = format!(
+        r#"<p><strong>{label} is available as a free Plugin Store package.</strong></p>
+        <p>Install <code>backupDestinations</code> from the Plugin Store (Host scope, Backup category). After install, this page and Destinations unlock automatically.</p>
+        <p style="margin-top:16px;">
+          <a class="btn primary" href="/plugins?view=store&amp;target=host&amp;category=Backup&amp;q=backupDestinations">Install Backup Destinations</a>
+          <a class="btn" href="/plugins?view=store&amp;target=host&amp;category=Backup" style="margin-left:8px;">Open Backup store (Host)</a>
+        </p>
+        <p class="muted" style="margin-top:12px;">CLI: <code>sudo cpn plugin install --host --id backupDestinations</code></p>"#,
+        label = html_escape(feature_label),
+    );
+    feature_shell(
+        &[("Backups", Some("/backups")), (feature_label, None)],
+        feature_label,
+        "Optional Host plugin (not installed yet).",
+        &body,
+        None,
+        None,
+    )
 }
 
 fn html_escape(value: &str) -> String {

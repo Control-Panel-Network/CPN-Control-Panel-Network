@@ -17,6 +17,7 @@ pub const HOST_HEAL_IDS: &[&str] = &[
     "httpd",
     "phpmyadmin",
     "docker.engine",
+    "host.package_resources",
 ];
 
 fn free_disk_mb(path: &str) -> Option<(u64, u64)> {
@@ -496,6 +497,31 @@ pub fn heal_docker_engine() -> HealResult {
             "could not start docker or podman".into()
         } else {
             started.join("; ")
+        },
+    }
+}
+
+pub fn heal_host_package_resources() -> HealResult {
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            return HealResult {
+                heal_id: "host.package_resources".into(),
+                ok: false,
+                message: "requires root to apply package host limits".into(),
+            };
+        }
+    }
+    match crate::host_resource_limits::sync_all_site_package_resources() {
+        Ok(msg) => HealResult {
+            heal_id: "host.package_resources".into(),
+            ok: true,
+            message: msg,
+        },
+        Err(msg) => HealResult {
+            heal_id: "host.package_resources".into(),
+            ok: false,
+            message: msg,
         },
     }
 }

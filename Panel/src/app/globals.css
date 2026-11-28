@@ -521,7 +521,16 @@ a {
   flex: 1 1 auto;
   min-width: 0;
 }
-.notify-popover header button {
+.notify-popover header .notify-popover-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.notify-popover header button,
+.notify-popover header .notify-popover-actions button {
   flex: 0 0 auto;
   border: 0;
   background: transparent;
@@ -532,6 +541,9 @@ a {
   padding: 4px 6px;
   cursor: pointer;
   white-space: nowrap;
+}
+.notify-popover header .notify-popover-actions button.notify-action-muted {
+  color: var(--muted);
 }
 .notify-list {
   list-style: none;
@@ -563,7 +575,26 @@ a {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 .notify-toast.is-read {
-  opacity: 0.78;
+  background: #2c3139 !important;
+  color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.notify-toast.is-read .notify-toast-icon {
+  background: #6b7280 !important;
+  color: rgba(255, 255, 255, 0.88);
+}
+.notify-toast.is-read .notify-toast-text strong {
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 500;
+}
+.notify-toast.is-read .notify-toast-text span {
+  color: rgba(255, 255, 255, 0.58);
+}
+.notify-toast.is-read .notify-toast-link {
+  color: #8ba3c4;
+}
+.notify-toast.is-read .notify-toast-dismiss {
+  color: rgba(255, 255, 255, 0.38);
 }
 .notify-toast-icon {
   width: 28px;

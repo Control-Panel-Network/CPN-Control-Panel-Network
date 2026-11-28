@@ -6,6 +6,7 @@ use crate::panel_ops_files::{
     copy_entries, create_file, delete_names, mkdir, move_entries, rename_entry, write_text,
 };
 use crate::panel_ops_files_archive::{compress_entries, extract_entry};
+use crate::panel_ops_files_perms::fix_permissions;
 use actix_web::{HttpRequest, HttpResponse};
 use std::collections::HashMap;
 use std::path::Path;
@@ -88,6 +89,7 @@ pub(crate) fn run_op(
             let archive = names.first().map(String::as_str).unwrap_or("");
             extract_entry(path, archive, jail)
         }
+        "fix_permissions" => fix_permissions(path, names, jail),
         _ => Err("Unknown file operation".into()),
     }
 }

@@ -72,6 +72,12 @@ pub struct Package {
     /// Nested sub-domain sites (separate from main website count).
     #[serde(default = "crate::package_limits::default_unlimited")]
     pub subdomains: i64,
+    /// Max CPU for site Unix/PHP workers: `-1` unlimited; otherwise systemd `CPUQuota` percent (100 = one core).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub host_cpu_percent: i64,
+    /// Max RAM for site Unix account: `-1` unlimited; otherwise systemd `MemoryMax` in MB.
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub host_memory_mb: i64,
     pub fqdn_enabled: bool,
     #[serde(default)]
     pub notes: String,
@@ -120,6 +126,8 @@ pub struct PackageInput {
     pub email_filters: i64,
     pub alias_domains: i64,
     pub subdomains: i64,
+    pub host_cpu_percent: i64,
+    pub host_memory_mb: i64,
     pub fqdn_enabled: bool,
     pub notes: String,
     pub sidebar_hidden_nav_ids: Vec<String>,
@@ -142,6 +150,8 @@ impl Default for PackageInput {
             email_filters: UNLIMITED,
             alias_domains: UNLIMITED,
             subdomains: UNLIMITED,
+            host_cpu_percent: UNLIMITED,
+            host_memory_mb: UNLIMITED,
             fqdn_enabled: true,
             notes: String::new(),
             sidebar_hidden_nav_ids: Vec::new(),
@@ -290,6 +300,25 @@ fn validate_limit(name: &str, value: i64) -> Result<(), String> {
     Ok(())
 }
 
+/// Host CPU/memory package fields: `-1` unlimited, or a positive cap (`0` is not allowed).
+fn validate_host_resource_limit(name: &str, value: i64) -> Result<(), String> {
+    if is_unlimited(value) {
+        return Ok(());
+    }
+    if value <= 0 {
+        return Err(format!(
+            "{name} must be -1 (unlimited) or a positive number"
+        ));
+    }
+    if name == "host_cpu_percent" && value > 64_000 {
+        return Err("host_cpu_percent is too high (max 64000)".into());
+    }
+    if name == "host_memory_mb" && value > 16_384_000 {
+        return Err("host_memory_mb is too high".into());
+    }
+    Ok(())
+}
+
 fn migrate_package_zero_unlimited(pkg: &mut Package) {
     pkg.disk_mb = migrate_legacy_zero_unlimited(pkg.disk_mb);
     pkg.bandwidth_mb = migrate_legacy_zero_unlimited(pkg.bandwidth_mb);
@@ -325,6 +354,8 @@ fn validate_input(input: &PackageInput) -> Result<String, String> {
     validate_limit("autoresponders", input.autoresponders)?;
     validate_limit("forwarders", input.forwarders)?;
     validate_limit("email_filters", input.email_filters)?;
+    validate_host_resource_limit("host_cpu_percent", input.host_cpu_percent)?;
+    validate_host_resource_limit("host_memory_mb", input.host_memory_mb)?;
     if has_control_chars(&input.notes) {
         return Err("Notes cannot include control characters".into());
     }
@@ -353,6 +384,7 @@ fn sanitize_sidebar_hidden(raw: &[String]) -> Result<Vec<String>, String> {
         "php",
         "services",
         "processes",
+        "cpn-usage",
         "logs",
         "package-manager",
         "litespeed",
@@ -398,6 +430,8 @@ fn default_package() -> Package {
         email_filters: 1000,
         alias_domains: UNLIMITED,
         subdomains: 20,
+        host_cpu_percent: UNLIMITED,
+        host_memory_mb: UNLIMITED,
         fqdn_enabled: true,
         notes: "Created automatically on first boot".into(),
         sidebar_hidden_nav_ids: Vec::new(),
@@ -488,6 +522,8 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
         email_filters: normalize_limit(input.email_filters),
         alias_domains: normalize_limit(input.alias_domains),
         subdomains: normalize_limit(input.subdomains),
+        host_cpu_percent: normalize_limit(input.host_cpu_percent),
+        host_memory_mb: normalize_limit(input.host_memory_mb),
         fqdn_enabled: input.fqdn_enabled,
         notes: input.notes.trim().to_string(),
         sidebar_hidden_nav_ids: sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?,
@@ -496,6 +532,7 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
     };
     file.packages.push(pkg.clone());
     save_packages_file(&file)?;
+    crate::host_resource_limits::apply_package_resources_for_id(&pkg.id).ok();
     Ok(pkg)
 }
 
@@ -537,12 +574,15 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     pkg.email_filters = normalize_limit(input.email_filters);
     pkg.alias_domains = normalize_limit(input.alias_domains);
     pkg.subdomains = normalize_limit(input.subdomains);
+    pkg.host_cpu_percent = normalize_limit(input.host_cpu_percent);
+    pkg.host_memory_mb = normalize_limit(input.host_memory_mb);
     pkg.fqdn_enabled = input.fqdn_enabled;
     pkg.notes = input.notes.trim().to_string();
     pkg.sidebar_hidden_nav_ids = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;
     pkg.updated_at_unix = now_unix();
     let out = pkg.clone();
     save_packages_file(&file)?;
+    crate::host_resource_limits::apply_package_resources_for_id(&out.id).ok();
     Ok(out)
 }
 
@@ -584,6 +624,7 @@ pub fn assign_package(username_raw: &str, package_id_raw: &str) -> Result<(), St
         return Err("Username is required".into());
     }
     let package = get_package(package_id_raw)?;
+    let package_id = package.id.clone();
     let accounts = list_accounts()?;
     if !accounts.iter().any(|a| names_equal(&a.username, username)) {
         return Err(format!("Account `{username}` not found"));
@@ -601,7 +642,9 @@ pub fn assign_package(username_raw: &str, package_id_raw: &str) -> Result<(), St
             package_id: package.id,
         });
     }
-    save_assignments_file(&file)
+    save_assignments_file(&file)?;
+    crate::host_resource_limits::apply_package_resources_for_id(&package_id).ok();
+    Ok(())
 }
 
 pub fn package_for_account(username: &str) -> Result<Package, String> {

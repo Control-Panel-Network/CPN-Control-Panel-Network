@@ -1,0 +1,22 @@
+File Manager Fix permissions - test notes
+=========================================
+
+Automated unit coverage (run on a Rust host):
+
+  cargo test --lib panel_ops_files_perms
+
+Covers:
+- mailbox home path parsing for /home/<domain>/e-mails/<local>/...
+- path-under-home helper
+- refusal of protected paths, filesystem root, and hosting home root
+- empty selection error
+- jail join rejects `..`
+- secure dir/file modes (0755 / 0644)
+
+Manual check on panel host after tip/heal:
+1. Open /server/files, browse to /home/<domain>/public_html
+2. Select a file and a folder (checkmarks)
+3. Click Fix permissions and confirm the dialog
+4. Expect success notice with site Unix user:group and modes
+5. Confirm `ls -ld` shows siteuser:siteuser and 0755/0644 (not root:root)
+6. Confirm selecting /etc or / is refused

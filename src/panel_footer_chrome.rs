@@ -76,9 +76,17 @@ pub fn sidebar_footer_styles() -> &'static str {
   flex:0 0 auto;
 }
 .notify-popover header span { flex:1 1 auto; min-width:0; }
-.notify-popover header button {
+.notify-popover header .notify-popover-actions {
+  display:flex; align-items:center; gap:2px; flex:0 0 auto; flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.notify-popover header button,
+.notify-popover header .notify-popover-actions button {
   flex:0 0 auto; border:0; background:transparent; color:var(--blue); font:inherit;
   font-size:12px; font-weight:600; padding:4px 6px; cursor:pointer; white-space:nowrap;
+}
+.notify-popover header .notify-popover-actions button.notify-action-muted {
+  color:var(--muted);
 }
 .notify-list {
   list-style:none; margin:0; padding:10px; overflow-y:auto; flex:1 1 auto; min-height:0;
@@ -93,7 +101,28 @@ pub fn sidebar_footer_styles() -> &'static str {
   color:#fff; font-size:13px; line-height:1.35;
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
 }
-.notify-toast.is-read { opacity:.78; }
+.notify-toast.is-read {
+  background:#2c3139 !important;
+  color:rgba(255,255,255,.72);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.notify-toast.is-read .notify-toast-icon {
+  background:#6b7280 !important;
+  color:rgba(255,255,255,.88);
+}
+.notify-toast.is-read .notify-toast-text strong {
+  color:rgba(255,255,255,.78);
+  font-weight:500;
+}
+.notify-toast.is-read .notify-toast-text span {
+  color:rgba(255,255,255,.58);
+}
+.notify-toast.is-read .notify-toast-link {
+  color:#8ba3c4;
+}
+.notify-toast.is-read .notify-toast-dismiss {
+  color:rgba(255,255,255,.38);
+}
 .notify-toast-icon {
   width:28px; height:28px; flex:0 0 auto; border-radius:4px;
   display:inline-grid; place-items:center; color:#fff;
@@ -179,7 +208,10 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
             <div id="cpn-notify-panel" class="notify-popover" hidden role="dialog" aria-label="Notifications">
               <header>
                 <span>Notifications</span>
-                <button type="button" id="cpn-notify-mark-all">Mark all as read</button>
+                <div class="notify-popover-actions">
+                  <button type="button" id="cpn-notify-mark-all">Mark all as read</button>
+                  <button type="button" id="cpn-notify-clear-all" class="notify-action-muted">Clear all</button>
+                </div>
               </header>
               <ul class="notify-list" id="cpn-notify-list"></ul>
               <p class="notify-empty" id="cpn-notify-empty">No notifications yet.</p>
@@ -211,6 +243,7 @@ pub fn notifications_popover_script() -> &'static str {
   var empty = document.getElementById("cpn-notify-empty");
   var badge = document.getElementById("cpn-notify-badge");
   var markAll = document.getElementById("cpn-notify-mark-all");
+  var clearAll = document.getElementById("cpn-notify-clear-all");
   var wrap = btn ? btn.closest(".notify-wrap") : null;
   if (!btn || !panel || !list || !empty) return;
 
@@ -357,10 +390,8 @@ pub fn notifications_popover_script() -> &'static str {
     return days + (days === 1 ? " day ago" : " days ago");
   }
 
-  function markRead(ids, all, dismissItems) {
+  function mutateNotifications(payload) {
     bumpLoadEpoch();
-    var payload = all ? { all: true } : { ids: ids || [] };
-    if (dismissItems) payload.dismiss = true;
     return fetch("/api/panel/notifications/mark-read", {
       method: "POST",
       credentials: "same-origin",
@@ -379,6 +410,16 @@ pub fn notifications_popover_script() -> &'static str {
         empty.textContent = "Could not update notifications.";
       }
     });
+  }
+
+  function markRead(ids, all, dismissItems) {
+    var payload = all ? { all: true } : { ids: ids || [] };
+    if (dismissItems) payload.dismiss = true;
+    return mutateNotifications(payload);
+  }
+
+  function clearDismissible() {
+    return mutateNotifications({ clear_all: true });
   }
 
   function renderItems(payload) {
@@ -423,6 +464,8 @@ pub fn notifications_popover_script() -> &'static str {
     var epoch = bumpLoadEpoch();
     loadAbort = new AbortController();
     var signal = loadAbort.signal;
+    list.innerHTML = "";
+    empty.hidden = true;
     return fetch("/api/panel/notifications", {
       credentials: "same-origin",
       headers: { "Accept": "application/json" },
@@ -479,7 +522,16 @@ pub fn notifications_popover_script() -> &'static str {
   if (markAll) {
     markAll.addEventListener("click", function (ev) {
       ev.stopPropagation();
-      markRead([], true);
+      markRead([], true, false);
+    });
+  }
+
+  if (clearAll) {
+    clearAll.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var msg = "Clear all dismissible notifications? Sticky announcements stay until you dismiss them.";
+      if (!window.confirm(msg)) return;
+      clearDismissible();
     });
   }
 })();
@@ -509,6 +561,8 @@ mod tests {
             assert!(html.contains("cpn-color-toggle"));
             assert!(html.contains(">Log out</a>"));
             assert!(html.contains("Mark all as read"));
+            assert!(html.contains("Clear all"));
+            assert!(html.contains("cpn-notify-clear-all"));
             assert!(!html.contains("Light mode"));
             assert!(!html.contains("Dark mode"));
             assert!(html.contains("notify-badge"));
@@ -529,6 +583,8 @@ mod tests {
         assert!(css.contains("notify-toast--info"));
         assert!(css.contains("#4a1c1c"));
         assert!(css.contains("#1a2744"));
+        assert!(css.contains("notify-toast.is-read"));
+        assert!(css.contains("#6b7280"));
     }
 
     #[test]
@@ -543,6 +599,9 @@ mod tests {
         assert!(js.contains(r#"target="_blank" rel="noopener noreferrer""#));
         assert!(js.contains("https:\\/\\/github\\.com"));
         assert!(js.contains("payload.dismiss = true"));
+        assert!(js.contains("clear_all"));
+        assert!(js.contains("cpn-notify-clear-all"));
+        assert!(js.contains("window.confirm"));
         assert!(js.contains("relativeTime"));
         assert!(js.contains("loadEpoch"));
         assert!(js.contains("AbortController"));

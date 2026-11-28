@@ -759,10 +759,19 @@ pub async fn dashboard_page(
     if let Some(user) = panel_user_from_request(state.get_ref(), &http) {
         let fallback_user = user.clone();
         let session_exp = crate::panel_hub_http::captured_session_exp(&http);
+        let spa = crate::panel_spa_nav::request_wants_spa_fragment(&http);
         return crate::panel_hub_http::html_blocking_budget_or_fallback(
             crate::panel_hub_http::HUB_RENDER_BUDGET,
-            move || panel_dashboard_html(&user, session_exp),
-            move || panel_dashboard_html_degraded(&fallback_user, session_exp),
+            move || {
+                crate::panel_spa_nav::with_spa_fragment(spa, || {
+                    panel_dashboard_html(&user, session_exp)
+                })
+            },
+            move || {
+                crate::panel_spa_nav::with_spa_fragment(spa, || {
+                    panel_dashboard_html_degraded(&fallback_user, session_exp)
+                })
+            },
         )
         .await;
     }

@@ -45,7 +45,7 @@ impl EntityKind {
             Self::WebsiteFiles => "Website files",
             Self::Database => "Database (MariaDB)",
             Self::Plugins => "Plugins folder",
-            Self::Email => "Email (vmail)",
+            Self::Email => "Email (mailboxes)",
             Self::Docker => "Docker / compose",
             Self::Dns => "DNS / zone data",
             Self::PanelConfig => "Panel config",
@@ -310,9 +310,16 @@ pub fn discover_entities(filename: &str, members: &[String]) -> Vec<RestoreEntit
     let has_plugins = paths
         .iter()
         .any(|p| p == "plugins" || p.starts_with("plugins/"));
-    let has_vmail = paths
-        .iter()
-        .any(|p| p == "vmail" || p.starts_with("vmail/"));
+    let has_vmail = paths.iter().any(|p| {
+        p == "vmail"
+            || p.starts_with("vmail/")
+            || p == "e-mails"
+            || p.starts_with("e-mails/")
+            || p == "email-stack"
+            || p.starts_with("email-stack/")
+            || p == "email-plugins"
+            || p.starts_with("email-plugins/")
+    });
     let has_docker = paths.iter().any(|p| {
         p == "docker"
             || p.starts_with("docker/")

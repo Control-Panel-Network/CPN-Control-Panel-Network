@@ -1,9 +1,11 @@
 //! OpenSSH internal-sftp jails for CPN websites and subdomains.
 //!
-//! Each account is a system user in group `cpn-sftp`, shell `nologin`, home set to
-//! the site home (`/home/<domain>/` or nested subdomain home). `sshd` Match Group
-//! applies `ChrootDirectory %h` + `ForceCommand internal-sftp`. Jail roots stay
-//! root-owned; only `public_html` (docroot) is writable by the SFTP user.
+//! Each account is a system user in group `cpn-sftp`, shell `nologin`. Home is a
+//! dedicated root-owned jail under `/var/lib/cpn/sftp-jails/<username>/` (OpenSSH
+//! requires chroot path components to be root-owned). The website home under
+//! `/home/<fqdn>` stays owned by the CPN website Unix account (`user:group`) and
+//! must not be reset to `root:root`. The real site docroot is bind-mounted into
+//! the jail as `public_html` when possible.
 
 use crate::resource_accounts::{
     FtpAccountRecord, create_ftp_account, delete_ftp_account, list_ftp_accounts,
@@ -15,6 +17,7 @@ use std::process::{Command, Stdio};
 
 pub const SFTP_GROUP: &str = "cpn-sftp";
 pub const SSHD_DROPIN: &str = "/etc/ssh/sshd_config.d/99-cpn-sftp.conf";
+pub const SFTP_JAILS_ROOT: &str = "/var/lib/cpn/sftp-jails";
 
 const RESERVED_USERS: &[&str] = &[
     "root", "admin", "cpn", "nobody", "nginx", "apache", "mysql", "mariadb", "postfix",
@@ -149,6 +152,7 @@ fn user_exists(username: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(unix)]
 fn set_owner(path: &Path, username: &str) -> Result<(), String> {
     run_checked(
         "chown",
@@ -161,6 +165,7 @@ fn set_owner(path: &Path, username: &str) -> Result<(), String> {
     )
 }
 
+#[cfg(unix)]
 fn set_root_owned(path: &Path, mode: u32) -> Result<(), String> {
     run_checked(
         "chown",
@@ -177,44 +182,59 @@ fn set_root_owned(path: &Path, mode: u32) -> Result<(), String> {
     Ok(())
 }
 
-fn prepare_jail(site_home: &Path, docroot: &Path, username: &str) -> Result<(), String> {
-    fs::create_dir_all(site_home)
-        .map_err(|e| format!("Could not create jail {}: {e}", site_home.display()))?;
+#[cfg(unix)]
+fn sftp_jail_home(username: &str) -> PathBuf {
+    PathBuf::from(SFTP_JAILS_ROOT).join(username)
+}
+
+/// Prepare a root-owned SFTP chroot that exposes the site docroot as `public_html`.
+///
+/// Does **not** chown the website home under `/home/<fqdn>` (that stays the CPN
+/// website Unix `user:group`), and does not recursively re-own the live docroot.
+#[cfg(unix)]
+fn prepare_jail(docroot: &Path, username: &str) -> Result<PathBuf, String> {
     fs::create_dir_all(docroot)
         .map_err(|e| format!("Could not create docroot {}: {e}", docroot.display()))?;
-
-    // OpenSSH requires every chroot path component to be root-owned and not group-writable.
-    // Only touch paths under the hosting home root (never `/` or system roots).
-    let hosting_root = crate::sites::hosting_home_root();
-    let mut chain = Vec::new();
-    let mut cur = site_home.to_path_buf();
-    loop {
-        chain.push(cur.clone());
-        if cur == hosting_root {
-            break;
-        }
-        match cur.parent() {
-            Some(parent) if parent != cur => {
-                if !parent.starts_with(&hosting_root) && parent != hosting_root {
-                    break;
-                }
-                cur = parent.to_path_buf();
-            }
-            _ => break,
+    let jail = sftp_jail_home(username);
+    fs::create_dir_all(SFTP_JAILS_ROOT)
+        .map_err(|e| format!("Could not create {SFTP_JAILS_ROOT}: {e}"))?;
+    set_root_owned(Path::new(SFTP_JAILS_ROOT), 0o755)?;
+    fs::create_dir_all(&jail)
+        .map_err(|e| format!("Could not create SFTP jail {}: {e}", jail.display()))?;
+    set_root_owned(&jail, 0o755)?;
+    let jail_doc = jail.join("public_html");
+    if !jail_doc.exists() {
+        fs::create_dir_all(&jail_doc)
+            .map_err(|e| format!("Could not create {}: {e}", jail_doc.display()))?;
+    }
+    // Best-effort bind of the real docroot into the jail.
+    let already_mounted = Command::new("findmnt")
+        .args(["-n", &jail_doc.display().to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !already_mounted {
+        let mounted = Command::new("mount")
+            .args([
+                "--bind",
+                &docroot.display().to_string(),
+                &jail_doc.display().to_string(),
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !mounted {
+            // Fallback: jail-local tree writable by the SFTP account (does not alter live docroot ownership).
+            set_owner(&jail_doc, username)?;
         }
     }
-    for path in chain.into_iter().rev() {
-        if path.exists() {
-            set_root_owned(&path, 0o755)?;
-        }
-    }
-    set_owner(docroot, username)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(docroot, fs::Permissions::from_mode(0o755));
-    }
-    Ok(())
+    let _ = username;
+    Ok(jail)
 }
 
 fn sshd_dropin_contents() -> String {
@@ -332,9 +352,9 @@ pub fn create_jailed_sftp_account(
         let username = validate_username(username_raw)?;
         validate_password(password)?;
         let site = load_site(domain_raw)?;
-        let jail = site_home_from_record(&site);
+        let site_home = site_home_from_record(&site);
         let docroot = PathBuf::from(&site.docroot);
-        if !docroot.starts_with(&jail) {
+        if !docroot.starts_with(&site_home) {
             return Err("Site docroot is outside the site home; refusing jail".into());
         }
         ensure_sftp_stack()?;
@@ -343,6 +363,13 @@ pub fn create_jailed_sftp_account(
         }
         // Registry first fails fast on duplicates without leaving orphan users.
         let record = create_ftp_account(owner, &username, &site.domain)?;
+        let jail = match prepare_jail(&docroot, &username) {
+            Ok(path) => path,
+            Err(err) => {
+                let _ = delete_ftp_account(&username);
+                return Err(err);
+            }
+        };
         let home = jail.display().to_string();
         let create = Command::new("useradd")
             .args([
@@ -371,11 +398,8 @@ pub fn create_jailed_sftp_account(
                 return Err(format!("useradd failed: {e}"));
             }
         }
-        if let Err(err) = prepare_jail(&jail, &docroot, &username) {
-            let _ = Command::new("userdel").args(["-f", &username]).status();
-            let _ = delete_ftp_account(&username);
-            return Err(err);
-        }
+        // Intentionally do not chown site_home to root (CPN website Unix ownership).
+        let _ = site_home;
         if let Err(err) = set_password(&username, password) {
             let _ = Command::new("userdel").args(["-f", &username]).status();
             let _ = delete_ftp_account(&username);

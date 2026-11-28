@@ -12,7 +12,12 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-pub const CORE_HEAL_IDS: &[&str] = &["cli.local_override", "panel.service", "manifest"];
+pub const CORE_HEAL_IDS: &[&str] = &[
+    "cli.local_override",
+    "panel.service",
+    "panel.resource_reserve",
+    "manifest",
+];
 
 fn executable(path: &str) -> bool {
     let p = Path::new(path);
@@ -181,6 +186,36 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             None,
         );
     } else {
+        let reserve_ok = Path::new(crate::host_resource_limits::PANEL_SLICE_PATH).is_file();
+        push(
+            checks,
+            "panel.resource_reserve",
+            "panel",
+            "Panel resource reserve",
+            if reserve_ok {
+                CheckStatus::Pass
+            } else {
+                CheckStatus::Warn
+            },
+            if reserve_ok {
+                format!(
+                    "{} configured",
+                    crate::host_resource_limits::PANEL_SLICE_NAME
+                )
+            } else {
+                format!(
+                    "missing {}; heal writes slice + service drop-in",
+                    crate::host_resource_limits::PANEL_SLICE_PATH
+                )
+            },
+            false,
+            if reserve_ok {
+                None
+            } else {
+                Some("panel.resource_reserve")
+            },
+        );
+
         let active = service_detect::systemd_unit_active(UNIT_NAME);
         push(
             checks,
@@ -329,6 +364,31 @@ pub fn heal_local_override() -> HealResult {
             ok: true,
             message: format!("{}; run hash -r in open shells", notes.join("; ")),
         }
+    }
+}
+
+pub fn heal_panel_resource_reserve() -> HealResult {
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            return HealResult {
+                heal_id: "panel.resource_reserve".into(),
+                ok: false,
+                message: "requires root to configure panel slice".into(),
+            };
+        }
+    }
+    match crate::host_resource_limits::ensure_panel_resource_reserve() {
+        Ok(msg) => HealResult {
+            heal_id: "panel.resource_reserve".into(),
+            ok: true,
+            message: msg,
+        },
+        Err(msg) => HealResult {
+            heal_id: "panel.resource_reserve".into(),
+            ok: false,
+            message: msg,
+        },
     }
 }
 

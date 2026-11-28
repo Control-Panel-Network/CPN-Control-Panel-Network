@@ -110,6 +110,11 @@ pub fn version_management_page(can_manage: bool) -> String {
     <input id="cpn-auto-prerelease" type="checkbox" class="cpn-check" />
     <span>Include GitHub prerelease tags</span>
   </label>
+  <p class="muted" style="margin:4px 0 0 28px;font-size:13px;line-height:1.45;">
+    When on, scheduled checks may apply GitHub Releases marked <em>prerelease</em> (alpha, beta, RC,
+    and similar tags). Only published release packages count. This does not follow the
+    <code>dev</code> branch or each new commit; branch and tip upgrades use the separate upgrade actions below.
+  </p>
   <p id="cpn-auto-security-note" class="muted" style="margin:10px 0 0;font-size:13px;line-height:1.45;"></p>
   <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;">
     <button type="button" class="btn-primary" id="cpn-auto-save">Save automatic updates</button>
@@ -297,6 +302,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     <span class="kv-label">Latest available</span>
     <span class="kv-value">
       <strong id="cpn-version-latest">Loading...</strong>
+      <span class="kv-meta" id="cpn-version-latest-date"></span>
       <span class="kv-meta" id="cpn-version-status" role="status">Checking for updates...</span>
     </span>
   </li>
@@ -400,6 +406,10 @@ mod tests {
             html.contains("id=\"cpn-source-clear-token\" type=\"checkbox\" class=\"cpn-check\"")
         );
         assert!(html.contains("id=\"cpn-auto-prerelease\" type=\"checkbox\" class=\"cpn-check\""));
+        assert!(html.contains("GitHub Releases marked <em>prerelease</em>"));
+        assert!(html.contains("does not follow the"));
+        assert!(html.contains("<code>dev</code> branch"));
+        assert!(html.contains("separate upgrade actions below"));
         assert!(
             !html.contains("id=\"cpn-auto-prerelease\" type=\"checkbox\" class=\"cpn-switch\"")
         );
@@ -427,6 +437,7 @@ mod tests {
         assert!(html.contains("cpn-version-row-current"));
         assert!(html.contains("cpn-version-row-diverge"));
         assert!(html.contains("Latest available"));
+        assert!(html.contains("id=\"cpn-version-latest-date\""));
         assert!(html.contains(">Refresh<"));
         assert!(html.contains("version-card-toolbar"));
         assert!(html.contains("can lag after a hot-deploy"));

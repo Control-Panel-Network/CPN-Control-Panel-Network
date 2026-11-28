@@ -393,6 +393,19 @@ pub fn dismiss(username: &str, ids: &[String]) -> Result<NotificationStore, Stri
     Ok(store)
 }
 
+/// Remove every non-sticky notification (Clear all). Sticky items stay until
+/// dismissed individually.
+pub fn clear_dismissible(username: &str) -> Result<NotificationStore, String> {
+    let path = store_path(username);
+    let mut store = load_notifications(username);
+    let before = store.items.len();
+    store.items.retain(is_sticky);
+    if store.items.len() != before {
+        write_store(&path, &store)?;
+    }
+    Ok(store)
+}
+
 /// Remove every update-completed notification for a user (used when the
 /// "update notifications" preference is switched off). Returns how many went.
 pub fn remove_update_notifications(username: &str) -> Result<usize, String> {
@@ -762,6 +775,31 @@ mod tests {
             assert_eq!(after.items.len(), 1);
             assert_eq!(after.items[0].id, plain.id);
             assert_eq!(load_notifications("Admin").items.len(), 1);
+        });
+    }
+
+    #[test]
+    fn clear_dismissible_removes_plain_items_keeps_sticky() {
+        with_test_data_dir(|| {
+            let ann =
+                push_notification("Admin", "Announcement", "x", "announcement").expect("push");
+            let plain =
+                push_notification("Admin", "Upgrade completed", "x", CATEGORY_PANEL).expect("push");
+            let flagged = push_notification_full(
+                "Admin",
+                "Heads up",
+                "x",
+                CATEGORY_PANEL,
+                Some("warning"),
+                true,
+            )
+            .expect("push");
+            let cleared = clear_dismissible("Admin").expect("clear");
+            assert_eq!(cleared.items.len(), 2);
+            let ids: Vec<&str> = cleared.items.iter().map(|i| i.id.as_str()).collect();
+            assert!(ids.contains(&ann.id.as_str()));
+            assert!(ids.contains(&flagged.id.as_str()));
+            assert!(!ids.contains(&plain.id.as_str()));
         });
     }
 

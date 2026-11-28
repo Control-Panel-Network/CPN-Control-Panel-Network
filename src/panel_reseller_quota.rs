@@ -77,6 +77,8 @@ pub fn package_slice_for(username: &str) -> QuotaSlice {
         email_filters: UNLIMITED,
         alias_domains: UNLIMITED,
         subdomains: UNLIMITED,
+        host_cpu_percent: UNLIMITED,
+        host_memory_mb: UNLIMITED,
         fqdn_enabled: true,
         notes: String::new(),
         sidebar_hidden_nav_ids: Vec::new(),

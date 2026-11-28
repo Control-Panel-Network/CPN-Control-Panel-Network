@@ -123,8 +123,8 @@ pub fn ssh_logins_panel() -> String {
     )
 }
 
-pub fn top_process_panel() -> String {
-    let body = match snapshot_top_processes(50) {
+pub fn top_process_panel(viewer: &str) -> String {
+    let body = match snapshot_top_processes(50, viewer) {
         Ok(rows) if rows.is_empty() => "<p class=\"empty-state\">No processes returned.</p>".into(),
         Ok(rows) => {
             let mut t = String::from(

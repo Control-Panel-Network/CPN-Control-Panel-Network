@@ -242,8 +242,11 @@ pub fn version_page_script(can_manage: bool) -> String {
     var currentAtEl = document.getElementById("cpn-version-current-installed-at");
     var currentShaEl = document.getElementById("cpn-version-current-sha");
     var runningShaEl = document.getElementById("cpn-version-running-sha");
+    var latestDateEl = document.getElementById("cpn-version-latest-date");
     var runningRow = releaseRowForVersion(info && info.running_version);
     var installedRow = releaseRowForVersion(info && info.installed_version);
+    var latestKey = info && (info.latest_version || info.latest_tag);
+    var latestRow = latestKey ? releaseRowForVersion(latestKey) : null;
     var runDate = runningRow && runningRow.published_at
       ? ("Released " + formatPublishedAt(runningRow.published_at)) : "";
     var instDate = installedRow && installedRow.published_at
@@ -258,6 +261,9 @@ pub fn version_page_script(can_manage: bool) -> String {
     if (currentDateEl) currentDateEl.textContent = runDate || instDate;
     if (currentAtEl) currentAtEl.textContent = installedAtText;
     if (currentShaEl) currentShaEl.textContent = shaText;
+    var latestDate = latestRow && latestRow.published_at
+      ? ("Released " + formatPublishedAt(latestRow.published_at)) : "";
+    if (latestDateEl) latestDateEl.textContent = latestDate;
   }}
   function supportedReleaseTags() {{
     if (!releaseCache.length) return {{}};
@@ -484,6 +490,8 @@ mod tests {
         assert!(js.contains("isPrereleaseLabel"));
         assert!(js.contains("cpnVersionCache"));
         assert!(js.contains("paintIdentityRows"));
+        assert!(js.contains("cpn-version-latest-date"));
+        assert!(js.contains("info.latest_version || info.latest_tag"));
         assert!(js.contains("resumeIfBusy"));
         assert!(js.contains("Running binary is ahead of packaged"));
         assert!(js.contains("Refreshing (keeping current values)"));

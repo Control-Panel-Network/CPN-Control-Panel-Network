@@ -405,10 +405,9 @@ pub fn ensure_opendkim_stack() -> Result<String, String> {
     }
     enable_now(&["opendkim"])?;
     steps.push("opendkim enabled".into());
-    // Soft-heal rspamd so Auth-Results (SPF/DMARC) stay available for Tachyon.
-    if let Ok(msg) = crate::panel_ops_email_antispam::heal_rspamd_for_auth_results() {
-        steps.push(msg);
-    }
+    // Soft-ensure rspamd (official EL repo when AppStream/EPEL lack the package) so
+    // Authentication-Results include SPF/DMARC for Tachyon Auth UI.
+    steps.push(crate::panel_ops_email_antispam::soft_ensure_rspamd_for_auth_results());
     steps.push(ensure_postfix_opendkim_milters()?);
     Ok(format!(
         "OpenDKIM ready ({} CPN domain key(s)): {}",

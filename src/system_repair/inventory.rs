@@ -1,13 +1,14 @@
-//! Website inventory checks: legacy owners and unregistered hostname vhosts.
+//! Website inventory checks: legacy owners, ownership, and unregistered hostname vhosts.
 
 use super::{CheckStatus, HealResult, push};
 use crate::package_usage_scope::is_known_panel_username;
+use crate::site_unix_owner::{heal_all_root_owned_site_homes, root_owned_site_homes};
 use crate::sites::list_sites;
 use crate::sites_inventory_heal;
 use std::fs;
 use std::path::Path;
 
-pub const INVENTORY_HEAL_IDS: &[&str] = &["sites.inventory"];
+pub const INVENTORY_HEAL_IDS: &[&str] = &["sites.inventory", "sites.ownership"];
 
 fn legacy_owner_count() -> usize {
     list_sites()
@@ -100,6 +101,36 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             Some("sites.inventory"),
         );
     }
+
+    let root_homes = root_owned_site_homes();
+    if root_homes.is_empty() {
+        push(
+            checks,
+            "sites.ownership",
+            "websites",
+            "Website Unix ownership",
+            CheckStatus::Pass,
+            "Registered website homes are not owned by root (CPN website Unix user:group)",
+            false,
+            Some("sites.ownership"),
+        );
+    } else {
+        let sample: Vec<String> = root_homes.iter().take(5).map(|(d, _)| d.clone()).collect();
+        push(
+            checks,
+            "sites.ownership",
+            "websites",
+            "Website Unix ownership",
+            CheckStatus::Fail,
+            format!(
+                "{} registered website home(s) are still root-owned (for example {}). Heal sets each home and docroot to the CPN website Unix account as user:group.",
+                root_homes.len(),
+                sample.join(", ")
+            ),
+            true,
+            Some("sites.ownership"),
+        );
+    }
 }
 
 pub fn heal_sites_inventory() -> HealResult {
@@ -111,6 +142,21 @@ pub fn heal_sites_inventory() -> HealResult {
         },
         Err(message) => HealResult {
             heal_id: "sites.inventory".into(),
+            ok: false,
+            message,
+        },
+    }
+}
+
+pub fn heal_sites_ownership() -> HealResult {
+    match heal_all_root_owned_site_homes() {
+        Ok(message) => HealResult {
+            heal_id: "sites.ownership".into(),
+            ok: true,
+            message,
+        },
+        Err(message) => HealResult {
+            heal_id: "sites.ownership".into(),
             ok: false,
             message,
         },
