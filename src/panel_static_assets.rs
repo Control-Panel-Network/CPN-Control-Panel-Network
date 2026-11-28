@@ -34,7 +34,7 @@ pub fn shared_panel_stylesheet() -> &'static str {
     static CSS: OnceLock<String> = OnceLock::new();
     CSS.get_or_init(|| {
         format!(
-            "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+            "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
             crate::panel_pages::panel_styles(),
             crate::panel_controls::control_styles(),
             crate::panel_nav_tree::nav_tree_styles(),
@@ -50,6 +50,7 @@ pub fn shared_panel_stylesheet() -> &'static str {
             crate::panel_theme::color_mode_styles(),
             crate::panel_chrome_scheme::chrome_scheme_styles(),
             crate::panel_nav_tree::sidebar_nav_contrast_styles(),
+            crate::panel_nav_chrome::sidebar_width_typography_styles(),
             crate::panel_spa_nav::spa_nav_styles(),
         )
     })
