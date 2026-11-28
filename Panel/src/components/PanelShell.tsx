@@ -80,6 +80,50 @@ function writeNotices(items: PanelNotice[]) {
   window.dispatchEvent(new Event(NOTIFY_EVENT));
 }
 
+type NotificationsPayload = {
+  ok?: boolean;
+  items?: PanelNotice[];
+  unread_count?: number;
+  error?: string;
+};
+
+async function fetchNotificationsJson(): Promise<NotificationsPayload> {
+  const res = await fetch("/api/panel/notifications", {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  const data = (await res.json()) as NotificationsPayload;
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+async function postNotificationsMutation(
+  payload: Record<string, unknown>,
+): Promise<NotificationsPayload> {
+  const res = await fetch("/api/panel/notifications/mark-read", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json()) as NotificationsPayload;
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+function applyNotificationPayload(data: NotificationsPayload) {
+  if (data.ok && Array.isArray(data.items)) {
+    writeNotices(data.items);
+  }
+}
+
 function subscribeColorMode(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
   window.addEventListener(COLOR_MODE_EVENT, onStoreChange);
@@ -393,6 +437,22 @@ export function PanelShell({
     return () => document.body.classList.remove("nav-open");
   }, [open]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchNotificationsJson()
+      .then((data) => {
+        if (!cancelled) {
+          applyNotificationPayload(data);
+        }
+      })
+      .catch(() => {
+        /* keep cached localStorage notices when offline */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const drawerMode = collapsed || narrow;
 
   const toggleCollapsed = () => {
@@ -405,13 +465,27 @@ export function PanelShell({
   };
 
   const markAllRead = () => {
-    writeNotices(notices.map((item) => ({ ...item, read: true })));
+    postNotificationsMutation({ all: true })
+      .then(applyNotificationPayload)
+      .catch(() => {
+        writeNotices(notices.map((item) => ({ ...item, read: true })));
+      });
+  };
+
+  const clearAllNotices = () => {
+    postNotificationsMutation({ clear_all: true })
+      .then(applyNotificationPayload)
+      .catch(() => {
+        /* no-op on failure */
+      });
   };
 
   const dismissNotice = (id: string) => {
-    writeNotices(
-      notices.map((item) => (item.id === id ? { ...item, read: true } : item)),
-    );
+    postNotificationsMutation({ ids: [id], dismiss: true })
+      .then(applyNotificationPayload)
+      .catch(() => {
+        writeNotices(notices.filter((item) => item.id !== id));
+      });
   };
 
   return (
@@ -484,6 +558,7 @@ export function PanelShell({
             <NotificationsPopover
               notices={notices}
               onMarkAllRead={markAllRead}
+              onClearAll={clearAllNotices}
               onDismiss={dismissNotice}
             />
             <Link
