@@ -464,6 +464,8 @@ pub fn notifications_popover_script() -> &'static str {
     var epoch = bumpLoadEpoch();
     loadAbort = new AbortController();
     var signal = loadAbort.signal;
+    list.innerHTML = "";
+    empty.hidden = true;
     return fetch("/api/panel/notifications", {
       credentials: "same-origin",
       headers: { "Accept": "application/json" },

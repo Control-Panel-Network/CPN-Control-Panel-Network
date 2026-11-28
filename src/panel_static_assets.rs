@@ -5,8 +5,22 @@
 use actix_web::{HttpResponse, route};
 use std::sync::OnceLock;
 
+static ASSET_VERSION: OnceLock<String> = OnceLock::new();
+
+/// Cache-buster for `/cpn-panel.css` and `/cpn-panel.js`. Includes the embedded git
+/// SHA so tip/commit upgrades within the same package version still refresh assets.
 pub fn asset_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    ASSET_VERSION
+        .get_or_init(|| {
+            let pkg = env!("CARGO_PKG_VERSION");
+            let sha = crate::build_meta::embedded_git_sha_short();
+            if sha.is_empty() {
+                pkg.to_string()
+            } else {
+                format!("{pkg}-{sha}")
+            }
+        })
+        .as_str()
 }
 
 fn strip_script_wrappers(raw: &str) -> String {
@@ -103,6 +117,18 @@ mod tests {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
         assert!(ct.starts_with(content_type), "content-type was {ct}");
+    }
+
+    #[test]
+    #[test]
+    fn asset_version_includes_pkg_or_sha_suffix() {
+        let ver = asset_version();
+        assert!(!ver.is_empty());
+        let pkg = env!("CARGO_PKG_VERSION");
+        assert!(
+            ver == pkg || ver.starts_with(&format!("{pkg}-")),
+            "unexpected asset version: {ver}"
+        );
     }
 
     #[test]
